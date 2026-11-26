@@ -4,11 +4,27 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: compilar
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Desempaquetar el codigo subido (codigo.b64)
+        run: |
+          if [ -f codigo.b64 ]; then
+            base64 -d -i codigo.b64 > /tmp/codigo.zip
+            unzip -t /tmp/codigo.zip
+            rm -rf src build.gradle gradle.properties settings.gradle LEEME.md codigo.b64
+            unzip -o /tmp/codigo.zip
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Desempaquetar codigo.b64" || true
+            git push || echo "No se pudo guardar el codigo desempaquetado"
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
