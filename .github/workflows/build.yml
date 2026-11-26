@@ -10,6 +10,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - name: Aplicar el codigo subido (cambios.b64 o codigo.b64)
@@ -35,6 +36,9 @@ jobs:
             git commit -m "Aplicar el codigo subido" || true
             git push || echo "No se pudo guardar el codigo en el repositorio"
           fi
+      - name: Generar texturas y modelos
+        run: |
+          if [ -f tools/texturas.py ]; then python3 tools/texturas.py .; fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,7 +46,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.10.2
-      - run: gradle build --no-daemon
+      - name: Compilar
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle build --no-daemon 2>&1 | tee build.log
       - uses: actions/upload-artifact@v4
         with:
           name: el-sistema-mod
@@ -58,3 +66,53 @@ jobs:
           body: Descarga el archivo .jar de abajo y ponlo en tu carpeta mods junto con Fabric API.
           files: build/libs/*.jar
           make_latest: true
+      - name: Prueba automatica del servidor
+        id: servidor
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p run
+          echo "eula=true" > run/eula.txt
+          printf 'level-type=minecraft\\:flat\nonline-mode=false\nspawn-protection=0\nmax-tick-time=-1\nview-distance=6\n' > run/server.properties
+          ELSISTEMA_SELFTEST=server timeout 900 gradle runServer --no-daemon > server-test.log 2>&1 || true
+          tail -n 40 server-test.log
+          grep -q "\[SELFTEST\] OK" server-test.log
+      - name: Prueba automatica del cliente
+        id: cliente
+        continue-on-error: true
+        shell: bash
+        run: |
+          sudo apt-get update -qq > /dev/null 2>&1 || true
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri > /dev/null 2>&1 || true
+          mkdir -p run/saves
+          rm -rf run/saves/selftest
+          if [ -d run/world ]; then cp -r run/world run/saves/selftest; rm -f run/saves/selftest/session.lock; fi
+          printf 'version:3955\nonboardAccessibility:false\npauseOnLostFocus:false\nguiScale:3\nrenderDistance:6\nsimulationDistance:6\nskipMultiplayerWarning:true\njoinedFirstServer:true\ntutorialStep:none\nsoundCategory_master:0.0\n' > run/options.txt
+          ELSISTEMA_SELFTEST=client timeout 1500 xvfb-run -a -s "-screen 0 1600x900x24" gradle runClient --no-daemon --args="--quickPlaySingleplayer selftest --width 1440 --height 810" > client-test.log 2>&1 || true
+          tail -n 60 client-test.log
+          grep -q "\[SELFTEST-CLIENTE\] OK" client-test.log
+      - name: Preparar registros
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p registros
+          for f in build.log server-test.log client-test.log; do if [ -f "$f" ]; then cp "$f" registros/; fi; done
+          i=0
+          for f in run/screenshots/*.png; do
+            [ -f "$f" ] || continue
+            i=$((i+1))
+            cp "$f" "registros/captura-$(printf %02d $i).png"
+          done
+          for f in run/crash-reports/*.txt; do if [ -f "$f" ]; then cp "$f" registros/; fi; done
+          echo "servidor=${{ steps.servidor.outcome }} cliente=${{ steps.cliente.outcome }}" > registros/resultado.txt
+          ls -la registros
+      - name: Publicar registros
+        if: always()
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: log-${{ github.run_number }}
+          name: Registros ${{ github.run_number }}
+          prerelease: true
+          make_latest: false
+          files: registros/*
