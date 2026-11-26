@@ -3,10 +3,11 @@
   "id": "elsistema",
   "version": "${version}",
   "name": "El Sistema",
-  "description": "Despierta como Jugador: niveles, rango de cazador, razas, clases, arboles de habilidades, monstruos con rango, mazmorras y tienda. V = Sistema, R = habilidad.",
+  "description": "Despierta como Jugador: niveles, rango de cazador, razas, clases, arboles de habilidades, ejercito de sombras, monstruos propios en mazmorras, armas y armaduras de la tienda. V = Sistema, R = habilidad, G = Levantate, H = sombras.",
   "authors": ["Tu"],
   "license": "MIT",
   "environment": "*",
+  "accessWidener": "elsistema.accesswidener",
   "entrypoints": {
     "main": ["com.elsistema.ElSistema"],
     "client": ["com.elsistema.client.ElSistemaClient"]

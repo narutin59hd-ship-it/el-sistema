@@ -40,6 +40,15 @@ public final class Hud {
     private static int goldAmount = 0;
     private static long warnTime = -1;
     private static String warnText = "";
+    private static long corpseStart = -1;
+    private static long corpseUntil = -1;
+    private static long corpseTotal = 1;
+    private static long ariseTime = -1;
+    private static int ariseCount = 0;
+
+    private record Note(String text, int color, long start) {}
+
+    private static final List<Note> NOTES = new ArrayList<>();
 
     // ================================================================== utilidades
 
@@ -99,6 +108,29 @@ public final class Hud {
         error();
     }
 
+    /** Aviso corto (sin sonido de error) que aparece debajo del panel. */
+    private static void note(String text, int color) {
+        NOTES.add(0, new Note(text, color, System.currentTimeMillis()));
+        while (NOTES.size() > 3) {
+            NOTES.remove(NOTES.size() - 1);
+        }
+    }
+
+    private static String shadowName(int id) {
+        ClientShadows.Entry e = ClientShadows.byId(id);
+        return e == null ? "Una sombra" : "Tu sombra " + e.name();
+    }
+
+    /** Se llama al salir del mundo. */
+    public static void reset() {
+        TOASTS.clear();
+        NOTES.clear();
+        corpseUntil = -1;
+        bigStart = -1;
+        callStart = -1;
+        warnTime = -1;
+    }
+
     // ================================================================== avisos del servidor
 
     public static void onNotify(int kind, int a, int b) {
@@ -123,7 +155,9 @@ public final class Hud {
             case Net.N_AWAKENED -> {
                 big("¡HAS DESPERTADO!", name(Defs.RACE_NAME, a) + "   ·   " + name(Defs.CLASS_NAME, b), 0x9050B4FF, 0x663A8DFF);
                 toast("NOTIFICACIÓN", Ui.CYAN, "Ahora eres un Jugador.",
-                        v + ": ventana del Sistema   ·   " + key(ElSistemaClient.SKILL) + ": habilidad");
+                        v + ": ventana del Sistema   ·   " + key(ElSistemaClient.SKILL) + ": habilidad",
+                        key(ElSistemaClient.ARISE) + ": ¡Levántate! (sobre un cadáver)   ·   "
+                                + key(ElSistemaClient.SHADOWS) + ": sombras");
             }
             case Net.N_XP -> {
                 xpAmount = (xpTime > 0 && now - xpTime < 1500 ? xpAmount : 0) + a;
@@ -162,7 +196,8 @@ public final class Hud {
             case Net.N_LAST_STAND -> callout("¡ÚLTIMA RESISTENCIA!", Ui.GOLD);
             case Net.N_RUNE -> toast("NOTIFICACIÓN", 0xFFB57BFF, "+1 punto de habilidad.",
                     "Tienes " + a + ". Úsalos en la pestaña Habilidades (" + v + ").");
-            case Net.N_BOUGHT -> toast("TIENDA", Ui.GOLD, "Has comprado: " + name(Shop.NAME, a) + (b > 1 ? " x" + b : "") + ".");
+            case Net.N_BOUGHT -> toast("TIENDA", Ui.GOLD, "Has comprado: "
+                    + (a >= 0 && a < Shop.OFFERS.size() ? Shop.OFFERS.get(a).name() : "?") + (b > 1 ? " x" + b : "") + ".");
             case Net.N_NO_COINS -> warn("Oro insuficiente (" + b + "/" + a + ")");
             case Net.N_SOLD -> {
                 if (a <= 0) {
@@ -172,9 +207,42 @@ public final class Hud {
                 }
             }
             case Net.N_TREE_UP -> {
-                Trees.Node[] t = Trees.tree(a == 0, a == 0 ? CData.race() : CData.cls());
-                if (t != null && b >= 0 && b < t.length) callout(t[b].name().toUpperCase(Locale.ROOT), 0xFFB57BFF);
+                Trees.Node[] t = Trees.tree(a, CData.treeIndex(a));
+                if (t != null && b >= 0 && b < t.length) callout(t[b].name().toUpperCase(Locale.ROOT), a == 2 ? Ui.SHADOW : Ui.PURPLE);
             }
+            // ---------------------------------------------------------- sombras
+            case Net.N_SHADOW_MARK -> ClientShadows.mark(a);
+            case Net.N_CORPSE -> {
+                if (CData.awakened()) {
+                    corpseStart = now;
+                    corpseTotal = Math.max(1, a) * 1000L;
+                    corpseUntil = now + corpseTotal;
+                    sound(SoundEvents.AMETHYST_BLOCK_CHIME, 1.0F, 0.5F);
+                }
+            }
+            case Net.N_ARISE_OK -> {
+                corpseUntil = -1;
+                ariseCount = ariseTime > 0 && now - ariseTime < 1500 ? ariseCount + 1 : 1;
+                ariseTime = now;
+                big(ariseCount > 1 ? "¡LEVÁNTATE! x" + ariseCount : "¡LEVÁNTATE!",
+                        "Una sombra de rango " + name(Defs.RANK, b) + " se une a tu ejército", 0x909A4DFF, 0x55200040);
+            }
+            case Net.N_ARISE_FAIL -> {
+                if (a <= 0) corpseUntil = -1;
+                warn(a > 0 ? "La extracción ha fallado. Quedan " + a + " intentos." : "La extracción ha fallado. El alma se ha desvanecido.");
+            }
+            case Net.N_ARISE_NO_MP -> warn("Maná insuficiente para la extracción (" + b + "/" + a + " MP)");
+            case Net.N_NO_CORPSE -> warn("No hay ningún cadáver tuyo cerca para extraer.");
+            case Net.N_ARMY_FULL -> warn("Tu ejército está lleno (" + a + "/" + b + "). Mejóralo en el árbol de sombras.");
+            case Net.N_SHADOWS_OUT -> callout(a == 1 ? "SAL, SOMBRA" : "SALID, SOMBRAS (" + a + ")", Ui.SHADOW);
+            case Net.N_SHADOWS_IN -> note(a == 1 ? "Una sombra ha vuelto a tu sombra." : a + " sombras han vuelto a tu sombra.", Ui.PURPLE);
+            case Net.N_SHADOW_BACK -> note(shadowName(b) + " ha caído. Vuelve en " + a + " s.", 0xFFD08AFF);
+            case Net.N_SHADOW_LEVEL -> note(shadowName(a) + " ha subido al nivel " + b + ".", Ui.SHADOW);
+            case Net.N_NO_SHADOWS -> warn(a == 0 ? "Aún no tienes sombras. Mata una criatura y pulsa " + key(ElSistemaClient.ARISE) + "."
+                    : "No hay sombras disponibles: están fuera o recuperándose.");
+            case Net.N_RANK_REQ -> warn("Necesitas rango " + name(Defs.RANK, a) + " para comprar esto.");
+            case Net.N_MANA -> note("+" + a + " de maná", Ui.CYAN);
+            case Net.N_RETURN -> note(a == 1 ? "Has salido de la mazmorra." : "La piedra te ha devuelto a casa.", Ui.CYAN);
             default -> {
             }
         }
@@ -190,8 +258,10 @@ public final class Hud {
         int sw = g.guiWidth();
         int sh = g.guiHeight();
         int bottom = CData.awakened() ? panel(g, f, now) : hint(g, f, now);
-        warnLine(g, f, now, bottom);
+        bottom = warnLine(g, f, now, bottom);
+        notes(g, f, now, bottom);
         floating(g, f, now);
+        corpseHint(g, f, now, sw, sh);
         toasts(g, f, now, sw);
         big(g, f, now, sw, sh);
         callout(g, f, now, sw, sh);
@@ -203,7 +273,7 @@ public final class Hud {
         int y1 = PY;
         int x2 = PX + PW;
         boolean pts = CData.points() > 0;
-        int y2 = y1 + (pts ? 80 : 70);
+        int y2 = y1 + (pts ? 90 : 80);
         Ui.panel(g, x1, y1, x2, y2, Ui.CYAN, 0.9F);
         Ui.shine(g, x1, y1, x2, y1 + 14, now, 0.9F);
 
@@ -235,23 +305,29 @@ public final class Hud {
             Ui.glow(g, f, sp, x2 - 5 - f.width(sp), y1 + 46, 0xFFB57BFF, 0x50B57BFF, pulse);
         }
 
+        Ui.text(g, f, "SOM", x1 + 5, y1 + 56, Ui.SHADOW, 1F);
+        Ui.text(g, f, CData.shadowCount() + "/" + CData.shadowMax(), bx, y1 + 56, Ui.WHITE, 1F);
+        int out = ClientShadows.out();
+        String so = out > 0 ? out + " fuera  [" + key(ElSistemaClient.SHADOWS) + "]" : "[" + key(ElSistemaClient.SHADOWS) + "] invocar";
+        Ui.text(g, f, so, x2 - 5 - f.width(so), y1 + 56, out > 0 ? Ui.PURPLE : Ui.MUTED, 1F);
+
         String skill = "[" + key(ElSistemaClient.SKILL) + "] " + name(Defs.SKILL_NAME, CData.cls());
-        Ui.text(g, f, skill, x1 + 5, y1 + 56, Ui.WHITE, 1F);
+        Ui.text(g, f, skill, x1 + 5, y1 + 66, Ui.WHITE, 1F);
         int cd = CData.cooldown();
         if (cd > 0) {
             String s = String.format(Locale.ROOT, "%.1fs", cd / 20F);
-            Ui.text(g, f, s, x2 - 5 - f.width(s), y1 + 56, Ui.GRAY, 1F);
+            Ui.text(g, f, s, x2 - 5 - f.width(s), y1 + 66, Ui.GRAY, 1F);
             float frac = cd / (float) CData.cooldownTotal();
-            g.fill(x1 + 5, y1 + 66, x1 + 5 + Math.round((PW - 10) * frac), y1 + 67, Ui.fade(Ui.CYAN, 0.8F));
+            g.fill(x1 + 5, y1 + 76, x1 + 5 + Math.round((PW - 10) * frac), y1 + 77, Ui.fade(Ui.CYAN, 0.8F));
         } else {
             float pulse = 0.6F + 0.4F * (float) Math.sin(now / 250.0);
             String s = "LISTO";
-            Ui.glow(g, f, s, x2 - 5 - f.width(s), y1 + 56, Ui.CYAN, Ui.GLOW, pulse);
+            Ui.glow(g, f, s, x2 - 5 - f.width(s), y1 + 66, Ui.CYAN, Ui.GLOW, pulse);
         }
         if (pts) {
             float pulse = 0.6F + 0.4F * (float) Math.sin(now / 300.0);
             Ui.text(g, f, "+" + CData.points() + " puntos sin usar  [" + key(ElSistemaClient.STATUS) + "]",
-                    x1 + 5, y1 + 70, Ui.GOLD, pulse);
+                    x1 + 5, y1 + 80, Ui.GOLD, pulse);
         }
         return y2;
     }
@@ -266,15 +342,48 @@ public final class Hud {
         return PY + 18;
     }
 
-    private static void warnLine(GuiGraphics g, Font f, long now, int y) {
-        if (warnTime < 0) return;
+    private static int warnLine(GuiGraphics g, Font f, long now, int y) {
+        if (warnTime < 0) return y;
         long age = now - warnTime;
-        if (age > 1600) {
+        if (age > 2200) {
             warnTime = -1;
+            return y;
+        }
+        float a = 1F - Ui.clamp01((age - 1700) / 500F);
+        Ui.glow(g, f, warnText, PX + 2, y + 6, Ui.RED, 0x50FF3030, a);
+        return y + 12;
+    }
+
+    private static void notes(GuiGraphics g, Font f, long now, int y) {
+        NOTES.removeIf(n -> now - n.start() > 3500);
+        int yy = y + 6;
+        for (Note n : NOTES) {
+            long age = now - n.start();
+            float a = Ui.clamp01(age / 150F) * (1F - Ui.clamp01((age - 2900) / 600F));
+            int slide = Math.round((1F - Ui.easeOut(age / 250F)) * -20F);
+            Ui.glow(g, f, n.text(), PX + 2 + slide, yy, n.color(), 0x40000000 | (n.color() & 0x00FFFFFF), a);
+            yy += 11;
+        }
+    }
+
+    /** «[G] ¡LEVÁNTATE!» bajo la mira mientras el cadáver todavía humea. */
+    private static void corpseHint(GuiGraphics g, Font f, long now, int sw, int sh) {
+        if (corpseUntil < 0) return;
+        long left = corpseUntil - now;
+        if (left <= 0) {
+            corpseUntil = -1;
             return;
         }
-        float a = 1F - Ui.clamp01((age - 1100) / 500F);
-        Ui.glow(g, f, warnText, PX + 2, y + 6, Ui.RED, 0x50FF3030, a);
+        float a = Ui.clamp01((now - corpseStart) / 200F) * Ui.clamp01(left / 500F);
+        float pulse = 0.75F + 0.25F * (float) Math.sin(now / 160.0);
+        String s = "[" + key(ElSistemaClient.ARISE) + "]  ¡LEVÁNTATE!";
+        int cx = sw / 2;
+        int y = sh / 2 + 20;
+        int w = f.width(s) + 18;
+        Ui.panel(g, cx - w / 2, y - 4, cx + w / 2, y + 13, Ui.SHADOW, a * 0.95F);
+        Ui.glow(g, f, s, cx - f.width(s) / 2, y, Ui.WHITE, 0xA07A3DFF, a * pulse);
+        float frac = left / (float) corpseTotal;
+        g.fill(cx - w / 2 + 2, y + 10, cx - w / 2 + 2 + Math.round((w - 4) * frac), y + 11, Ui.fade(Ui.SHADOW, a));
     }
 
     /** "+12 EXP" y "+5 oro" que suben y se desvanecen junto al panel. */

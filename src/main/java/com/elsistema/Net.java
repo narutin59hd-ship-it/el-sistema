@@ -39,6 +39,21 @@ public final class Net {
     public static final int N_SOLD = 24;
     public static final int N_GATE_FAIL = 25;
     public static final int N_TREE_UP = 26;
+    public static final int N_CORPSE = 27;        // a = segundos para extraer
+    public static final int N_ARISE_OK = 28;      // a = id de la sombra, b = rango
+    public static final int N_ARISE_FAIL = 29;    // a = intentos que quedan
+    public static final int N_ARMY_FULL = 30;     // a = sombras, b = máximo
+    public static final int N_SHADOW_BACK = 31;   // a = segundos de recuperación
+    public static final int N_SHADOW_MARK = 32;   // a = id de entidad, b = 1 es sombra
+    public static final int N_NO_CORPSE = 33;
+    public static final int N_SHADOWS_OUT = 34;   // a = cuántas
+    public static final int N_SHADOWS_IN = 35;    // a = cuántas
+    public static final int N_RANK_REQ = 36;      // a = rango necesario
+    public static final int N_SHADOW_LEVEL = 37;  // a = id de la sombra, b = nivel
+    public static final int N_MANA = 38;          // a = maná recuperado
+    public static final int N_RETURN = 39;
+    public static final int N_ARISE_NO_MP = 40;   // a = coste
+    public static final int N_NO_SHADOWS = 41;
 
     // Acciones (cliente -> servidor)
     public static final int ACT_SKILL = 1;
@@ -47,6 +62,10 @@ public final class Net {
     public static final int ACT_TREE = 4;
     public static final int ACT_BUY = 5;
     public static final int ACT_SELL = 6;
+    public static final int ACT_ARISE = 7;
+    public static final int ACT_SHADOWS_TOGGLE = 8;
+    public static final int ACT_SHADOW = 9;        // a = id, b = 0 invocar, 1 guardar, 2 liberar
+    public static final int ACT_SHADOWS_ALL = 10;  // a = 1 invocar todas, 0 guardar todas
 
     /** Servidor -> cliente: todos los datos del Jugador. */
     public record SyncPayload(List<Integer> data) implements CustomPacketPayload {
@@ -72,6 +91,22 @@ public final class Net {
                 ByteBufCodecs.VAR_INT, NotifyPayload::a,
                 ByteBufCodecs.VAR_INT, NotifyPayload::b,
                 NotifyPayload::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Servidor -> cliente: lista de sombras (7 números y 2 textos por sombra). */
+    public record ShadowsPayload(List<Integer> nums, List<String> strs) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<ShadowsPayload> TYPE =
+                new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "shadows"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, ShadowsPayload> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), ShadowsPayload::nums,
+                ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), ShadowsPayload::strs,
+                ShadowsPayload::new);
 
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {

@@ -20,6 +20,8 @@ public final class Combat {
     public static boolean allowDamage(LivingEntity victim, DamageSource src, float amount) {
         if (busy) return true;
         Entity attacker = src.getEntity();
+        // El Jugador y sus sombras nunca se hacen daño entre ellos
+        if (attacker != null && attacker != victim && Shadows.allied(attacker, victim)) return false;
 
         if (victim instanceof ServerPlayer p) {
             Data d = Store.get(p);
@@ -53,6 +55,9 @@ public final class Combat {
 
         if (attacker instanceof ServerPlayer ap && attacker != victim) {
             Data d = Store.get(ap);
+            if (src.getDirectEntity() == ap && ap.getMainHandItem().is(ModItems.GUADANA)) {
+                Shadows.focus(ap, victim);
+            }
             if (d.awakened == 1) {
                 double steal = d.fx(Trees.FX_LIFESTEAL);
                 if (steal > 0) ap.heal((float) (amount * steal / 100.0));

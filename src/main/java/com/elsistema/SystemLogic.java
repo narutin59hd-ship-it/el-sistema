@@ -109,8 +109,12 @@ public final class SystemLogic {
         ServerPlayNetworking.send(p, new Net.NotifyPayload(kind, a, b));
     }
 
+    public static void sendShadows(ServerPlayer p, List<Integer> nums, List<String> strs) {
+        ServerPlayNetworking.send(p, new Net.ShadowsPayload(nums, strs));
+    }
+
     public static void sync(ServerPlayer p, Data d) {
-        List<Integer> l = new ArrayList<>(28);
+        List<Integer> l = new ArrayList<>(36);
         l.add(d.awakened);
         l.add(d.race);
         l.add(d.cls);
@@ -133,6 +137,12 @@ public final class SystemLogic {
         for (int i = 0; i < 5; i++) {
             l.add(d.classRank(i));
         }
+        for (int i = 0; i < 5; i++) {
+            l.add(d.shadowRank(i));
+        }
+        l.add(Shadows.count(d));
+        l.add(Shadows.maxSlots(d));
+        l.add(d.setBonus);
         ServerPlayNetworking.send(p, new Net.SyncPayload(l));
     }
 
@@ -146,12 +156,14 @@ public final class SystemLogic {
         int m = 50 + 3 * d.bonus(3);
         if (d.awakened == 1 && d.cls == Defs.MAGO) m += 50;
         if (d.awakened == 1 && d.race == Defs.DEMONIO) m += 30;
+        if (d.setBonus == ModArmor.SET_ARCHIMAGO) m += 40;
         return m + (int) Math.round(d.fx(Trees.FX_MP_MAX));
     }
 
     public static double mpRegen(Data d) {
         double r = 1.0 + 0.05 * d.bonus(3);
         if (d.awakened == 1 && d.cls == Defs.MAGO) r *= 2.0;
+        if (d.setBonus == ModArmor.SET_ARCHIMAGO) r *= 1.5;
         return r * (1.0 + d.fx(Trees.FX_MP_REGEN) / 100.0);
     }
 
@@ -334,6 +346,7 @@ public final class SystemLogic {
                 d.joinDelay--;
                 if (d.joinDelay == 0) {
                     notify(p, d.awakened == 1 ? Net.N_WELCOME : Net.N_AWAKEN_PROMPT, 0, 0);
+                    if (d.awakened == 1) Shadows.onJoined(p);
                 }
             }
             if (d.anim > 0) animTick(p, d);
@@ -356,6 +369,17 @@ public final class SystemLogic {
             }
             if (t % 10 == 0) {
                 updateSword(p, d);
+                int set = d.awakened == 1 ? ModArmor.fullSet(p) : -1;
+                if (set != d.setBonus) {
+                    d.setBonus = set;
+                    Shadows.refresh(p);
+                    if (d.mp > maxMp(d)) d.mp = maxMp(d);
+                }
+                if (set == ModArmor.SET_CAZADOR) {
+                    p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 0, true, false, true));
+                } else if (set == ModArmor.SET_CABALLERO) {
+                    p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 40, 0, true, false, true));
+                }
                 if (d.awakened == 1) {
                     if (d.race == Defs.DEMONIO || d.fx(Trees.FX_FIRE_IMMUNE) > 0) {
                         p.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 40, 0, true, false, false));
@@ -368,6 +392,7 @@ public final class SystemLogic {
             }
         }
         if (t % 6000 == 0) {
+            Shadows.snapshot(server);
             Store.saveAll(server);
         }
     }
@@ -379,9 +404,19 @@ public final class SystemLogic {
             case Net.ACT_SKILL -> useSkill(p);
             case Net.ACT_STAT -> addStat(p, a, b);
             case Net.ACT_CHOOSE -> choose(p, a, b);
-            case Net.ACT_TREE -> treeUp(p, a == 0, b);
+            case Net.ACT_TREE -> treeUp(p, a, b);
             case Net.ACT_BUY -> Shop.buy(p, a, b);
             case Net.ACT_SELL -> Shop.sellCores(p);
+            case Net.ACT_ARISE -> Shadows.arise(p);
+            case Net.ACT_SHADOWS_TOGGLE -> Shadows.toggle(p);
+            case Net.ACT_SHADOW -> Shadows.action(p, a, b);
+            case Net.ACT_SHADOWS_ALL -> {
+                if (a == 1) {
+                    if (Shadows.summonAll(p) == 0) notify(p, Net.N_NO_SHADOWS, Store.get(p).shadows.size(), 0);
+                } else {
+                    Shadows.storeAll(p, false);
+                }
+            }
             default -> {
             }
         }
@@ -432,13 +467,13 @@ public final class SystemLogic {
         sync(p, d);
     }
 
-    /** Sube un rango de un nudo del árbol de la raza (race = true) o de la clase. */
-    public static void treeUp(ServerPlayer p, boolean race, int node) {
+    /** Sube un rango de un nudo del árbol indicado (0 raza, 1 clase, 2 sombras). */
+    public static void treeUp(ServerPlayer p, int kind, int node) {
         Data d = Store.get(p);
-        if (d.awakened != 1 || node < 0 || node > 4 || d.skillPoints <= 0) return;
-        Trees.Node[] tree = Trees.tree(race, race ? d.race : d.cls);
-        if (tree == null) return;
-        int[] ranks = race ? d.raceTree[d.race] : d.classTree[d.cls];
+        if (d.awakened != 1 || node < 0 || node > 4 || d.skillPoints <= 0 || kind < 0 || kind > 2) return;
+        Trees.Node[] tree = Trees.tree(kind, kind == Trees.KIND_RACE ? d.race : d.cls);
+        int[] ranks = d.ranks(kind);
+        if (tree == null || ranks == null) return;
         Trees.Node n = tree[node];
         if (ranks[node] >= n.max() || d.level < n.lvl()) return;
         int parent = Trees.PARENT[node];
@@ -446,9 +481,11 @@ public final class SystemLogic {
         ranks[node]++;
         d.skillPoints--;
         applyAll(p, d);
+        if (kind == Trees.KIND_SHADOW) Shadows.refresh(p);
         p.playNotifySound(SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 0.8F, 1.4F);
-        notify(p, Net.N_TREE_UP, race ? 0 : 1, node);
+        notify(p, Net.N_TREE_UP, kind, node);
         sync(p, d);
+        Shadows.sendList(p);
     }
 
     public static void choose(ServerPlayer p, int race, int cls) {
@@ -494,6 +531,8 @@ public final class SystemLogic {
         d.spGranted = 0;
         d.raceTree = new int[Trees.RACE.length][5];
         d.classTree = new int[Trees.CLASS.length][5];
+        d.shadowTree = new int[5];
+        Shadows.wipe(p);
         applyAll(p, d);
         sync(p, d);
         notify(p, Net.N_AWAKEN_PROMPT, 0, 0);
@@ -511,6 +550,7 @@ public final class SystemLogic {
         Dungeons.recover(p, d);
         d.joinDelay = 60;
         sync(p, d);
+        Shadows.sendList(p);
     }
 
     public static void onRespawn(ServerPlayer p) {
@@ -535,6 +575,10 @@ public final class SystemLogic {
             if (d.fx(Trees.FX_FIRE_ARROWS) > 0) {
                 arrow.setRemainingFireTicks(2000);
             }
+            return;
+        }
+        if (Shadows.isShadow(entity)) {
+            Shadows.onLoad(entity);
             return;
         }
         Ranks.onLoad(entity);

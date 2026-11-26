@@ -21,6 +21,9 @@ public final class Ui {
     public static final int MUTED = 0xFF7F95AA;
     public static final int BG = 0xE0060D18;
     public static final int GLOW = 0x7050B4FF;
+    public static final int PURPLE = 0xFFB57BFF;
+    public static final int SHADOW = 0xFF9B5CFF;
+    public static final int SHADOW_GLOW = 0x807A3DFF;
 
     // ------------------------------------------------------------------ matemáticas
 

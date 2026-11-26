@@ -29,7 +29,7 @@ public final class Skills {
     private Skills() {}
 
     private static boolean isTarget(LivingEntity e, ServerPlayer p) {
-        return e != p && e.isAlive() && e instanceof Enemy;
+        return e != p && e.isAlive() && e instanceof Enemy && !Shadows.allied(e, p);
     }
 
     private static void sound(ServerLevel lvl, double x, double y, double z, SoundEvent s, float volume, float pitch) {
@@ -121,6 +121,33 @@ public final class Skills {
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.EVOKER_CAST_SPELL, 1.0F, 1.6F);
         sound(lvl, to.x, to.y, to.z, SoundEvents.AMETHYST_BLOCK_CHIME, 1.5F, 0.6F);
         return true;
+    }
+
+    /** Báculo arcano: rayo corto que atraviesa monstruos (más daño con INTELIGENCIA). */
+    public static void bolt(ServerPlayer p, Data d) {
+        ServerLevel lvl = (ServerLevel) p.level();
+        Vec3 eye = p.getEyePosition();
+        Vec3 end = eye.add(p.getLookAngle().scale(18.0));
+        BlockHitResult bh = lvl.clip(new ClipContext(eye, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, p));
+        if (bh.getType() != HitResult.Type.MISS) {
+            end = bh.getLocation();
+        }
+        final Vec3 from = eye;
+        final Vec3 to = end;
+        float dmg = (float) (5.0 + 0.25 * d.bonus(3) + 0.05 * d.level);
+        List<LivingEntity> hits = lvl.getEntitiesOfClass(LivingEntity.class, new AABB(from, to).inflate(1.0),
+                e -> isTarget(e, p) && e.getBoundingBox().inflate(0.3).clip(from, to).isPresent());
+        for (LivingEntity e : hits) {
+            e.hurt(p.damageSources().indirectMagic(p, p), dmg);
+            lvl.sendParticles(ParticleTypes.WITCH, e.getX(), e.getY() + e.getBbHeight() / 2.0, e.getZ(), 10, 0.3, 0.3, 0.3, 0.05);
+        }
+        double len = from.distanceTo(to);
+        Vec3 dir = to.subtract(from).normalize();
+        for (double t = 0.8; t < len; t += 0.5) {
+            Vec3 q = from.add(dir.scale(t));
+            lvl.sendParticles(ParticleTypes.WITCH, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
+        }
+        sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.EVOKER_CAST_SPELL, 0.7F, 1.9F);
     }
 
     /** Asesino: Sigilo. */

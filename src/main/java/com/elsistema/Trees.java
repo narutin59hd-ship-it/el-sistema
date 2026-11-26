@@ -1,7 +1,7 @@
 package com.elsistema;
 
 /**
- * Árboles de habilidades: uno por raza y uno por clase.
+ * Árboles de habilidades: uno por raza, uno por clase y el de las Sombras (común a todos).
  * Cada árbol tiene 5 nudos: 0 es la raíz, 1 y 2 salen de 0, 3 sale de 1 y 4 sale de 2.
  */
 public final class Trees {
@@ -30,6 +30,15 @@ public final class Trees {
     public static final int FX_SKILL_TIME = 20;   // segundos extra de Sigilo o Fortaleza
     public static final int FX_FIRE_ARROWS = 21;  // flechas en llamas
     public static final int FX_DROP = 22;         // % de probabilidad de botín
+    public static final int FX_SHADOW_SLOTS = 23; // sombras extra en el ejército
+    public static final int FX_SHADOW_CHANCE = 24; // % de probabilidad de extracción
+    public static final int FX_SHADOW_POWER = 25; // % de vida y daño de las sombras
+    public static final int FX_SHADOW_REGEN = 26; // curación de las sombras y recuperación más rápida
+
+    // Tipos de árbol
+    public static final int KIND_RACE = 0;
+    public static final int KIND_CLASS = 1;
+    public static final int KIND_SHADOW = 2;
 
     // Efectos de atributo: ATTR + índice en SystemLogic.TREE_ATTRS
     public static final int ATTR = 100;
@@ -130,8 +139,72 @@ public final class Trees {
                     n("Inamovible", "+6% de resistencia al empuje por rango", 5, 30, A_KB, 0.06)}
     };
 
+    public static final String SHADOW_TREE = "Monarca de las Sombras";
+
+    public static final Node[] SHADOW = {
+            n("Ejército de sombras", "+1 sombra en tu ejército por rango", 10, 1, FX_SHADOW_SLOTS, 1),
+            n("Extracción perfecta", "+5% de probabilidad de extraer una sombra por rango", 5, 5, FX_SHADOW_CHANCE, 5),
+            n("Poder de las sombras", "+5% de vida y daño de tus sombras por rango", 10, 5, FX_SHADOW_POWER, 5),
+            n("Legión", "+2 sombras en tu ejército por rango", 5, 25, FX_SHADOW_SLOTS, 2),
+            n("Soberano de la noche", "Tus sombras se curan 1 de vida por segundo y vuelven 15 s antes por rango", 3, 40, FX_SHADOW_REGEN, 1)};
+
     public static Node[] tree(boolean race, int index) {
         Node[][] all = race ? RACE : CLASS;
         return index >= 0 && index < all.length ? all[index] : null;
+    }
+
+    /** kind: 0 = raza, 1 = clase, 2 = sombras. */
+    public static Node[] tree(int kind, int index) {
+        if (kind == KIND_SHADOW) return SHADOW;
+        return tree(kind == KIND_RACE, index);
+    }
+
+    private static String num(double v) {
+        if (Math.abs(v - Math.rint(v)) < 1e-6) return String.valueOf((long) Math.rint(v));
+        return String.valueOf(Math.round(v * 100.0) / 100.0);
+    }
+
+    /** Texto corto con el efecto total de un nudo a un rango dado (para el panel de detalles). */
+    public static String effect(Node n, int rank) {
+        double v = n.val() * rank;
+        String x = num(v);
+        String pct = num(v * 100.0);
+        return switch (n.fx()) {
+            case FX_XP -> "+" + x + "% de EXP";
+            case FX_COINS -> "+" + x + "% de oro";
+            case FX_SKILL_DMG -> "+" + x + "% de daño de habilidad";
+            case FX_SKILL_CD -> "-" + x + "% de enfriamiento";
+            case FX_MP_MAX -> "+" + x + " de maná máximo";
+            case FX_MP_REGEN -> "+" + x + "% de regeneración de maná";
+            case FX_ARROW_DMG -> "+" + x + "% de daño con flechas";
+            case FX_LIFESTEAL -> x + "% de robo de vida";
+            case FX_DODGE -> x + "% de esquivar";
+            case FX_THORNS -> x + "% del daño devuelto";
+            case FX_FIRE_IMMUNE -> rank > 0 ? "Inmune al fuego" : "Sin efecto";
+            case FX_NIGHT_VISION -> rank > 0 ? "Visión nocturna" : "Sin efecto";
+            case FX_FIRE_HIT -> x + " s de fuego al golpear";
+            case FX_POISON_HIT -> x + " s de veneno al golpear";
+            case FX_REGEN -> "+" + x + " de vida cada 5 s";
+            case FX_LAST_STAND -> rank > 0 ? "Última resistencia activa" : "Sin efecto";
+            case FX_GLIDE -> rank > 0 ? "Puedes planear" : "Sin efecto";
+            case FX_EXTRA_ARROWS -> "+" + x + " flechas";
+            case FX_SKILL_RADIUS -> "+" + x + " bloques de alcance";
+            case FX_SKILL_TIME -> "+" + x + " s de duración";
+            case FX_FIRE_ARROWS -> rank > 0 ? "Flechas en llamas" : "Sin efecto";
+            case FX_DROP -> "+" + x + "% de botín";
+            case FX_SHADOW_SLOTS -> "+" + x + " sombras";
+            case FX_SHADOW_CHANCE -> "+" + x + "% de extracción";
+            case FX_SHADOW_POWER -> "+" + x + "% de poder de las sombras";
+            case FX_SHADOW_REGEN -> "+" + x + " vida/s, -" + num(15 * v) + " s de recuperación";
+            case A_HP -> "+" + x + " de vida máxima";
+            case A_ARMOR -> "+" + x + " de armadura";
+            case A_DMG -> "+" + x + " de daño";
+            case A_ATKSPD -> "+" + x + " de velocidad de ataque";
+            case A_SPEED -> "+" + pct + "% de velocidad";
+            case A_KB -> "+" + pct + "% de resistencia al empuje";
+            case A_MINE -> "+" + pct + "% de velocidad al picar";
+            case A_TOUGH -> "+" + x + " de dureza";
+            default -> x;
+        };
     }
 }

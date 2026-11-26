@@ -6,7 +6,7 @@ import java.util.List;
 public final class CData {
     private CData() {}
 
-    public static final int SIZE = 28;
+    public static final int SIZE = 36;
     private static int[] d = fresh();
 
     private static int[] fresh() {
@@ -19,6 +19,8 @@ public final class CData {
             n[i] = 10;
         }
         n[15] = 1;
+        n[34] = 2;
+        n[35] = -1;
         return n;
     }
 
@@ -56,4 +58,20 @@ public final class CData {
     public static int skillPoints() { return d[17]; }
     public static int raceRank(int node) { return d[18 + node]; }
     public static int classRank(int node) { return d[23 + node]; }
+    public static int shadowRank(int node) { return d[28 + node]; }
+    public static int shadowCount() { return d[33]; }
+    public static int shadowMax() { return Math.max(0, d[34]); }
+    /** Conjunto de armadura completo que lleva puesto (-1 = ninguno). */
+    public static int setBonus() { return d[35]; }
+
+    /** Rango de un nudo: kind 0 = raza, 1 = clase, 2 = sombras. */
+    public static int rank(int kind, int node) {
+        if (node < 0 || node > 4) return 0;
+        return kind == 0 ? raceRank(node) : kind == 1 ? classRank(node) : shadowRank(node);
+    }
+
+    /** Índice del árbol de cada tipo (raza, clase o el único de sombras). */
+    public static int treeIndex(int kind) {
+        return kind == 0 ? race() : kind == 1 ? cls() : 0;
+    }
 }

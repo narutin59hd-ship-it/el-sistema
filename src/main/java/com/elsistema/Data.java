@@ -1,5 +1,8 @@
 package com.elsistema;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** Datos de un Jugador (se guardan en la carpeta del mundo, en el_sistema/). */
 public class Data {
     public int awakened = 0;
@@ -18,6 +21,11 @@ public class Data {
     public int spGranted = 0;
     public int[][] raceTree = new int[6][5];
     public int[][] classTree = new int[5][5];
+    public int[] shadowTree = new int[5];
+
+    // Ejército de sombras
+    public List<ShadowRec> shadows = new ArrayList<>();
+    public int nextShadow = 1;
 
     // Para volver de una mazmorra si el juego se cierra dentro
     public int inDungeon = 0;
@@ -36,6 +44,30 @@ public class Data {
     public transient boolean swordOn = false;
     public transient int lastStand = 0;
     public transient int gateTimer = 0;
+    public transient int setBonus = -1;
+
+    /** Una sombra del ejército (guardada, fuera o recuperándose). */
+    public static class ShadowRec {
+        public int id;
+        public String type = "";
+        public String key = "";
+        public int rank;
+        public int level = 1;
+        public int kills;
+        public boolean boss;
+        public String nbt = "";
+        public int state;           // 0 guardada, 1 fuera, 2 recuperándose
+        public long recoverAt;
+        public float hp = 1F;
+        public boolean wasOut;
+    }
+
+    public ShadowRec shadow(int id) {
+        for (ShadowRec r : shadows) {
+            if (r.id == id) return r;
+        }
+        return null;
+    }
 
     /** Puntos por encima del valor inicial (10). */
     public int bonus(int stat) {
@@ -48,6 +80,17 @@ public class Data {
 
     public int classRank(int node) {
         return cls >= 0 && cls < classTree.length ? classTree[cls][node] : 0;
+    }
+
+    public int shadowRank(int node) {
+        return node >= 0 && node < shadowTree.length ? shadowTree[node] : 0;
+    }
+
+    /** Rangos del árbol indicado (0 raza, 1 clase, 2 sombras) o null. */
+    public int[] ranks(int kind) {
+        if (kind == Trees.KIND_SHADOW) return shadowTree;
+        if (kind == Trees.KIND_RACE) return race >= 0 && race < raceTree.length ? raceTree[race] : null;
+        return cls >= 0 && cls < classTree.length ? classTree[cls] : null;
     }
 
     /** Suma de un efecto especial en el árbol de tu raza y el de tu clase. */
@@ -65,6 +108,9 @@ public class Data {
             for (int i = 0; i < ct.length; i++) {
                 if (ct[i].fx() == effect) s += classTree[cls][i] * ct[i].val();
             }
+        }
+        for (int i = 0; i < Trees.SHADOW.length; i++) {
+            if (Trees.SHADOW[i].fx() == effect) s += shadowTree[i] * Trees.SHADOW[i].val();
         }
         return s;
     }
@@ -90,6 +136,20 @@ public class Data {
         if (skillPoints < 0) skillPoints = 0;
         raceTree = fixTree(raceTree, Trees.RACE);
         classTree = fixTree(classTree, Trees.CLASS);
+        shadowTree = fixTree(new int[][]{shadowTree}, new Trees.Node[][]{Trees.SHADOW})[0];
+        if (shadows == null) shadows = new ArrayList<>();
+        shadows.removeIf(r -> r == null || r.nbt == null || r.nbt.isEmpty() || r.type == null);
+        int maxId = 0;
+        for (ShadowRec r : shadows) {
+            maxId = Math.max(maxId, r.id);
+            if (r.state == 1) {
+                r.state = 0;
+                r.wasOut = true;
+            }
+            if (r.key == null) r.key = "";
+            if (Float.isNaN(r.hp) || r.hp <= 0F || r.hp > 1F) r.hp = 1F;
+        }
+        if (nextShadow <= maxId) nextShadow = maxId + 1;
         // Puntos de habilidad para los niveles que ya tenías antes de esta versión
         int target = level - 1;
         if (spGranted < target) {

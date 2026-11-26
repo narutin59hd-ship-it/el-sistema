@@ -28,6 +28,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -47,8 +48,8 @@ import java.util.UUID;
 public final class Dungeons {
     private Dungeons() {}
 
-    private static final int SIZE = 23;
-    private static final int H = 9;
+    private static final int SIZE = 27;
+    private static final int H = 12;
     private static final int[] WAVES = {3, 3, 4, 4, 5, 5};
     private static final int GATE_LIFE = 6000;
     private static final int RUN_LIMIT = 20 * 60 * 15;
@@ -56,25 +57,35 @@ public final class Dungeons {
             {0.75F, 0.75F, 0.75F}, {0.45F, 0.95F, 0.5F}, {0.35F, 0.75F, 1.0F},
             {0.75F, 0.45F, 1.0F}, {1.0F, 0.7F, 0.25F}, {1.0F, 0.25F, 0.25F}};
     private static final String[] BOSS_NAME = {
-            "Rey de los no muertos", "Reina araña", "Verdugo carmesí",
-            "Caballero de la muerte", "Bestia del caos", "Monarca de las sombras"};
+            "Rey goblin", "Licántropo alfa", "Señor de la guerra orco",
+            "Oso de hielo ancestral", "Reina hormiga", "Coloso de piedra"};
+    private static final String[] THEME = {
+            "Cueva de los goblins", "Guarida de los lobos", "Fortaleza orca",
+            "Caverna helada", "Nido de hormigas", "Templo del coloso"};
 
-    private static final List<EntityType<? extends Mob>> BOSS = List.<EntityType<? extends Mob>>of(
-            EntityType.ZOMBIE, EntityType.SPIDER, EntityType.VINDICATOR,
-            EntityType.WITHER_SKELETON, EntityType.RAVAGER, EntityType.WITHER_SKELETON);
+    /** Jefe de cada rango (monstruos propios de las mazmorras). */
+    private static EntityType<? extends Mob> boss(int rank) {
+        return switch (rank) {
+            case 0 -> ModEntities.GOBLIN;
+            case 1 -> ModEntities.LOBO;
+            case 2 -> ModEntities.ORCO;
+            case 3 -> ModEntities.OSO;
+            case 4 -> ModEntities.HORMIGA;
+            default -> ModEntities.COLOSO;
+        };
+    }
 
-    private static final List<List<EntityType<? extends Mob>>> POOL = List.of(
-            List.<EntityType<? extends Mob>>of(EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER),
-            List.<EntityType<? extends Mob>>of(EntityType.ZOMBIE, EntityType.HUSK, EntityType.SKELETON,
-                    EntityType.STRAY, EntityType.SPIDER, EntityType.CAVE_SPIDER),
-            List.<EntityType<? extends Mob>>of(EntityType.HUSK, EntityType.STRAY, EntityType.WITCH,
-                    EntityType.VINDICATOR, EntityType.PILLAGER, EntityType.BOGGED),
-            List.<EntityType<? extends Mob>>of(EntityType.VINDICATOR, EntityType.PILLAGER, EntityType.BLAZE,
-                    EntityType.WITHER_SKELETON, EntityType.WITCH),
-            List.<EntityType<? extends Mob>>of(EntityType.WITHER_SKELETON, EntityType.BLAZE, EntityType.VINDICATOR,
-                    EntityType.EVOKER, EntityType.RAVAGER),
-            List.<EntityType<? extends Mob>>of(EntityType.WITHER_SKELETON, EntityType.EVOKER, EntityType.RAVAGER,
-                    EntityType.BLAZE, EntityType.VINDICATOR));
+    /** Monstruos de cada rango: solo aparecen dentro de las mazmorras. */
+    private static List<EntityType<? extends Mob>> pool(int rank) {
+        return switch (rank) {
+            case 0 -> List.<EntityType<? extends Mob>>of(ModEntities.GOBLIN, ModEntities.GOBLIN, ModEntities.LOBO);
+            case 1 -> List.<EntityType<? extends Mob>>of(ModEntities.GOBLIN, ModEntities.LOBO, ModEntities.LOBO);
+            case 2 -> List.<EntityType<? extends Mob>>of(ModEntities.LOBO, ModEntities.ORCO, ModEntities.ORCO, ModEntities.OSO);
+            case 3 -> List.<EntityType<? extends Mob>>of(ModEntities.ORCO, ModEntities.OSO, ModEntities.OSO, ModEntities.HORMIGA);
+            case 4 -> List.<EntityType<? extends Mob>>of(ModEntities.HORMIGA, ModEntities.HORMIGA, ModEntities.CABALLERO, ModEntities.ORCO);
+            default -> List.<EntityType<? extends Mob>>of(ModEntities.CABALLERO, ModEntities.CABALLERO, ModEntities.HORMIGA);
+        };
+    }
 
     private static final List<Gate> GATES = new ArrayList<>();
     private static int nextId = 1;
@@ -322,7 +333,7 @@ public final class Dungeons {
         }
         if (ex || ez) {
             if (ex && ez) return Blocks.CRYING_OBSIDIAN.defaultBlockState();
-            if (y == 3) return glass;
+            if (y == 3 || y == 8) return glass;
             return Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState();
         }
         return null;
@@ -359,7 +370,7 @@ public final class Dungeons {
                 }
             }
             r.total = WAVES[g.rank];
-            r.bar = new ServerBossEvent(Component.literal("Mazmorra de rango " + Defs.RANK[g.rank] + " · Preparándose..."),
+            r.bar = new ServerBossEvent(Component.literal(THEME[g.rank] + " (rango " + Defs.RANK[g.rank] + ") · Preparándose..."),
                     BossEvent.BossBarColor.PURPLE, BossEvent.BossBarOverlay.PROGRESS);
             r.bar.setProgress(1.0F);
             g.run = r;
@@ -395,6 +406,7 @@ public final class Dungeons {
         d.arenaY = r.y0;
         d.arenaZ = r.z0;
         p.teleportTo(r.cx(), r.y0 + 1, r.cz());
+        Shadows.recall(p);
         p.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 40, 0, false, false, false));
         p.playNotifySound(SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8F, 0.6F);
         SystemLogic.notify(p, Net.N_DUNGEON_ENTER, g.rank, g.lvl);
@@ -406,8 +418,29 @@ public final class Dungeons {
         Data d = Store.get(p);
         if (d.inDungeon == 1 && p.isAlive() && near(r, p, 64)) {
             p.teleportTo(d.retX, d.retY, d.retZ);
+            Shadows.recall(p);
         }
         d.inDungeon = 0;
+    }
+
+    /** ¿Está el Jugador dentro de una mazmorra activa? */
+    public static boolean inDungeon(ServerPlayer p) {
+        for (Gate g : GATES) {
+            if (g.run != null && g.run.players.contains(p.getUUID())) return true;
+        }
+        return false;
+    }
+
+    /** Piedra de retorno: sale de la mazmorra (cuenta como abandonarla). */
+    public static boolean leaveNow(ServerPlayer p) {
+        for (Gate g : GATES) {
+            if (g.run != null && g.run.players.remove(p.getUUID())) {
+                if (!g.run.won) SystemLogic.notify(p, Net.N_DUNGEON_FAIL, 0, 0);
+                leave(p, g.run);
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ServerPlayer nearestPlayer(Gate g, Entity from) {
@@ -502,7 +535,7 @@ public final class Dungeons {
         Run r = g.run;
         r.wave++;
         boolean boss = r.wave >= r.total;
-        List<EntityType<? extends Mob>> pool = POOL.get(g.rank);
+        List<EntityType<? extends Mob>> pool = pool(g.rank);
         RandomSource rnd = g.level.getRandom();
         List<UUID> list = new ArrayList<>();
         int n = boss ? 2 + g.rank / 2 : 3 + g.rank + r.wave;
@@ -513,7 +546,7 @@ public final class Dungeons {
                 if (m != null) list.add(m.getUUID());
             }
             if (boss) {
-                Mob b = spawnMob(g, BOSS.get(g.rank), true);
+                Mob b = spawnMob(g, boss(g.rank), true);
                 if (b != null) list.add(b.getUUID());
             }
         } finally {
@@ -526,7 +559,7 @@ public final class Dungeons {
             r.bar.setName(Component.literal("★ JEFE: " + BOSS_NAME[g.rank] + " · Rango " + Defs.RANK[g.rank]));
             r.bar.setColor(BossEvent.BossBarColor.RED);
         } else {
-            r.bar.setName(Component.literal("Mazmorra de rango " + Defs.RANK[g.rank] + " · Oleada " + r.wave + "/" + r.total));
+            r.bar.setName(Component.literal(THEME[g.rank] + " · Oleada " + r.wave + "/" + r.total));
             r.bar.setColor(BossEvent.BossBarColor.PURPLE);
         }
         r.bar.setProgress(1.0F);
@@ -548,7 +581,7 @@ public final class Dungeons {
         RandomSource rnd = g.level.getRandom();
         BlockPos pos;
         if (boss) {
-            pos = new BlockPos(r.x0 + SIZE / 2, r.y0 + 1, r.z0 + SIZE / 2 + 5);
+            pos = new BlockPos(r.x0 + SIZE / 2, r.y0 + 1, r.z0 + SIZE / 2 + 6);
         } else {
             int x;
             int z;
@@ -634,7 +667,7 @@ public final class Dungeons {
                 Entity e = l.getEntity(u);
                 if (e != null) e.discard();
             }
-            for (Mob m : l.getEntitiesOfClass(Mob.class, box, m -> true)) {
+            for (Mob m : l.getEntitiesOfClass(Mob.class, box, m -> !Shadows.isShadow(m))) {
                 m.discard();
             }
             MinecraftServer server = l.getServer();
@@ -699,6 +732,19 @@ public final class Dungeons {
         }
         p.teleportTo(d.retX, d.retY, d.retZ);
         d.inDungeon = 0;
+    }
+
+    /** Para la prueba automática: construye una mazmorra de cada rango, saca la oleada del jefe y la limpia. */
+    public static void selfTest(ServerLevel lvl, BlockPos at) {
+        BlockPos pos = new BlockPos(at.getX(), lvl.getHeight(Heightmap.Types.MOTION_BLOCKING, at.getX(), at.getZ()), at.getZ());
+        for (int rank = 0; rank < 6; rank++) {
+            Gate g = new Gate(nextId++, lvl, pos, rank, Defs.RANK_MIN[rank] + 2);
+            if (!build(g)) throw new IllegalStateException("no se pudo construir la mazmorra de rango " + Defs.RANK[rank]);
+            g.run.total = 1;
+            spawnWave(g);
+            if (g.run.mobs.isEmpty()) throw new IllegalStateException("la mazmorra de rango " + Defs.RANK[rank] + " no tiene monstruos");
+            cleanup(g);
+        }
     }
 
     // ================================================================ efectos

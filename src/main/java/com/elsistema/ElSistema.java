@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -26,9 +27,11 @@ public class ElSistema implements ModInitializer {
     @Override
     public void onInitialize() {
         ModItems.register();
+        ModEntities.register();
 
         PayloadTypeRegistry.playS2C().register(Net.SyncPayload.TYPE, Net.SyncPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(Net.NotifyPayload.TYPE, Net.NotifyPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(Net.ShadowsPayload.TYPE, Net.ShadowsPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(Net.ActionPayload.TYPE, Net.ActionPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(Net.ActionPayload.TYPE, (payload, context) ->
@@ -39,12 +42,15 @@ public class ElSistema implements ModInitializer {
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             Dungeons.onDisconnect(handler.player);
+            Shadows.storeAll(handler.player, true);
+            Shadows.forget(handler.player);
             Store.save(server, handler.player.getUUID());
             Store.remove(handler.player.getUUID());
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             Dungeons.shutdown();
+            Shadows.shutdown(server);
             Store.saveAll(server);
             Store.clear();
         });
@@ -54,12 +60,27 @@ public class ElSistema implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             SystemLogic.tick(server);
             Dungeons.tick(server);
+            Shadows.tick(server);
         });
 
-        // EXP, oro y botín al matar criaturas (cuerpo a cuerpo, flechas o habilidades)
+        // EXP, oro y botín al matar criaturas (cuerpo a cuerpo, flechas, habilidades o tus sombras)
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             if (source.getEntity() instanceof ServerPlayer sp && entity != sp) {
-                Ranks.onKill(sp, entity);
+                Ranks.onKill(sp, entity, 1.0);
+            } else if (Shadows.isShadow(source.getEntity())) {
+                ServerPlayer owner = Shadows.ownerPlayer(source.getEntity());
+                if (owner != null) Ranks.onKill(owner, entity, 0.6);
+            }
+            Shadows.onDeath(entity, source);
+        });
+
+        // Las sombras no mueren: vuelven a la sombra de su dueño para recuperarse
+        ServerLivingEntityEvents.ALLOW_DEATH.register(Shadows::allowDeath);
+
+        // El cliente necesita saber qué criaturas son sombras para pintarlas oscuras
+        EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
+            if (Shadows.isShadow(entity)) {
+                SystemLogic.notify(player, Net.N_SHADOW_MARK, entity.getId(), 1);
             }
         });
 
@@ -127,6 +148,11 @@ public class ElSistema implements ModInitializer {
                                     SystemLogic.reset(ctx.getSource().getPlayerOrException());
                                     return 1;
                                 }))));
+
+        String selfTest = System.getenv("ELSISTEMA_SELFTEST");
+        if (selfTest != null && !selfTest.isBlank()) {
+            SelfTest.register(selfTest);
+        }
 
         LOGGER.info("El Sistema cargado");
     }

@@ -17,7 +17,9 @@ public final class Xp {
             Map.entry("zombified_piglin", 10), Map.entry("piglin", 10), Map.entry("piglin_brute", 35),
             Map.entry("hoglin", 18), Map.entry("zoglin", 22), Map.entry("guardian", 18), Map.entry("shulker", 25),
             Map.entry("breeze", 30), Map.entry("elder_guardian", 200), Map.entry("warden", 600),
-            Map.entry("wither", 1000), Map.entry("ender_dragon", 2500));
+            Map.entry("wither", 1000), Map.entry("ender_dragon", 2500),
+            Map.entry("goblin", 12), Map.entry("lobo_acero", 16), Map.entry("oso_hielo", 28), Map.entry("orco", 26),
+            Map.entry("hormiga", 30), Map.entry("caballero", 40), Map.entry("coloso", 60));
 
     /** EXP de una criatura. Los monstruos que no están en la lista dan 10 y los animales 1. */
     public static int forMob(String id, boolean hostile) {

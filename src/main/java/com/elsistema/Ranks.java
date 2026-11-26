@@ -30,6 +30,7 @@ public final class Ranks {
     private Ranks() {}
 
     public static final String TAG = "es_rank";
+    public static final String BOSS_TAG = "es_boss";
     /** Mientras es true, los monstruos que aparecen no reciben rango automático (los pone la mazmorra). */
     public static boolean spawning = false;
 
@@ -46,7 +47,7 @@ public final class Ranks {
         if (spawning) return;
         if (!(e instanceof Mob mob) || !(e instanceof Enemy)) return;
         if (mob instanceof EnderDragon || mob instanceof WitherBoss) return;
-        if (mob.getTags().contains(TAG) || mob.hasCustomName()) return;
+        if (mob.getTags().contains(TAG) || mob.hasCustomName() || Shadows.isShadow(mob)) return;
         if (!(mob.level() instanceof ServerLevel lvl)) return;
         int base;
         Player near = lvl.getNearestPlayer(mob, 128.0);
@@ -64,18 +65,7 @@ public final class Ranks {
 
     /** Da rango y nivel a un monstruo (también lo usan las mazmorras). */
     public static void apply(Mob mob, int rank, int level, boolean boss) {
-        for (String t : new ArrayList<>(mob.getTags())) {
-            if (t.startsWith("esr_") || t.startsWith("esl_")) mob.removeTag(t);
-        }
-        mob.addTag(TAG);
-        mob.addTag("esr_" + rank);
-        mob.addTag("esl_" + level);
-        double hp = 0.06 * level + HP[rank] + (boss ? 3.0 + rank * 1.5 : 0.0);
-        mod(mob, Attributes.MAX_HEALTH, "rango_vida", hp, Operation.ADD_MULTIPLIED_TOTAL);
-        mod(mob, Attributes.ATTACK_DAMAGE, "rango_dano", 0.03 * level + (boss ? 0.5 : 0.0), Operation.ADD_MULTIPLIED_TOTAL);
-        mod(mob, Attributes.MOVEMENT_SPEED, "rango_velocidad", 0.02 * rank, Operation.ADD_MULTIPLIED_BASE);
-        mod(mob, Attributes.ARMOR, "rango_armadura", 1.5 * rank + (boss ? 4.0 : 0.0), Operation.ADD_VALUE);
-        mod(mob, Attributes.SCALE, "rango_tamano", SIZE[rank] + (boss ? 0.5 : 0.0), Operation.ADD_VALUE);
+        applyStats(mob, rank, level, boss);
         mob.setHealth(mob.getMaxHealth());
         MutableComponent name = Component.literal((boss ? "★ " : "") + "[" + Defs.RANK[rank] + "] ").withStyle(COLOR[rank]);
         name.append(mob.getType().getDescription());
@@ -84,7 +74,26 @@ public final class Ranks {
         mob.setCustomNameVisible(boss);
     }
 
-    private static void mod(Mob mob, Holder<Attribute> attr, String path, double v, Operation op) {
+    /** Solo las etiquetas y los atributos del rango (las sombras usan esto para no perder su nombre). */
+    public static void applyStats(Mob mob, int rank, int level, boolean boss) {
+        rank = Math.max(0, Math.min(5, rank));
+        level = Math.max(1, Math.min(Defs.MAX_LEVEL, level));
+        for (String t : new ArrayList<>(mob.getTags())) {
+            if (t.startsWith("esr_") || t.startsWith("esl_") || t.equals(BOSS_TAG)) mob.removeTag(t);
+        }
+        mob.addTag(TAG);
+        mob.addTag("esr_" + rank);
+        mob.addTag("esl_" + level);
+        if (boss) mob.addTag(BOSS_TAG);
+        double hp = 0.06 * level + HP[rank] + (boss ? 3.0 + rank * 1.5 : 0.0);
+        mod(mob, Attributes.MAX_HEALTH, "rango_vida", hp, Operation.ADD_MULTIPLIED_TOTAL);
+        mod(mob, Attributes.ATTACK_DAMAGE, "rango_dano", 0.03 * level + (boss ? 0.5 : 0.0), Operation.ADD_MULTIPLIED_TOTAL);
+        mod(mob, Attributes.MOVEMENT_SPEED, "rango_velocidad", 0.02 * rank, Operation.ADD_MULTIPLIED_BASE);
+        mod(mob, Attributes.ARMOR, "rango_armadura", 1.5 * rank + (boss ? 4.0 : 0.0), Operation.ADD_VALUE);
+        mod(mob, Attributes.SCALE, "rango_tamano", SIZE[rank] + (boss ? 0.5 : 0.0), Operation.ADD_VALUE);
+    }
+
+    static void mod(Mob mob, Holder<Attribute> attr, String path, double v, Operation op) {
         AttributeInstance inst = mob.getAttribute(attr);
         if (inst == null) return;
         ResourceLocation id = ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, path);
@@ -116,15 +125,20 @@ public final class Ranks {
         return Math.max(1, tagNumber(e, "esl_"));
     }
 
-    /** Recompensas al matar una criatura: EXP, oro y botín según rango y nivel. */
-    public static void onKill(ServerPlayer p, LivingEntity dead) {
-        if (dead instanceof Player) return;
+    public static boolean isBoss(Entity e) {
+        return e.getTags().contains(BOSS_TAG);
+    }
+
+    /** Recompensas al matar una criatura: EXP, oro y botín según rango y nivel. xpMult < 1 si la mató una sombra. */
+    public static void onKill(ServerPlayer p, LivingEntity dead, double xpMult) {
+        if (dead instanceof Player || Shadows.isShadow(dead)) return;
         String id = BuiltInRegistries.ENTITY_TYPE.getKey(dead.getType()).getPath();
         boolean hostile = dead instanceof Enemy;
         int base = Xp.forMob(id, hostile);
         int rank = rankOf(dead);
         double mult = rank >= 0 ? REWARD[rank] * (1.0 + 0.04 * levelOf(dead)) : 1.0;
-        SystemLogic.addXp(p, (int) Math.round(base * mult));
+        if (isBoss(dead)) mult *= 3.0;
+        SystemLogic.addXp(p, (int) Math.round(base * mult * xpMult));
         if (hostile) {
             SystemLogic.addCoins(p, (int) Math.round(Math.max(1.0, base / 2.0) * mult));
         }
