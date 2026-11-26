@@ -156,7 +156,7 @@ public class SystemScreen extends Screen {
     public void render(GuiGraphics g, int mx, int my, float partialTick) {
         long now = System.currentTimeMillis();
         float p = Ui.easeOut((now - openTime) / 280F);
-        g.fill(0, 0, this.width, this.height, Ui.fade(0x99000208, p));
+        g.fill(0, 0, this.width, this.height, Ui.fade(0xC0000208, p));
         int x1 = px();
         int y1 = py();
         int x2 = x1 + pw();
@@ -366,7 +366,7 @@ public class SystemScreen extends Screen {
     }
 
     private int chipW() {
-        return Math.min(132, (pw() - 16 - 8) / 3);
+        return Math.min(120, (pw() - 16 - 8 - 56) / 3);
     }
 
     private int chipX(int i) {
@@ -1018,7 +1018,7 @@ public class SystemScreen extends Screen {
             }
             if (hover) tip = offerTip(i, myRank);
         }
-        hint(g, "Clic: comprar   ·   Mayús + clic: comprar 5   ·   gana oro en mazmorras y vendiendo núcleos", x1, x2, y2, a);
+        hint(g, "Clic: comprar   ·   Mayús + clic: comprar 5", x1, x2, y2, a);
         return tip;
     }
 

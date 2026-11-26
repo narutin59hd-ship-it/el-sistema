@@ -252,7 +252,7 @@ public final class Hud {
 
     public static void render(GuiGraphics g) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui) return;
+        if (mc.player == null || mc.options.hideGui || mc.screen instanceof SystemScreen) return;
         Font f = mc.font;
         long now = System.currentTimeMillis();
         int sw = g.guiWidth();

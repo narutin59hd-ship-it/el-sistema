@@ -762,6 +762,11 @@ public final class Shadows {
         int n = 0;
         int allowed = maxSlots(d);
         for (ShadowRec rec : d.shadows) {
+            if (rec.state == OUT && entityOf(p, rec) != null) {
+                rec.wasOut = false;
+                n++;
+                continue;
+            }
             if (rec.state == OUT) rec.state = STORED;
             if (rec.wasOut && rec.state == STORED && n < allowed && summon(p, d, rec, null)) n++;
             rec.wasOut = false;
