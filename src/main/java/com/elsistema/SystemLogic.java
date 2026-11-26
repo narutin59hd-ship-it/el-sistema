@@ -88,6 +88,22 @@ public final class SystemLogic {
                     new Mod(Attributes.KNOCKBACK_RESISTANCE, 0.3, Operation.ADD_VALUE),
                     new Mod(Attributes.MOVEMENT_SPEED, -0.05, Operation.ADD_MULTIPLIED_BASE)));
 
+    /** Atributos que cambia la mutación de clase (y lo que suma cada clase mutada). */
+    private static final List<Holder<Attribute>> MUT_ATTRS = List.of(
+            Attributes.ATTACK_DAMAGE, Attributes.ATTACK_SPEED, Attributes.MOVEMENT_SPEED, Attributes.MAX_HEALTH,
+            Attributes.ARMOR, Attributes.ARMOR_TOUGHNESS);
+    private static final List<List<Mod>> MUTATION_MODS = List.of(
+            List.of(
+                    new Mod(Attributes.ATTACK_DAMAGE, 2.0, Operation.ADD_VALUE),
+                    new Mod(Attributes.ATTACK_SPEED, 0.2, Operation.ADD_VALUE)),
+            List.of(new Mod(Attributes.MOVEMENT_SPEED, 0.10, Operation.ADD_MULTIPLIED_BASE)),
+            List.<Mod>of(),
+            List.<Mod>of(),
+            List.of(
+                    new Mod(Attributes.MAX_HEALTH, 8.0, Operation.ADD_VALUE),
+                    new Mod(Attributes.ARMOR, 3.0, Operation.ADD_VALUE),
+                    new Mod(Attributes.ARMOR_TOUGHNESS, 2.0, Operation.ADD_VALUE)));
+
     // ================================================================ Utilidades
 
     private static ResourceLocation id(String path) {
@@ -114,7 +130,7 @@ public final class SystemLogic {
     }
 
     public static void sync(ServerPlayer p, Data d) {
-        List<Integer> l = new ArrayList<>(36);
+        List<Integer> l = new ArrayList<>(64);
         l.add(d.awakened);
         l.add(d.race);
         l.add(d.cls);
@@ -143,6 +159,15 @@ public final class SystemLogic {
         l.add(Shadows.count(d));
         l.add(Shadows.maxSlots(d));
         l.add(d.setBonus);
+        l.add(d.isMutated() ? 1 : 0);
+        l.add(d.milestones);
+        l.add(d.trialTries);
+        for (int i = 0; i < Quests.COUNT; i++) {
+            l.add(d.quest[i]);
+        }
+        for (int i = 0; i < Quests.COUNT; i++) {
+            l.add(d.questProg[i]);
+        }
         ServerPlayNetworking.send(p, new Net.SyncPayload(l));
     }
 
@@ -215,6 +240,9 @@ public final class SystemLogic {
                 setMod(p, a, "arbol_clase_" + k, 0.0, Operation.ADD_VALUE);
             }
         }
+        for (int i = 0; i < MUT_ATTRS.size(); i++) {
+            setMod(p, MUT_ATTRS.get(i), "mutacion_" + i, 0.0, Operation.ADD_VALUE);
+        }
         if (d.awakened == 1) {
             if (d.race >= 0 && d.race < RACE_MODS.size()) {
                 for (Mod m : RACE_MODS.get(d.race)) {
@@ -228,6 +256,11 @@ public final class SystemLogic {
             }
             applyTree(p, Trees.tree(true, d.race), d.race >= 0 ? d.raceTree[d.race] : null, "arbol_raza_");
             applyTree(p, Trees.tree(false, d.cls), d.cls >= 0 ? d.classTree[d.cls] : null, "arbol_clase_");
+            if (d.isMutated() && d.cls >= 0 && d.cls < MUTATION_MODS.size()) {
+                for (Mod m : MUTATION_MODS.get(d.cls)) {
+                    setMod(p, m.attr(), "mutacion_" + MUT_ATTRS.indexOf(m.attr()), m.amount(), m.op());
+                }
+            }
         }
         d.swordOn = false;
         setMod(p, Attributes.ATTACK_DAMAGE, "clase_espada", 0.0, Operation.ADD_VALUE);
@@ -294,6 +327,7 @@ public final class SystemLogic {
             if (d.level >= Defs.MAX_LEVEL) {
                 notify(p, Net.N_MAX_LEVEL, 0, 0);
             }
+            Quests.onLevel(p, d);
         }
         sync(p, d);
     }
@@ -346,7 +380,10 @@ public final class SystemLogic {
                 d.joinDelay--;
                 if (d.joinDelay == 0) {
                     notify(p, d.awakened == 1 ? Net.N_WELCOME : Net.N_AWAKEN_PROMPT, 0, 0);
-                    if (d.awakened == 1) Shadows.onJoined(p);
+                    if (d.awakened == 1) {
+                        Shadows.onJoined(p);
+                        Quests.onJoin(p, d);
+                    }
                 }
             }
             if (d.anim > 0) animTick(p, d);
@@ -362,6 +399,7 @@ public final class SystemLogic {
                     d.mp = Math.min(max, d.mp + mpRegen(d));
                 }
                 Dungeons.playerTick(p, d);
+                SecretBoss.playerTick(p, d);
             }
             if (t % 100 == 0 && d.awakened == 1 && p.isAlive()) {
                 double regen = d.fx(Trees.FX_REGEN);
@@ -409,6 +447,7 @@ public final class SystemLogic {
             case Net.ACT_SELL -> Shop.sellCores(p);
             case Net.ACT_ARISE -> Shadows.arise(p);
             case Net.ACT_SHADOWS_TOGGLE -> Shadows.toggle(p);
+            case Net.ACT_QUEST -> Quests.action(p, a, b);
             case Net.ACT_SHADOW -> Shadows.action(p, a, b);
             case Net.ACT_SHADOWS_ALL -> {
                 if (a == 1) {
@@ -451,7 +490,7 @@ public final class SystemLogic {
         int cd = (int) Math.round(Defs.SKILL_CD[d.cls] * (1.0 - cdr(d)));
         d.cooldown = Math.max(1, cd);
         d.cooldownTotal = d.cooldown;
-        notify(p, Net.N_SKILL, d.cls, 0);
+        notify(p, Net.N_SKILL, d.cls, d.isMutated() ? 1 : 0);
         sync(p, d);
     }
 
@@ -532,6 +571,7 @@ public final class SystemLogic {
         d.raceTree = new int[Trees.RACE.length][5];
         d.classTree = new int[Trees.CLASS.length][5];
         d.shadowTree = new int[5];
+        Quests.wipe(d);
         Shadows.wipe(p);
         applyAll(p, d);
         sync(p, d);

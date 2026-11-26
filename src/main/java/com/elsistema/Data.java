@@ -27,6 +27,17 @@ public class Data {
     public List<ShadowRec> shadows = new ArrayList<>();
     public int nextShadow = 1;
 
+    // Misiones ocultas, hitos de nivel y cambio de clase
+    public int mutated = 0;
+    /** Estado de cada misión: 0 oculta, 1 descubierta, 2 completada. */
+    public int[] quest = new int[Quests.COUNT];
+    public int[] questProg = new int[Quests.COUNT];
+    /** Hitos de nivel ya cobrados (un bit por hito). */
+    public int milestones = 0;
+    /** Sombras extra para siempre (recompensas ocultas). */
+    public int bonusSlots = 0;
+    public int trialTries = 0;
+
     // Para volver de una mazmorra si el juego se cierra dentro
     public int inDungeon = 0;
     public double retX = 0;
@@ -45,6 +56,7 @@ public class Data {
     public transient int lastStand = 0;
     public transient int gateTimer = 0;
     public transient int setBonus = -1;
+    public transient int bossTimer = 0;
 
     /** Una sombra del ejército (guardada, fuera o recuperándose). */
     public static class ShadowRec {
@@ -112,7 +124,11 @@ public class Data {
         for (int i = 0; i < Trees.SHADOW.length; i++) {
             if (Trees.SHADOW[i].fx() == effect) s += shadowTree[i] * Trees.SHADOW[i].val();
         }
-        return s;
+        return s + Quests.fx(this, effect);
+    }
+
+    public boolean isMutated() {
+        return awakened == 1 && mutated == 1;
     }
 
     /** Corrige datos rotos o de versiones antiguas. */
@@ -150,12 +166,26 @@ public class Data {
             if (Float.isNaN(r.hp) || r.hp <= 0F || r.hp > 1F) r.hp = 1F;
         }
         if (nextShadow <= maxId) nextShadow = maxId + 1;
+        quest = fixArr(quest, 0, 2);
+        questProg = fixArr(questProg, 0, Integer.MAX_VALUE);
+        if (mutated != 1) mutated = 0;
+        bonusSlots = Math.max(0, Math.min(60, bonusSlots));
+        if (trialTries < 0) trialTries = 0;
         // Puntos de habilidad para los niveles que ya tenías antes de esta versión
         int target = level - 1;
         if (spGranted < target) {
             skillPoints += target - spGranted;
             spGranted = target;
         }
+    }
+
+    private static int[] fixArr(int[] a, int min, int max) {
+        int[] out = new int[Quests.COUNT];
+        for (int i = 0; i < out.length; i++) {
+            int v = a != null && i < a.length ? a[i] : 0;
+            out[i] = Math.max(min, Math.min(max, v));
+        }
+        return out;
     }
 
     private static int[][] fixTree(int[][] t, Trees.Node[][] defs) {

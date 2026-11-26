@@ -2,6 +2,8 @@ package com.elsistema.client;
 
 import com.elsistema.Defs;
 import com.elsistema.Net;
+import com.elsistema.Quests;
+import com.elsistema.SecretBoss;
 import com.elsistema.Shop;
 import com.elsistema.Trees;
 import net.minecraft.client.KeyMapping;
@@ -167,7 +169,7 @@ public final class Hud {
                 goldAmount = (goldTime > 0 && now - goldTime < 1500 ? goldAmount : 0) + a;
                 goldTime = now;
             }
-            case Net.N_SKILL -> callout(name(Defs.SKILL_NAME, a).toUpperCase(Locale.ROOT), Ui.WHITE);
+            case Net.N_SKILL -> callout(Defs.skillName(a, b == 1).toUpperCase(Locale.ROOT), b == 1 ? Ui.GOLD : Ui.WHITE);
             case Net.N_COOLDOWN -> warn("Habilidad en enfriamiento: " + a + " s");
             case Net.N_NO_MP -> warn("Maná insuficiente (" + b + "/" + a + " MP)");
             case Net.N_RANK_UP -> toast("NOTIFICACIÓN", Defs.RANK_COLOR[Math.max(0, Math.min(5, a))],
@@ -243,6 +245,62 @@ public final class Hud {
             case Net.N_RANK_REQ -> warn("Necesitas rango " + name(Defs.RANK, a) + " para comprar esto.");
             case Net.N_MANA -> note("+" + a + " de maná", Ui.CYAN);
             case Net.N_RETURN -> note(a == 1 ? "Has salido de la mazmorra." : "La piedra te ha devuelto a casa.", Ui.CYAN);
+            // ---------------------------------------------------------- misiones ocultas y jefes secretos
+            case Net.N_QUEST_FOUND -> {
+                big("MISIÓN OCULTA", name(Quests.NAME, a), 0x90FFC857, 0x55B08A20);
+                toast("MISIÓN OCULTA DESCUBIERTA", Ui.GOLD, name(Quests.NAME, a) + ".",
+                        a >= 0 && a < Quests.GOAL_TEXT.length ? Quests.GOAL_TEXT[a] + "." : "",
+                        "Mírala en la pestaña Misiones (" + v + ", tecla 5).");
+                sound(SoundEvents.ENCHANTMENT_TABLE_USE, 1.0F, 0.7F);
+            }
+            case Net.N_QUEST_DONE -> {
+                big("¡MISIÓN COMPLETADA!", name(Quests.NAME, a), 0x90FFC857, 0x55FFC857);
+                List<String> lines = new ArrayList<>();
+                lines.add(name(Quests.NAME, a) + ".");
+                if (a >= 0 && a < Quests.REWARD.length) {
+                    for (String r : Quests.REWARD[a]) {
+                        lines.add("+ " + r);
+                    }
+                }
+                toast("RECOMPENSA OCULTA", Ui.GOLD, lines.toArray(new String[0]));
+            }
+            case Net.N_MUTATION -> {
+                big("¡CAMBIO DE CLASE!", name(Defs.CLASS_NAME, a) + "   »   " + name(Defs.MUTATION_NAME, a), 0x90FFC857, 0x66B07AFF);
+                toast("NOTIFICACIÓN", Ui.PURPLE, "Tu clase ha mutado: " + name(Defs.MUTATION_NAME, a) + ".",
+                        "Nueva habilidad: " + name(Defs.MUT_SKILL_NAME, a) + ".",
+                        "Mira tus nuevos bonus en la pestaña Estado.");
+                sound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 1.0F);
+            }
+            case Net.N_SECRET_BOSS -> {
+                big("¡JEFE SECRETO!", name(SecretBoss.NAME, a) + "   ·   " + name(SecretBoss.TITLE, a), 0x90FF3030, 0x66600010);
+                toast("¡ALERTA!", Ui.RED, name(SecretBoss.NAME, a) + " ha aparecido.",
+                        b > 0 ? "Está a " + b + " bloques de ti." : "¡Derrótalo para conseguir su recompensa oculta!");
+                sound(SoundEvents.WITHER_SPAWN, 0.5F, 0.8F);
+            }
+            case Net.N_SECRET_FLED -> toast("NOTIFICACIÓN", Ui.GRAY, name(SecretBoss.NAME, a) + " se ha desvanecido con el amanecer.",
+                    "Quizá vuelva otra noche...");
+            case Net.N_HIDDEN_REWARD -> {
+                List<String> lines = new ArrayList<>();
+                int lv = a >= 0 && a < Quests.MS_LEVEL.length ? Quests.MS_LEVEL[a] : 0;
+                lines.add("Hito de nivel " + lv + ": " + name(Quests.MS_NAME, a) + ".");
+                if (a >= 0 && a < Quests.MS_REWARD.length) {
+                    for (String r : Quests.MS_REWARD[a]) {
+                        lines.add("+ " + r);
+                    }
+                }
+                toast("RECOMPENSA OCULTA", Ui.GOLD, lines.toArray(new String[0]));
+            }
+            case Net.N_TRIAL_START -> big("PRUEBA DEL CAMBIO DE CLASE", "Supera 4 oleadas de élite y derrota al jefe secreto",
+                    0x90FFC857, 0x55B08A20);
+            case Net.N_TRIAL_FAIL -> toast("PRUEBA FALLIDA", Ui.RED,
+                    a == 1 ? "Se acabó el tiempo." : a == 2 ? "Has caído en la prueba." : "Has abandonado la prueba.",
+                    "Puedes intentarlo otra vez desde la pestaña Misiones.");
+            case Net.N_TRIAL_DENIED -> warn(switch (a) {
+                case 1 -> "Ya estás dentro de una mazmorra.";
+                case 2 -> "No hay sitio para la prueba aquí. Prueba en otro lugar.";
+                default -> "Esa prueba no está disponible.";
+            });
+            case Net.N_SLOTS_UP -> note("+" + a + " sombras en tu ejército para siempre (máximo " + b + ").", Ui.SHADOW);
             default -> {
             }
         }
@@ -282,8 +340,8 @@ public final class Hud {
         int r = Defs.rank(lvl);
         String rk = "RANGO " + Defs.RANK[r];
         Ui.glow(g, f, rk, x2 - 5 - f.width(rk), y1 + 4, Defs.RANK_COLOR[r], 0x40FFFFFF, 1F);
-        String sub = name(Defs.CLASS_NAME, CData.cls()) + " · " + name(Defs.RACE_NAME, CData.race());
-        Ui.text(g, f, sub.toUpperCase(Locale.ROOT), x1 + 5, y1 + 15, Ui.GRAY, 1F);
+        String sub = CData.className() + " · " + name(Defs.RACE_NAME, CData.race());
+        Ui.text(g, f, sub.toUpperCase(Locale.ROOT), x1 + 5, y1 + 15, CData.mutated() ? Ui.GOLD : Ui.GRAY, 1F);
 
         int bx = x1 + 25;
         int bw = 72;
@@ -311,7 +369,7 @@ public final class Hud {
         String so = out > 0 ? out + " fuera  [" + key(ElSistemaClient.SHADOWS) + "]" : "[" + key(ElSistemaClient.SHADOWS) + "] invocar";
         Ui.text(g, f, so, x2 - 5 - f.width(so), y1 + 56, out > 0 ? Ui.PURPLE : Ui.MUTED, 1F);
 
-        String skill = "[" + key(ElSistemaClient.SKILL) + "] " + name(Defs.SKILL_NAME, CData.cls());
+        String skill = "[" + key(ElSistemaClient.SKILL) + "] " + CData.skillName();
         Ui.text(g, f, skill, x1 + 5, y1 + 66, Ui.WHITE, 1F);
         int cd = CData.cooldown();
         if (cd > 0) {

@@ -32,6 +32,12 @@ public final class SelfTest {
 
     /** 0 = en curso, 1 = todo bien, 2 = fallo. El cliente lo lee para saber cuándo seguir. */
     public static volatile int state = 0;
+    /**
+     * El cliente pide los pasos de la prueba del cambio de clase: 1 empezar, 2 saltar al jefe secreto,
+     * 3 derrotarlo, 4 comprobar la mutación y usar las habilidades mutadas de las 5 clases.
+     */
+    public static volatile int trialRequest = 0;
+    private static int trialDone = 0;
 
     private static boolean clientMode = false;
     private static int ticks = 0;
@@ -54,7 +60,11 @@ public final class SelfTest {
     }
 
     private static void tick(MinecraftServer server) {
-        if (state != 0) return;
+        if (state == 2) return;
+        if (state == 1) {
+            if (clientMode) trialTick(server);
+            return;
+        }
         ticks++;
         ServerPlayer player = null;
         if (clientMode) {
@@ -135,8 +145,90 @@ public final class SelfTest {
         back.fix();
         if (back.shadows.size() != 1) throw new IllegalStateException("datos de sombras");
         Dungeons.selfTest(lvl, base);
-        ElSistema.LOGGER.info("[SELFTEST] mazmorras construidas y limpiadas");
+        ElSistema.LOGGER.info("[SELFTEST] mazmorras construidas y limpiadas (también la prueba y los jefes secretos)");
+        secretBosses(lvl, base);
         if (player != null) army(player, lvl);
+    }
+
+    /** Crea los 4 jefes secretos (en fila, detrás de los demás monstruos) y les hace usar todas sus habilidades. */
+    private static void secretBosses(ServerLevel lvl, BlockPos base) {
+        SecretBoss.Kind[] kinds = SecretBoss.Kind.values();
+        for (int i = 0; i < kinds.length; i++) {
+            int x = base.getX() - 12 + i * 8;
+            int z = base.getZ() + 30;
+            int y = lvl.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+            // Solo uno enseña su barra de jefe (los demás se marcan como de mazmorra para no llenar la pantalla)
+            SecretBoss b = SecretBoss.spawn(lvl, kinds[i], new BlockPos(x, y, z), 3 + i % 3, 50 + i * 10, i != 3);
+            if (b == null) throw new IllegalStateException("no se pudo crear el jefe secreto " + kinds[i]);
+            Mob dummy = EntityType.ZOMBIE.spawn(lvl, new BlockPos(x, y, z + 4), MobSpawnType.COMMAND);
+            if (dummy == null) throw new IllegalStateException("no se pudo crear el muñeco de prueba");
+            dummy.setNoAi(true);
+            b.selfTestAbilities(lvl, dummy);
+            dummy.discard();
+            b.setTarget(null);
+            if (clientMode) b.setNoAi(true);
+            Mob s = Shadows.testShadow(b, lvl);
+            if (s == null) throw new IllegalStateException("no se pudo crear la sombra del jefe secreto " + kinds[i]);
+            if (clientMode) s.setNoAi(true);
+            SHADOWS.add(s);
+            SPAWNED.add(b);
+        }
+        ElSistema.LOGGER.info("[SELFTEST] {} jefes secretos creados y probados", kinds.length);
+    }
+
+    private static void trialTick(MinecraftServer server) {
+        int want = trialRequest;
+        if (want <= trialDone) return;
+        List<ServerPlayer> players = server.getPlayerList().getPlayers();
+        if (players.isEmpty()) return;
+        trialDone = want;
+        try {
+            trialStep(players.get(0), want);
+        } catch (Throwable t) {
+            fail(server, "prueba del cambio de clase (paso " + want + ")", t);
+        }
+    }
+
+    private static void trialStep(ServerPlayer p, int step) {
+        Data d = Store.get(p);
+        switch (step) {
+            case 1 -> {
+                if (d.quest[Quests.Q_CLASS] != Quests.ACTIVE) throw new IllegalStateException("la misión del cambio de clase no se descubrió");
+                Quests.startTrial(p);
+                if (!Dungeons.inDungeon(p)) throw new IllegalStateException("no empezó la prueba");
+                ElSistema.LOGGER.info("[SELFTEST] prueba del cambio de clase empezada");
+            }
+            case 2 -> {
+                if (!Dungeons.testSkipToBoss(p)) throw new IllegalStateException("no se pudo saltar al jefe");
+                ElSistema.LOGGER.info("[SELFTEST] saltando al jefe secreto de la prueba");
+            }
+            case 3 -> {
+                int n = Dungeons.testWin(p);
+                if (n <= 0) throw new IllegalStateException("no había nadie que derrotar en la prueba (" + n + ")");
+                ElSistema.LOGGER.info("[SELFTEST] {} enemigos derrotados en la prueba", n);
+            }
+            case 4 -> {
+                if (d.mutated != 1 || d.quest[Quests.Q_CLASS] != Quests.DONE) {
+                    throw new IllegalStateException("la clase no mutó tras superar la prueba");
+                }
+                int cls = d.cls;
+                for (int c = 0; c < Defs.CLASS_NAME.length; c++) {
+                    d.cls = c;
+                    d.cooldown = 0;
+                    SystemLogic.applyAll(p, d);
+                    SystemLogic.useSkill(p);
+                    if (d.cooldown <= 0) throw new IllegalStateException("no se usó la habilidad mutada de " + Defs.MUTATION_NAME[c]);
+                }
+                d.cls = cls;
+                d.cooldown = 0;
+                SystemLogic.applyAll(p, d);
+                SystemLogic.sync(p, d);
+                ElSistema.LOGGER.info("[SELFTEST] OK prueba del cambio de clase: {} y las 5 habilidades mutadas",
+                        Defs.MUTATION_NAME[cls]);
+            }
+            default -> {
+            }
+        }
     }
 
     /** Despierta al Jugador del cliente, le da sombras propias y deja un cadáver para extraer. */
@@ -176,6 +268,16 @@ public final class SelfTest {
             p.setItemSlot(slots[k], new ItemStack(ModItems.ARMOR[ModArmor.SET_MONARCA][k]));
         }
         SystemLogic.applyAll(p, d);
+        // Misiones ocultas: el nivel 45 descubre el cambio de clase y da los hitos 10, 20 y 30
+        Quests.onLevel(p, d);
+        if (d.quest[Quests.Q_CLASS] != Quests.ACTIVE) throw new IllegalStateException("no apareció la misión del cambio de clase");
+        if (Integer.bitCount(d.milestones) != 3) throw new IllegalStateException("hitos de nivel: " + d.milestones);
+        d.quest[Quests.Q_NIGHT] = Quests.ACTIVE;
+        d.questProg[Quests.Q_NIGHT] = 37;
+        d.quest[Quests.Q_BOSSES] = Quests.DONE;
+        d.questProg[Quests.Q_BOSSES] = Quests.GOAL[Quests.Q_BOSSES];
+        d.quest[Quests.Q_ECLIPSE] = Quests.ACTIVE;
+        d.questProg[Quests.Q_LEGION] = 4;
         int out = Shadows.summonAll(p);
         if (out <= 0) throw new IllegalStateException("no salió ninguna sombra propia");
         ElSistema.LOGGER.info("[SELFTEST] {} sombras propias invocadas", out);

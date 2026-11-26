@@ -54,6 +54,16 @@ public final class Net {
     public static final int N_RETURN = 39;
     public static final int N_ARISE_NO_MP = 40;   // a = coste
     public static final int N_NO_SHADOWS = 41;
+    public static final int N_QUEST_FOUND = 42;   // a = misión
+    public static final int N_QUEST_DONE = 43;    // a = misión
+    public static final int N_MUTATION = 44;      // a = clase
+    public static final int N_SECRET_BOSS = 45;   // a = jefe secreto, b = distancia (0 = en la mazmorra)
+    public static final int N_SECRET_FLED = 46;   // a = jefe secreto
+    public static final int N_HIDDEN_REWARD = 47; // a = hito de nivel
+    public static final int N_TRIAL_FAIL = 48;    // a = 1 si se acabó el tiempo
+    public static final int N_TRIAL_START = 49;   // a = rango, b = nivel
+    public static final int N_TRIAL_DENIED = 50;  // a = motivo
+    public static final int N_SLOTS_UP = 51;      // a = sombras extra, b = máximo
 
     // Acciones (cliente -> servidor)
     public static final int ACT_SKILL = 1;
@@ -66,6 +76,7 @@ public final class Net {
     public static final int ACT_SHADOWS_TOGGLE = 8;
     public static final int ACT_SHADOW = 9;        // a = id, b = 0 invocar, 1 guardar, 2 liberar
     public static final int ACT_SHADOWS_ALL = 10;  // a = 1 invocar todas, 0 guardar todas
+    public static final int ACT_QUEST = 11;        // a = misión, b = 0 empezar la prueba
 
     /** Servidor -> cliente: todos los datos del Jugador. */
     public record SyncPayload(List<Integer> data) implements CustomPacketPayload {

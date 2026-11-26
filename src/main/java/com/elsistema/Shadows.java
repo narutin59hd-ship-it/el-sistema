@@ -17,6 +17,8 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -330,6 +332,7 @@ public final class Shadows {
         }
         if (ok > 0) {
             sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.WITHER_SPAWN, 0.35F, 1.6F);
+            Quests.onArmy(p, d);
         }
         SystemLogic.sync(p, d);
         sendList(p);
@@ -519,6 +522,20 @@ public final class Shadows {
         }
     }
 
+    /** Nigromante (Dominio de las sombras): Fuerza II y Velocidad II para todas las sombras que están fuera. */
+    public static void buffOut(ServerPlayer p, int time) {
+        Map<Integer, UUID> map = ACTIVE.get(p.getUUID());
+        if (map == null) return;
+        for (UUID id : map.values()) {
+            Mob m = find(p, id);
+            if (m == null) continue;
+            m.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, time, 1, false, true));
+            m.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, time, 1, false, true));
+            ((ServerLevel) m.level()).sendParticles(ParticleTypes.SOUL_FIRE_FLAME, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
+                    12, 0.3, 0.5, 0.3, 0.02);
+        }
+    }
+
     /** Guadaña del Monarca: todas las sombras atacan a quien golpea el Jugador. */
     public static void focus(ServerPlayer p, LivingEntity target) {
         Map<Integer, UUID> map = ACTIVE.get(p.getUUID());
@@ -550,6 +567,7 @@ public final class Shadows {
             m.setItemSlot(EquipmentSlot.HEAD, new ItemStack(ModItems.VEIL));
         }
         Ranks.applyStats(m, rec.rank, rec.level, rec.boss);
+        if (m instanceof SecretBoss sb) sb.asShadow();
         double pw = d == null ? 0.0 : power(d);
         Ranks.mod(m, Attributes.MAX_HEALTH, "sombra_poder", pw, Operation.ADD_MULTIPLIED_TOTAL);
         Ranks.mod(m, Attributes.ATTACK_DAMAGE, "sombra_poder", pw, Operation.ADD_MULTIPLIED_TOTAL);

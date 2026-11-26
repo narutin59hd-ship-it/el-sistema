@@ -6,7 +6,8 @@ import java.util.List;
 public final class CData {
     private CData() {}
 
-    public static final int SIZE = 36;
+    /** 36 números del Jugador + mutación, hitos, intentos de la prueba y 8 misiones (estado y progreso). */
+    public static final int SIZE = 39 + 2 * com.elsistema.Quests.COUNT;
     private static int[] d = fresh();
 
     private static int[] fresh() {
@@ -63,6 +64,18 @@ public final class CData {
     public static int shadowMax() { return Math.max(0, d[34]); }
     /** Conjunto de armadura completo que lleva puesto (-1 = ninguno). */
     public static int setBonus() { return d[35]; }
+    /** ¿Ha mutado su clase (prueba del cambio de clase superada)? */
+    public static boolean mutated() { return d[36] == 1; }
+    public static int milestones() { return d[37]; }
+    public static boolean milestone(int i) { return (d[37] & (1 << i)) != 0; }
+    public static int trialTries() { return d[38]; }
+    /** 0 oculta, 1 descubierta, 2 completada. */
+    public static int quest(int q) { return q >= 0 && q < com.elsistema.Quests.COUNT ? d[39 + q] : 0; }
+    public static int questProg(int q) {
+        return q >= 0 && q < com.elsistema.Quests.COUNT ? d[39 + com.elsistema.Quests.COUNT + q] : 0;
+    }
+    public static String className() { return com.elsistema.Defs.className(cls(), mutated()); }
+    public static String skillName() { return com.elsistema.Defs.skillName(cls(), mutated()); }
 
     /** Rango de un nudo: kind 0 = raza, 1 = clase, 2 = sombras. */
     public static int rank(int kind, int node) {

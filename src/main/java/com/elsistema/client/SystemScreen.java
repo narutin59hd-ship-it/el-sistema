@@ -4,6 +4,7 @@ import com.elsistema.Defs;
 import com.elsistema.ModArmor;
 import com.elsistema.ModItems;
 import com.elsistema.Net;
+import com.elsistema.Quests;
 import com.elsistema.Shop;
 import com.elsistema.Trees;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -27,12 +28,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Ventana del Sistema (tecla V): Estado, Habilidades (3 árboles), Sombras y Tienda. */
+/** Ventana del Sistema (tecla V): Estado, Habilidades (3 árboles), Sombras, Tienda y Misiones. */
 public class SystemScreen extends Screen {
     private static int lastTab = 0;
     private static int lastSub = 0;
     private static int lastCat = 0;
-    private static final String[] TABS = {"ESTADO", "HABILIDADES", "SOMBRAS", "TIENDA"};
+    private static int lastQSub = 0;
+    private static final String[] TABS = {"ESTADO", "HABILIDADES", "SOMBRAS", "TIENDA", "MISIONES"};
     private static final int TAB_H = 14;
     private static final int TAB_Y = 6;
 
@@ -51,6 +53,8 @@ public class SystemScreen extends Screen {
     private static final int NODE_R = 13;
     private static final int SHADOW_ROW = 24;
     private static final int SHOP_ROW = 22;
+    private static final int QUEST_ROW = 24;
+    private static final String[] QUEST_SUBS = {"MISIONES OCULTAS", "HITOS DE NIVEL"};
     private static final int HINT = 0xFF5F7387;
     private static final int LOCKED = 0xFF3C4A58;
 
@@ -80,6 +84,8 @@ public class SystemScreen extends Screen {
     private int selNode = -1;
     private int selShadow = -1;
     private int scroll = 0;
+    private int selQuest = -1;
+    private int qscroll = 0;
     private int releaseId = -1;
     private long releaseTime = 0L;
     private LivingEntity preview;
@@ -142,12 +148,18 @@ public class SystemScreen extends Screen {
     }
 
     private int tabW() {
-        return Math.min(98, (pw() - 20 - 12) / 4);
+        int n = TABS.length;
+        return Math.min(98, (pw() - 20 - 4 * (n - 1)) / n);
     }
 
     private int tabX(int i) {
         int tw = tabW();
-        return px() + pw() / 2 - (4 * tw + 12) / 2 + i * (tw + 4);
+        int n = TABS.length;
+        return px() + pw() / 2 - (n * tw + 4 * (n - 1)) / 2 + i * (tw + 4);
+    }
+
+    private static int tabAccent(int i) {
+        return i == 2 ? Ui.SHADOW : i == 4 ? Ui.GOLD : Ui.CYAN;
     }
 
     // ================================================================== dibujo
@@ -163,7 +175,7 @@ public class SystemScreen extends Screen {
         int y2 = y1 + ph();
         int cy = (y1 + y2) / 2;
         int hh = Math.max(1, Math.round((y2 - y1) * p / 2F));
-        int accent = tab == 2 ? Ui.SHADOW : Ui.CYAN;
+        int accent = tabAccent(tab);
         Ui.panel(g, x1, cy - hh, x2, cy + hh, accent, Math.min(1F, p * 1.5F));
         float a = Ui.clamp01((p - 0.55F) / 0.45F);
         if (a <= 0F) return;
@@ -175,6 +187,7 @@ public class SystemScreen extends Screen {
             case 1 -> trees(g, x1, y1, x2, y2, mx, my, ca, now);
             case 2 -> shadows(g, x1, y1, x2, y2, mx, my, ca, now);
             case 3 -> shop(g, x1, y1, x2, y2, mx, my, ca);
+            case 4 -> quests(g, x1, y1, x2, y2, mx, my, ca, now);
             default -> status(g, x1, y1, x2, y2, mx, my, ca, now);
         };
         g.disableScissor();
@@ -191,13 +204,15 @@ public class SystemScreen extends Screen {
             int ty = y1 + TAB_Y;
             boolean on = i == tab;
             boolean hover = Ui.inside(mx, my, tx, ty, tw, TAB_H);
-            int acc = i == 2 ? Ui.SHADOW : Ui.CYAN;
-            int bg = on ? (i == 2 ? 0xA05A2D9F : 0xA03A8DFF) : hover ? 0x60305070 : 0x40101A28;
+            int acc = tabAccent(i);
+            int bg = on ? (i == 2 ? 0xA05A2D9F : i == 4 ? 0xA08A6A1A : 0xA03A8DFF) : hover ? 0x60305070 : 0x40101A28;
             g.fill(tx, ty, tx + tw, ty + TAB_H, Ui.fade(bg, a));
             Ui.border(g, tx, ty, tx + tw, ty + TAB_H, Ui.fade(on ? acc : 0xFF3C5A74, a));
             String label = TABS[i];
             if ((i == 0 && CData.points() > 0) || (i == 1 && CData.skillPoints() > 0)) label += " *";
-            Ui.center(g, f, label, tx + tw / 2, ty + 3, on ? Ui.WHITE : Ui.GRAY, a);
+            boolean alert = i == 4 && CData.quest(Quests.Q_CLASS) == Quests.ACTIVE;
+            if (alert) label += " !";
+            Ui.center(g, f, fit(f, label, tw - 4), tx + tw / 2, ty + 3, on ? Ui.WHITE : alert ? Ui.GOLD : Ui.GRAY, a);
         }
         Ui.divider(g, x1, x2, y1 + TAB_Y + TAB_H + 3, a);
     }
@@ -244,11 +259,11 @@ public class SystemScreen extends Screen {
         label(g, f, "NIVEL", String.valueOf(CData.level()), mid, y1 + Y_NAME, Ui.WHITE, a);
         int r = Defs.rank(CData.level());
         label(g, f, "RANGO", Defs.RANK[r], lx, y1 + Y_RANK, Defs.RANK_COLOR[r], a);
-        label(g, f, "CLASE", Hud.name(Defs.CLASS_NAME, CData.cls()), mid, y1 + Y_RANK, Ui.WHITE, a);
+        label(g, f, "CLASE", CData.className(), mid, y1 + Y_RANK, CData.mutated() ? Ui.GOLD : Ui.WHITE, a);
         label(g, f, "RAZA", Hud.name(Defs.RACE_NAME, CData.race()), lx, y1 + Y_RACE, Ui.WHITE, a);
         label(g, f, "ORO", String.valueOf(CData.coins()), mid, y1 + Y_RACE, Ui.GOLD, a);
         if (Ui.inside(mx, my, mid, y1 + Y_RANK - 1, rx - mid, 10) && CData.cls() >= 0) {
-            tip = classTip(CData.cls());
+            tip = classTip(CData.cls(), CData.mutated());
         }
         if (Ui.inside(mx, my, lx, y1 + Y_RACE - 1, mid - lx - 8, 10) && CData.race() >= 0) {
             tip = raceTip(CData.race());
@@ -306,13 +321,15 @@ public class SystemScreen extends Screen {
         int limit = set >= 0 ? y2 - 38 : y2 - 24;
         int c = CData.cls();
         if (c >= 0 && c < Defs.SKILL_NAME.length) {
+            boolean mut = CData.mutated();
             String k = "HABILIDAD [" + Hud.key(ElSistemaClient.SKILL) + "]:";
             Ui.text(g, f, k, lx, y1 + Y_SKILL, Ui.GRAY, a);
-            Ui.glow(g, f, Defs.SKILL_NAME[c], lx + f.width(k) + 5, y1 + Y_SKILL, Ui.CYAN, 0x5050B4FF, a);
+            Ui.glow(g, f, Defs.skillName(c, mut), lx + f.width(k) + 5, y1 + Y_SKILL, mut ? Ui.GOLD : Ui.CYAN,
+                    mut ? 0x50FFC857 : 0x5050B4FF, a);
             String cost = Defs.SKILL_COST[c] + " MP  ·  " + (Defs.SKILL_CD[c] / 20) + " s";
             Ui.text(g, f, cost, rx - f.width(cost), y1 + Y_SKILL, Ui.MUTED, a);
             int yy = y1 + Y_SKILL + 12;
-            for (String l : Ui.wrap(f, Defs.SKILL_DESC[c], rx - lx)) {
+            for (String l : Ui.wrap(f, Defs.skillDesc(c, mut), rx - lx)) {
                 if (yy > limit) break;
                 Ui.text(g, f, l, lx, yy, Ui.WHITE, a);
                 yy += 10;
@@ -327,7 +344,7 @@ public class SystemScreen extends Screen {
             String b = fit(f, ModArmor.SET_BONUS[set], rx - (lx + f.width(k) + f.width(v) + 16));
             Ui.text(g, f, b, rx - f.width(b), sy, Ui.WHITE, a);
         }
-        hint(g, "Esc: cerrar   ·   1-4: pestañas   ·   ratón encima: detalles", x1, x2, y2, a);
+        hint(g, "Esc: cerrar   ·   1-5: pestañas   ·   ratón encima: detalles", x1, x2, y2, a);
         return tip;
     }
 
@@ -349,13 +366,19 @@ public class SystemScreen extends Screen {
         return l;
     }
 
-    private static List<String> classTip(int c) {
+    private static List<String> classTip(int c, boolean mut) {
         List<String> l = new ArrayList<>();
-        l.add("CLASE: " + Defs.CLASS_NAME[c].toUpperCase(Locale.ROOT));
+        l.add("CLASE: " + Defs.className(c, mut).toUpperCase(Locale.ROOT));
+        if (mut) l.add("Mutación de " + Defs.CLASS_NAME[c] + " (prueba superada)");
         for (String s : Defs.CLASS_BONUS[c]) {
             l.add(s);
         }
-        l.add("Habilidad: " + Defs.SKILL_NAME[c]);
+        if (mut) {
+            for (String s : Defs.MUTATION_BONUS[c]) {
+                l.add("★ " + s);
+            }
+        }
+        l.add("Habilidad: " + Defs.skillName(c, mut));
         return l;
     }
 
@@ -506,7 +529,7 @@ public class SystemScreen extends Screen {
         int cw = chipW();
         for (int i = 0; i < 3; i++) {
             int cx = chipX(i);
-            String who = i == 0 ? Hud.name(Defs.RACE_NAME, CData.race()) : i == 1 ? Hud.name(Defs.CLASS_NAME, CData.cls()) : "Monarca";
+            String who = i == 0 ? Hud.name(Defs.RACE_NAME, CData.race()) : i == 1 ? CData.className() : "Monarca";
             String text = KIND_LABEL[i] + ": " + who.toUpperCase(Locale.ROOT);
             if (i == 2) text = "SOMBRAS";
             chip(g, f, text, cx, y1 + 27, cw, i == kind, Ui.inside(mx, my, cx, y1 + 27, cw, 13), KIND_COLOR[i], a);
@@ -531,7 +554,7 @@ public class SystemScreen extends Screen {
         String title = kind == 0 ? Trees.RACE_TREE[CData.race()] : kind == 1 ? Trees.CLASS_TREE[CData.cls()] : Trees.SHADOW_TREE;
         Ui.glow(g, f, title.toUpperCase(Locale.ROOT), gb.cx() - f.width(title.toUpperCase(Locale.ROOT)) / 2, gb.y1() + 6, Ui.WHITE, (accent & 0x00FFFFFF) | 0x70000000, a);
         String subTitle = kind == 0 ? "Árbol de raza · " + Hud.name(Defs.RACE_NAME, CData.race())
-                : kind == 1 ? "Árbol de clase · " + Hud.name(Defs.CLASS_NAME, CData.cls()) : "Árbol compartido por todos";
+                : kind == 1 ? "Árbol de clase · " + CData.className() : "Árbol compartido por todos";
         Ui.center(g, f, subTitle, gb.cx(), gb.y1() + 17, Ui.MUTED, a);
 
         // líneas
@@ -1041,6 +1064,352 @@ public class SystemScreen extends Screen {
         return l;
     }
 
+    // ------------------------------------------------------------------ pestaña MISIONES
+
+    private static int qsub() {
+        return lastQSub == 1 ? 1 : 0;
+    }
+
+    private int qchipW() {
+        return Math.min(124, (pw() - 16 - 8) / 3);
+    }
+
+    private int qchipX(int i) {
+        return px() + 8 + i * (qchipW() + 4);
+    }
+
+    private Box questList() {
+        int x1 = px();
+        int y1 = py();
+        return new Box(x1 + 8, y1 + 45, x1 + pw() * 52 / 100, y1 + ph() - 17);
+    }
+
+    private Box questInfo() {
+        Box lb = questList();
+        return new Box(lb.x2() + 6, lb.y1(), px() + pw() - 8, lb.y2());
+    }
+
+    private int questRows() {
+        return Math.max(1, (questList().h() - 4) / QUEST_ROW);
+    }
+
+    private Box trialButton(Box ib) {
+        return new Box(ib.x1() + 8, ib.y2() - 22, ib.x2() - 8, ib.y2() - 6);
+    }
+
+    private static int questColor(int q) {
+        int st = CData.quest(q);
+        return st == Quests.DONE ? Ui.GREEN : st == Quests.ACTIVE ? Ui.GOLD : 0xFF56626E;
+    }
+
+    private static String questMark(int q) {
+        return q >= Quests.Q_ECLIPSE ? "☠" : q == Quests.Q_CLASS ? "✦" : "◆";
+    }
+
+    private static int firstQuest() {
+        for (int q = 0; q < Quests.COUNT; q++) {
+            if (CData.quest(q) == Quests.ACTIVE) return q;
+        }
+        return 0;
+    }
+
+    private static List<String> questTip(int q, int st) {
+        List<String> l = new ArrayList<>();
+        if (st == Quests.HIDDEN) {
+            l.add("MISIÓN OCULTA");
+            l.add("El Sistema todavía no te la ha revelado.");
+            l.add("Pista: " + Quests.CLUE[q]);
+            return l;
+        }
+        l.add(Quests.NAME[q].toUpperCase(Locale.ROOT));
+        l.add(Quests.GOAL_TEXT[q]);
+        if (Quests.GOAL[q] > 1) l.add("Progreso: " + (st == Quests.DONE ? Quests.GOAL[q] : CData.questProg(q)) + "/" + Quests.GOAL[q]);
+        l.add(st == Quests.DONE ? "Completada" : "Clic: ver detalles");
+        return l;
+    }
+
+    /** Recompensas que se muestran (la del cambio de clase dice a qué clase mutas). */
+    private static List<String> rewardLines(int q) {
+        List<String> l = new ArrayList<>();
+        for (String r : Quests.REWARD[q]) {
+            l.add(r);
+        }
+        int c = CData.cls();
+        if (q == Quests.Q_CLASS && c >= 0 && c < Defs.MUTATION_NAME.length) {
+            l.set(0, "Clase: " + Defs.CLASS_NAME[c] + " » " + Defs.MUTATION_NAME[c]);
+            l.set(1, "Habilidad: " + Defs.MUT_SKILL_NAME[c]);
+        }
+        return l;
+    }
+
+    private List<String> quests(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
+        Font f = this.font;
+        int sub = qsub();
+        int cw = qchipW();
+        for (int i = 0; i < QUEST_SUBS.length; i++) {
+            int cx = qchipX(i);
+            chip(g, f, QUEST_SUBS[i], cx, y1 + 27, cw, i == sub, Ui.inside(mx, my, cx, y1 + 27, cw, 13), Ui.GOLD, a);
+        }
+        int found = 0;
+        int done = 0;
+        for (int q = 0; q < Quests.COUNT; q++) {
+            if (CData.quest(q) != Quests.HIDDEN) found++;
+            if (CData.quest(q) == Quests.DONE) done++;
+        }
+        String sum = sub == 0 ? "Descubiertas " + found + "/" + Quests.COUNT + "  ·  hechas " + done
+                : "Cobrados " + Integer.bitCount(CData.milestones()) + "/" + Quests.MS_LEVEL.length;
+        sum = fit(f, sum, x2 - 10 - (qchipX(1) + cw + 8));
+        Ui.text(g, f, sum, x2 - 10 - f.width(sum), y1 + 30, Ui.GRAY, a);
+        if (sub == 1) return milestones(g, x1, y1, x2, y2, mx, my, a, now);
+
+        Box lb = questList();
+        Box ib = questInfo();
+        g.fill(lb.x1(), lb.y1(), lb.x2(), lb.y2(), Ui.fade(0x70040812, a));
+        Ui.border(g, lb.x1(), lb.y1(), lb.x2(), lb.y2(), Ui.fade(0xFF2A3F5A, a));
+        g.fill(ib.x1(), ib.y1(), ib.x2(), ib.y2(), Ui.fade(0x90070E1A, a));
+        Ui.border(g, ib.x1(), ib.y1(), ib.x2(), ib.y2(), Ui.fade(0x90FFC857, a));
+        Ui.corners(g, ib.x1() - 1, ib.y1() - 1, ib.x2() + 1, ib.y2() + 1, 6, Ui.fade(Ui.GOLD, a));
+        int rows = questRows();
+        qscroll = Math.max(0, Math.min(qscroll, Quests.COUNT - rows));
+        if (selQuest < 0 || selQuest >= Quests.COUNT) selQuest = firstQuest();
+        List<String> tip = null;
+        float pulse = 0.65F + 0.35F * (float) Math.sin(now / 260.0);
+        g.enableScissor(lb.x1() + 1, lb.y1() + 1, lb.x2() - 1, lb.y2() - 1);
+        for (int i = 0; i < rows && qscroll + i < Quests.COUNT; i++) {
+            int q = qscroll + i;
+            int st = CData.quest(q);
+            int ry = lb.y1() + 3 + i * QUEST_ROW;
+            int rx1 = lb.x1() + 3;
+            int rx2 = lb.x2() - (Quests.COUNT > rows ? 8 : 3);
+            boolean hover = Ui.inside(mx, my, rx1, ry, rx2 - rx1, QUEST_ROW - 3);
+            boolean on = q == selQuest;
+            int col = questColor(q);
+            g.fill(rx1, ry, rx2, ry + QUEST_ROW - 3, Ui.fade(on ? 0xB0302408 : hover ? 0x90182438 : 0x70101A28, a));
+            Ui.border(g, rx1, ry, rx2, ry + QUEST_ROW - 3, Ui.fade(on ? Ui.GOLD : 0xFF24364A, a));
+            g.fill(rx1, ry, rx1 + 2, ry + QUEST_ROW - 3, Ui.fade(col, a));
+            String mark = questMark(q);
+            Ui.text(g, f, mark, rx1 + 6, ry + 3, col, a);
+            String right = st == Quests.DONE ? "✔" : st == Quests.ACTIVE && Quests.GOAL[q] > 1
+                    ? CData.questProg(q) + "/" + Quests.GOAL[q] : "";
+            int nameX = rx1 + 8 + f.width(mark);
+            String name = st == Quests.HIDDEN ? "? ? ?" : Quests.NAME[q];
+            int nameColor = st == Quests.HIDDEN ? Ui.MUTED : st == Quests.DONE ? Ui.GREEN : Ui.WHITE;
+            Ui.text(g, f, fit(f, name, rx2 - 8 - f.width(right) - nameX), nameX, ry + 3, nameColor, a);
+            if (!right.isEmpty()) Ui.text(g, f, right, rx2 - 4 - f.width(right), ry + 3, col, a);
+            String line2;
+            int c2;
+            float a2 = a * 0.9F;
+            if (st == Quests.HIDDEN) {
+                line2 = Quests.CLUE[q];
+                c2 = 0xFF5A6A7A;
+            } else if (st == Quests.DONE) {
+                line2 = "Completada";
+                c2 = Ui.GREEN;
+            } else if (q == Quests.Q_CLASS) {
+                line2 = "¡Prueba disponible!";
+                c2 = Ui.GOLD;
+                a2 = a * pulse;
+            } else {
+                line2 = Quests.GOAL_TEXT[q];
+                c2 = Ui.GRAY;
+            }
+            Ui.text(g, f, fit(f, line2, rx2 - rx1 - 12), rx1 + 6, ry + 12, c2, a2);
+            if (hover) tip = questTip(q, st);
+        }
+        g.disableScissor();
+        if (Quests.COUNT > rows) {
+            int trackY1 = lb.y1() + 3;
+            int trackY2 = lb.y2() - 3;
+            int th = Math.max(10, (trackY2 - trackY1) * rows / Quests.COUNT);
+            int ty = trackY1 + (trackY2 - trackY1 - th) * qscroll / Math.max(1, Quests.COUNT - rows);
+            g.fill(lb.x2() - 6, trackY1, lb.x2() - 3, trackY2, Ui.fade(0x60101A28, a));
+            g.fill(lb.x2() - 6, ty, lb.x2() - 3, ty + th, Ui.fade(Ui.GOLD, a));
+        }
+        questInfo(g, f, ib, selQuest, mx, my, a, now);
+        hint(g, "Las misiones ocultas aparecen cuando cumples su condición secreta", x1, x2, y2, a);
+        return tip;
+    }
+
+    private void questInfo(GuiGraphics g, Font f, Box ib, int q, int mx, int my, float a, long now) {
+        int st = CData.quest(q);
+        int lx = ib.x1() + 8;
+        int w = ib.w() - 16;
+        int y = ib.y1() + 7;
+        int col = questColor(q);
+        String state = st == Quests.DONE ? "COMPLETADA" : st == Quests.ACTIVE ? "DESCUBIERTA" : "OCULTA";
+        int sw = f.width(state) + 8;
+        g.fill(ib.x2() - 8 - sw, y - 2, ib.x2() - 8, y + 9, Ui.fade((col & 0x00FFFFFF) | 0x40000000, a));
+        Ui.border(g, ib.x2() - 8 - sw, y - 2, ib.x2() - 8, y + 9, Ui.fade(col, a));
+        Ui.center(g, f, state, ib.x2() - 8 - sw / 2, y, col, a);
+        String title = st == Quests.HIDDEN ? "MISIÓN OCULTA" : Quests.NAME[q];
+        Ui.glow(g, f, fit(f, title, w - sw - 6), lx, y, Ui.WHITE, 0x60FFC857, a);
+        y += 13;
+        g.fill(lx, y, ib.x2() - 8, y + 1, Ui.fade(0x60FFC857, a));
+        y += 6;
+        float pulse = 0.65F + 0.35F * (float) Math.sin(now / 400.0);
+        if (st == Quests.HIDDEN) {
+            Ui.bigCenter(g, f, "? ? ?", ib.cx(), y + 16, 2.6F, Ui.MUTED, 0x40FFC857, a * pulse);
+            y += 36;
+            for (String l : Ui.wrap(f, "El Sistema todavía no te ha revelado esta misión.", w)) {
+                Ui.text(g, f, l, lx, y, Ui.MUTED, a);
+                y += 10;
+            }
+            y += 5;
+            Ui.text(g, f, "PISTA:", lx, y, Ui.GRAY, a);
+            y += 10;
+            for (String l : Ui.wrap(f, Quests.CLUE[q], w)) {
+                Ui.text(g, f, l, lx, y, 0xFFC8D6E5, a);
+                y += 10;
+            }
+            y += 5;
+            Ui.text(g, f, "RECOMPENSA:", lx, y, Ui.GRAY, a);
+            Ui.text(g, f, "? ? ?", lx + f.width("RECOMPENSA:") + 5, y, Ui.GOLD, a * pulse);
+            return;
+        }
+        List<String> rewards = rewardLines(q);
+        boolean trial = q == Quests.Q_CLASS;
+        int reserved = 27 + rewards.size() * 10 + (Quests.GOAL[q] > 1 ? 12 : 0) + (trial ? 36 : 0);
+        int limit = ib.y2() - 6 - reserved;
+        for (String l : Ui.wrap(f, Quests.DESC[q], w)) {
+            if (y > limit) break;
+            Ui.text(g, f, l, lx, y, 0xFFC8D6E5, a);
+            y += 10;
+        }
+        y += 4;
+        Ui.text(g, f, "OBJETIVO:", lx, y, Ui.GRAY, a);
+        y += 10;
+        Ui.text(g, f, fit(f, Quests.GOAL_TEXT[q], w), lx, y, Ui.WHITE, a);
+        y += 11;
+        if (Quests.GOAL[q] > 1) {
+            int pr = st == Quests.DONE ? Quests.GOAL[q] : CData.questProg(q);
+            String pt = pr + " / " + Quests.GOAL[q];
+            Ui.bar(g, lx, y + 1, w - f.width(pt) - 6, 5, pr / (float) Quests.GOAL[q], col, a);
+            Ui.text(g, f, pt, ib.x2() - 8 - f.width(pt), y, Ui.WHITE, a);
+            y += 12;
+        }
+        y += 2;
+        Ui.text(g, f, st == Quests.DONE ? "RECOMPENSA (RECIBIDA):" : "RECOMPENSA:", lx, y, Ui.GRAY, a);
+        y += 10;
+        for (String r : rewards) {
+            Ui.text(g, f, fit(f, "• " + r, w), lx, y, st == Quests.DONE ? Ui.GREEN : Ui.GOLD, a);
+            y += 10;
+        }
+        if (trial) {
+            Box b = trialButton(ib);
+            if (st == Quests.ACTIVE) {
+                String info = "Mazmorra privada · rango B · 4 oleadas + jefe";
+                if (CData.trialTries() > 0) info += " · intentos: " + CData.trialTries();
+                Ui.center(g, f, fit(f, info, w), ib.cx(), b.y1() - 11, Ui.MUTED, a);
+                g.fill(b.x1() - 2, b.y1() - 2, b.x2() + 2, b.y2() + 2, Ui.fade(0x30FFC857, a * pulse));
+                Ui.button(g, f, "INICIAR PRUEBA", b.x1(), b.y1(), b.w(), b.h(), mx, my, Ui.GOLD, true, a);
+            } else {
+                Ui.glow(g, f, fit(f, "Tu clase: " + CData.className(), w), lx, b.y1() + 4, Ui.GOLD, 0x50FFC857, a);
+            }
+        }
+    }
+
+    private List<String> milestones(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
+        Font f = this.font;
+        int gx1 = x1 + 8;
+        int gy1 = y1 + 45;
+        int gx2 = x2 - 8;
+        int gy2 = y2 - 17;
+        int gap = 5;
+        int cw = (gx2 - gx1 - gap * 2) / 3;
+        int ch = (gy2 - gy1 - gap * 2) / 3;
+        int lvl = CData.level();
+        int next = -1;
+        for (int i = 0; i < Quests.MS_LEVEL.length; i++) {
+            if (!CData.milestone(i)) {
+                next = i;
+                break;
+            }
+        }
+        float pulse = 0.65F + 0.35F * (float) Math.sin(now / 300.0);
+        List<String> tip = null;
+        for (int i = 0; i < Quests.MS_LEVEL.length; i++) {
+            int cx = gx1 + (i % 3) * (cw + gap);
+            int cy = gy1 + (i / 3) * (ch + gap);
+            boolean got = CData.milestone(i);
+            boolean isNext = i == next;
+            boolean hover = Ui.inside(mx, my, cx, cy, cw, ch);
+            int col = got ? Ui.GREEN : isNext ? Ui.GOLD : 0xFF3C4A58;
+            g.fill(cx, cy, cx + cw, cy + ch, Ui.fade(got ? 0x70102418 : isNext ? 0x80302408 : 0x60080C12, a));
+            Ui.border(g, cx, cy, cx + cw, cy + ch, Ui.fade(hover ? Ui.GOLD : col, a));
+            if (isNext) Ui.corners(g, cx - 1, cy - 1, cx + cw + 1, cy + ch + 1, 5, Ui.fade(Ui.GOLD, a * pulse));
+            String lv = "NV. " + Quests.MS_LEVEL[i];
+            int bw = f.width(lv) + 8;
+            g.fill(cx + 4, cy + 4, cx + 4 + bw, cy + 15, Ui.fade((col & 0x00FFFFFF) | 0x50000000, a));
+            Ui.text(g, f, lv, cx + 8, cy + 6, got ? Ui.GREEN : isNext ? Ui.GOLD : Ui.MUTED, a);
+            String state = got ? "✔ COBRADO" : isNext ? lvl + "/" + Quests.MS_LEVEL[i] : "BLOQUEADO";
+            Ui.text(g, f, state, cx + cw - 5 - f.width(state), cy + 6, got ? Ui.GREEN : isNext ? Ui.GOLD : 0xFF56626E, a);
+            int ty = cy + 19;
+            if (got) {
+                Ui.text(g, f, fit(f, Quests.MS_NAME[i], cw - 10), cx + 5, ty, Ui.WHITE, a);
+                ty += 11;
+                for (String r : Quests.MS_REWARD[i]) {
+                    if (ty > cy + ch - 9) break;
+                    Ui.text(g, f, fit(f, r, cw - 10), cx + 5, ty, 0xFFB8E8C8, a);
+                    ty += 10;
+                }
+            } else {
+                Ui.text(g, f, "? ? ?", cx + 5, ty, Ui.MUTED, a * (isNext ? pulse : 1F));
+                ty += 11;
+                Ui.text(g, f, fit(f, "Recompensa oculta", cw - 10), cx + 5, ty, 0xFF5A6A7A, a);
+                if (isNext && ch > 40) {
+                    Ui.bar(g, cx + 5, cy + ch - 8, cw - 10, 3, Math.min(1F, lvl / (float) Quests.MS_LEVEL[i]), Ui.GOLD, a);
+                }
+            }
+            if (hover) {
+                List<String> l = new ArrayList<>();
+                if (got) {
+                    l.add(Quests.MS_NAME[i].toUpperCase(Locale.ROOT) + "  (nivel " + Quests.MS_LEVEL[i] + ")");
+                    for (String r : Quests.MS_REWARD[i]) {
+                        l.add("+ " + r);
+                    }
+                } else {
+                    l.add("HITO OCULTO");
+                    l.add("Llega al nivel " + Quests.MS_LEVEL[i] + " para descubrir su recompensa.");
+                }
+                tip = l;
+            }
+        }
+        hint(g, "Recompensas ocultas del Sistema al llegar a ciertos niveles", x1, x2, y2, a);
+        return tip;
+    }
+
+    private boolean clickQuests(double mx, double my, int y1) {
+        int cw = qchipW();
+        for (int i = 0; i < QUEST_SUBS.length; i++) {
+            if (Ui.inside(mx, my, qchipX(i), y1 + 27, cw, 13)) {
+                if (lastQSub != i) {
+                    lastQSub = i;
+                    tabTime = System.currentTimeMillis();
+                    Hud.click();
+                }
+                return true;
+            }
+        }
+        if (qsub() != 0) return false;
+        Box lb = questList();
+        int rows = questRows();
+        for (int i = 0; i < rows && qscroll + i < Quests.COUNT; i++) {
+            int ry = lb.y1() + 3 + i * QUEST_ROW;
+            if (Ui.inside(mx, my, lb.x1() + 3, ry, lb.w() - 6, QUEST_ROW - 3)) {
+                selQuest = qscroll + i;
+                Hud.click();
+                return true;
+            }
+        }
+        if (selQuest == Quests.Q_CLASS && CData.quest(Quests.Q_CLASS) == Quests.ACTIVE && trialButton(questInfo()).in(mx, my)) {
+            send(Net.ACT_QUEST, Quests.Q_CLASS, 0);
+            Hud.sound(SoundEvents.BEACON_ACTIVATE, 0.8F, 1.2F);
+            this.onClose();
+            return true;
+        }
+        return false;
+    }
+
     // ================================================================== ratón y teclado
 
     private void switchTab(int i) {
@@ -1085,6 +1454,7 @@ public class SystemScreen extends Screen {
         if (tab == 1 && clickTree(mx, my, button, y1)) return true;
         if (tab == 2 && button == 0 && clickShadows(mx, my)) return true;
         if (tab == 3 && button == 0 && clickShop(mx, my, y1, x2)) return true;
+        if (tab == 4 && button == 0 && clickQuests(mx, my, y1)) return true;
         return super.mouseClicked(mx, my, button);
     }
 
@@ -1233,6 +1603,11 @@ public class SystemScreen extends Screen {
             scroll = Math.max(0, Math.min(max, scroll - (int) Math.signum(scrollY)));
             return true;
         }
+        if (tab == 4 && qsub() == 0 && questList().in(mx, my)) {
+            int max = Math.max(0, Quests.COUNT - questRows());
+            qscroll = Math.max(0, Math.min(max, qscroll - (int) Math.signum(scrollY)));
+            return true;
+        }
         return super.mouseScrolled(mx, my, scrollX, scrollY);
     }
 
@@ -1242,7 +1617,7 @@ public class SystemScreen extends Screen {
             this.onClose();
             return true;
         }
-        if (keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_4) {
+        if (keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_1 + TABS.length - 1) {
             switchTab(keyCode - GLFW.GLFW_KEY_1);
             return true;
         }
@@ -1255,7 +1630,11 @@ public class SystemScreen extends Screen {
     public void selfTestView(int newTab, int newSub, int newCat) {
         this.tab = newTab;
         lastTab = newTab;
-        lastSub = newSub;
+        if (newTab == 4) {
+            lastQSub = newSub;
+        } else {
+            lastSub = newSub;
+        }
         lastCat = newCat;
         this.selNode = -1;
         this.tabTime = 0L;
@@ -1287,7 +1666,14 @@ public class SystemScreen extends Screen {
             raceTip(r);
         }
         for (int c = 0; c < Defs.CLASS_NAME.length; c++) {
-            classTip(c);
+            classTip(c, false);
+            classTip(c, true);
+        }
+        for (int q = 0; q < Quests.COUNT; q++) {
+            questTip(q, Quests.HIDDEN);
+            questTip(q, Quests.ACTIVE);
+            questTip(q, Quests.DONE);
+            n++;
         }
         for (int i = 0; i < 5; i++) {
             statTip(i);

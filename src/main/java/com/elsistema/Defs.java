@@ -103,4 +103,51 @@ public final class Defs {
     public static final int[] SKILL_COST = {20, 25, 15, 30, 30};
     /** Enfriamiento en ticks (20 ticks = 1 segundo). */
     public static final int[] SKILL_CD = {160, 120, 40, 360, 400};
+
+    // ------------------------------------------------------------ Cambio de clase (mutaciones)
+    /** Nivel al que aparece la misión oculta del cambio de clase. */
+    public static final int MUTATION_LEVEL = 40;
+    public static final String[] MUTATION_NAME = {"Señor de la Guerra", "Cazador Celestial", "Hechicero del Abismo",
+            "Nigromante", "Bastión Inmortal"};
+    public static final String[] MUTATION_DESC = {
+            "El espadachín que sobrevivió a la prueba. Su acero no conoce rival.",
+            "Sus flechas caen del cielo como una tormenta de estrellas.",
+            "Ha mirado al abismo y ahora el abismo obedece su maná.",
+            "El asesino que aprendió a levantar a los muertos. Su ejército crece sin fin.",
+            "Una fortaleza viviente. Ni el tiempo consigue derribarla."
+    };
+    public static final String[][] MUTATION_BONUS = {
+            {"+2 de daño de ataque", "+0.2 de velocidad de ataque", "+5% de robo de vida", "+25% de daño de habilidad"},
+            {"+25% de daño con flechas", "+10% de velocidad", "+25% de daño de habilidad"},
+            {"+40 de maná máximo", "-20% de enfriamiento", "+25% de daño de habilidad"},
+            {"+3 sombras en tu ejército", "+10% de probabilidad de extracción", "+20% de poder de las sombras",
+                    "+25% de daño de habilidad"},
+            {"+4 corazones de vida", "+3 de armadura y +2 de dureza", "Devuelves el 10% del daño", "+25% de daño de habilidad"}
+    };
+    public static final String[] MUT_SKILL_NAME = {"Tormenta de acero", "Lluvia celestial", "Lanza del abismo",
+            "Dominio de las sombras", "Muralla eterna"};
+    public static final String[] MUT_SKILL_DESC = {
+            "Tajo enorme a tu alrededor con 2.2 veces el daño de tu arma. Ralentiza a los enemigos y te da Fuerza.",
+            "Abanico de flechas críticas y, además, una lluvia de flechas cae del cielo donde miras.",
+            "Rayo de 32 bloques que estalla al final: daño en área y Marchitamiento. Escala con INT.",
+            "Invisible y más fuerte. Tus sombras guardadas salen gratis y reciben Fuerza II y Velocidad II.",
+            "Resistencia III, Absorción IV y te curas un 30%. Todos los enemigos cercanos te atacan a ti."
+    };
+
+    /** Nombre de la clase (o de su mutación). */
+    public static String className(int cls, boolean mutated) {
+        if (cls < 0 || cls >= CLASS_NAME.length) return "?";
+        return mutated ? MUTATION_NAME[cls] : CLASS_NAME[cls];
+    }
+
+    /** Nombre de la habilidad de la clase (o de su mutación). */
+    public static String skillName(int cls, boolean mutated) {
+        if (cls < 0 || cls >= SKILL_NAME.length) return "?";
+        return mutated ? MUT_SKILL_NAME[cls] : SKILL_NAME[cls];
+    }
+
+    public static String skillDesc(int cls, boolean mutated) {
+        if (cls < 0 || cls >= SKILL_DESC.length) return "";
+        return mutated ? MUT_SKILL_DESC[cls] : SKILL_DESC[cls];
+    }
 }

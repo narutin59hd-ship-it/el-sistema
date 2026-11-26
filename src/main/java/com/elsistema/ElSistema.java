@@ -49,6 +49,7 @@ public class ElSistema implements ModInitializer {
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            SecretBoss.reset();
             Dungeons.shutdown();
             Shadows.shutdown(server);
             Store.saveAll(server);
@@ -67,9 +68,13 @@ public class ElSistema implements ModInitializer {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             if (source.getEntity() instanceof ServerPlayer sp && entity != sp) {
                 Ranks.onKill(sp, entity, 1.0);
+                Quests.onKill(sp, entity);
             } else if (Shadows.isShadow(source.getEntity())) {
                 ServerPlayer owner = Shadows.ownerPlayer(source.getEntity());
-                if (owner != null) Ranks.onKill(owner, entity, 0.6);
+                if (owner != null) {
+                    Ranks.onKill(owner, entity, 0.6);
+                    Quests.onKill(owner, entity);
+                }
             }
             Shadows.onDeath(entity, source);
         });
@@ -138,6 +143,41 @@ public class ElSistema implements ModInitializer {
                                             }
                                             return Dungeons.openGate(sp, rank, -1, true) ? 1 : 0;
                                         })))
+                        .then(Commands.literal("jefe")
+                                .then(Commands.argument("tipo", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                            SecretBoss.Kind k = SecretBoss.parse(StringArgumentType.getString(ctx, "tipo"));
+                                            if (k == null) {
+                                                sp.sendSystemMessage(Component.literal("[Sistema] Usa: guardian, eclipse, reina o coloso."));
+                                                return 0;
+                                            }
+                                            if (Store.get(sp).awakened != 1) {
+                                                sp.sendSystemMessage(Component.literal("[Sistema] Primero tienes que despertar (pulsa V)."));
+                                                return 0;
+                                            }
+                                            if (SecretBoss.spawnNear(sp, k, true) == null) {
+                                                sp.sendSystemMessage(Component.literal("[Sistema] No hay sitio para el jefe aquí."));
+                                                return 0;
+                                            }
+                                            return 1;
+                                        })))
+                        .then(Commands.literal("prueba")
+                                .executes(ctx -> {
+                                    ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                    Data d = Store.get(sp);
+                                    if (d.awakened != 1) {
+                                        sp.sendSystemMessage(Component.literal("[Sistema] Primero tienes que despertar (pulsa V)."));
+                                        return 0;
+                                    }
+                                    if (d.mutated == 1) {
+                                        sp.sendSystemMessage(Component.literal("[Sistema] Tu clase ya ha mutado."));
+                                        return 0;
+                                    }
+                                    if (d.quest[Quests.Q_CLASS] == Quests.HIDDEN) Quests.discover(sp, d, Quests.Q_CLASS);
+                                    Quests.startTrial(sp);
+                                    return 1;
+                                }))
                         .then(Commands.literal("cambiar")
                                 .executes(ctx -> {
                                     SystemLogic.rechoose(ctx.getSource().getPlayerOrException());

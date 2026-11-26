@@ -378,7 +378,8 @@ S_MOSS = (78, 110, 58)
 S_RUNE = (95, 215, 255)
 
 
-def stone(f, x, y, w, h, s, base=S_STONE):
+def stone(f, x, y, w, h, s, base=None):
+    base = S_STONE if base is None else base
     c = shade_face(base, f, x, y, w, h, s, 0.18)
     n = noise(x, y, s + 9)
     if n > 0.9:
@@ -435,14 +436,15 @@ W_DARK = (66, 70, 80)
 W_LIGHT = (188, 196, 206)
 
 
-def wolf_fur(f, x, y, w, h, s, base=W_FUR):
+def wolf_fur(f, x, y, w, h, s, base=None):
+    base = W_FUR if base is None else base
     c = shade_face(base, f, x, y, w, h, s, 0.14)
     if noise(x * 3, y, s + 5) > 0.82:
         c = mix(c, W_LIGHT, 0.45)
     return c
 
 
-def lobo():
+def lobo(name="lobo_acero", eye=(255, 170, 40), eye2=(140, 60, 10)):
     t = Tex(64, 64)
 
     def body(f, x, y, w, h):
@@ -463,9 +465,9 @@ def lobo():
         c = wolf_fur(f, x, y, w, h, 14)
         if f == "front":
             if y == 2 and x in (1, 5):
-                c = (255, 170, 40)
+                c = eye
             if y == 2 and x in (2, 4):
-                c = (140, 60, 10)
+                c = eye2
             if y == 1 and x in (1, 2, 4, 5):
                 c = W_DARK
         if f == "top" and 2 <= x <= 4:
@@ -511,7 +513,7 @@ def lobo():
     paint_box(t, 50, 41, 2, 3, 1, ear)
     paint_box(t, 48, 0, 3, 9, 3, leg)
     paint_box(t, 48, 13, 2, 9, 2, tail)
-    t.save(os.path.join(A, "textures/entity/lobo_acero.png"))
+    t.save(os.path.join(A, "textures/entity", name + ".png"))
 
 
 # ====================================================================== oso de hielo (128x64)
@@ -598,7 +600,7 @@ H_DARK = (36, 16, 12)
 H_RED = (170, 52, 28)
 
 
-def hormiga():
+def hormiga(name="hormiga", eye=(60, 60, 70), eye_side=(90, 90, 100)):
     t = Tex(64, 64)
 
     def chitin(f, x, y, w, h, s, base=H_CHITIN):
@@ -611,13 +613,13 @@ def hormiga():
         c = chitin(f, x, y, w, h, 31, H_RED)
         if f == "front":
             if y == 1 and x in (0, 1, 4, 5):
-                c = (14, 10, 10) if x in (0, 5) else (60, 60, 70)
+                c = (14, 10, 10) if x in (0, 5) else eye
             if y == 2 and x in (0, 5):
                 c = (14, 10, 10)
             if y >= 3 and 2 <= x <= 3:
                 c = mul(H_RED, 0.7)
         if f in ("left", "right") and 1 <= y <= 2 and 1 <= x <= 3:
-            c = (14, 10, 10) if (x + y) % 2 else (90, 90, 100)
+            c = (14, 10, 10) if (x + y) % 2 else eye_side
         return c
 
     def mandible(f, x, y, w, h):
@@ -660,7 +662,52 @@ def hormiga():
     paint_box(t, 0, 12, 7, 5, 7, thorax)
     paint_box(t, 0, 26, 10, 8, 12, abdomen)
     paint_box(t, 36, 10, 12, 2, 2, leg)
-    t.save(os.path.join(A, "textures/entity/hormiga.png"))
+    t.save(os.path.join(A, "textures/entity", name + ".png"))
+
+
+# ====================================================================== jefes secretos
+
+
+def secret_bosses():
+    global K_STEEL, K_HI, K_RED, K_CAPE, S_STONE, S_MOSS, S_RUNE, W_FUR, W_DARK, W_LIGHT, H_CHITIN, H_DARK, H_RED
+    # Guardián del Juicio: armadura plateada con oro, capa azul real y ojos de luz celeste
+    saved = (K_STEEL, K_HI, K_RED, K_CAPE)
+    K_STEEL, K_HI, K_RED, K_CAPE = (168, 174, 192), (236, 240, 250), (222, 182, 64), (38, 62, 150)
+    eyes = {(255, 72, 56): (150, 240, 255), (120, 24, 20): (40, 120, 190), (8, 6, 10): (14, 20, 40)}
+
+    def head(f, x, y, w, h, sd):
+        c = knight_head(f, x, y, w, h, sd)
+        return eyes.get(tuple(c[:3]), c)
+
+    humanoid("guardian_juicio", head, knight_body, knight_arm, knight_leg, hat=knight_hat, seed=61)
+    K_STEEL, K_HI, K_RED, K_CAPE = saved
+
+    # Coloso Primordial: roca volcánica casi negra con grietas de magma
+    saved = (S_STONE, S_MOSS, S_RUNE)
+    S_STONE, S_MOSS, S_RUNE = (64, 54, 66), (140, 46, 22), (255, 140, 40)
+
+    def magma(fn):
+        def paint(f, x, y, w, h, sd):
+            c = fn(f, x, y, w, h, sd)
+            if noise(x * 2 + 1, y * 3 + 2, sd + 77) > 0.9 and f != "bottom":
+                c = mix((255, 110, 30), (255, 200, 80), noise(x, y, sd + 5))
+            return c
+        return paint
+
+    humanoid("coloso_primordial", magma(colossus_head), magma(colossus_body), magma(colossus_arm), magma(colossus_leg), seed=71)
+    S_STONE, S_MOSS, S_RUNE = saved
+
+    # Bestia del Eclipse: pelaje negro violáceo, marcas plateadas como la luna y ojos rojos
+    saved = (W_FUR, W_DARK, W_LIGHT)
+    W_FUR, W_DARK, W_LIGHT = (44, 36, 64), (18, 14, 30), (176, 166, 236)
+    lobo("bestia_eclipse", eye=(255, 50, 60), eye2=(120, 0, 20))
+    W_FUR, W_DARK, W_LIGHT = saved
+
+    # Reina Carmesí: caparazón carmesí con detalles dorados y ojos de oro
+    saved = (H_CHITIN, H_DARK, H_RED)
+    H_CHITIN, H_DARK, H_RED = (126, 18, 40), (52, 6, 18), (236, 186, 70)
+    hormiga("reina_carmesi", eye=(255, 214, 90), eye_side=(255, 236, 150))
+    H_CHITIN, H_DARK, H_RED = saved
 
 
 # ====================================================================== capa de las sombras (16x16)
@@ -1040,6 +1087,78 @@ def shade_icon(t, base_names=None):
     return out
 
 
+AGUIJON = [
+    "...............R",
+    "..............Rr",
+    ".............Rr.",
+    "............Rr..",
+    "...........Rr...",
+    "..........Rr....",
+    ".........Rr.....",
+    "........Rr......",
+    "...gg..Rr.......",
+    "...gGGRr........",
+    "....GGr.........",
+    "....hGGg........",
+    "...h..gg........",
+    "..h.............",
+    ".p..............",
+    "pp.............."]
+
+CORAZON = [
+    "................",
+    "................",
+    "...oooo..oooo...",
+    "..oOOOOooOOOOo..",
+    ".oOOyOOOOOOOOOo.",
+    ".oOyyOOOOOOOOOo.",
+    ".oOOOOOOOOOOOOo.",
+    ".oOOOOOOOOOOOOo.",
+    "..oOOOOOOOOOOo..",
+    "...oOOOOOOOOo...",
+    "....oOOOOOOo....",
+    ".....oOOOOo.....",
+    "......oOOo......",
+    ".......oo.......",
+    "................",
+    "................"]
+
+
+def legendaries():
+    # Hoja del Juicio: hoja blanca y celeste con guarda de oro
+    p = {"R": (236, 240, 255), "k": (120, 206, 255), "g": (176, 136, 36), "G": (255, 214, 90), "h": (70, 46, 30),
+         "p": (90, 200, 255)}
+    t = from_mask(ESPADA, p)
+    outline(t, (24, 18, 8))
+    save_item(t, "hoja_juicio")
+
+    # Colmillo del Eclipse: daga negra violácea con gema roja
+    p = {"a": (120, 108, 176), "W": (226, 216, 255), "b": (70, 50, 124), "g": (44, 32, 66), "h": (30, 20, 40),
+         "p": (230, 40, 60)}
+    t = shade_icon(from_mask(DAGA, p))
+    outline(t, (10, 6, 18))
+    save_item(t, "colmillo_eclipse")
+
+    # Aguijón Carmesí: estoque fino carmesí con guarda dorada
+    p = {"R": (255, 120, 140), "r": (170, 20, 50), "g": (150, 110, 30), "G": (240, 200, 80), "h": (60, 12, 24),
+         "p": (230, 60, 90)}
+    t = from_mask(AGUIJON, p)
+    outline(t, (18, 4, 10))
+    save_item(t, "aguijon_carmesi")
+
+    # Corazón Primordial: corazón de roca con magma dentro
+    p = {"o": (64, 44, 42), "O": (230, 104, 32), "y": (255, 232, 160)}
+    t = from_mask(CORAZON, p)
+    for y in range(16):
+        for x in range(16):
+            c = t.get(x, y)
+            if c[3] and c[:3] == (230, 104, 32) and noise(x, y, 91) > 0.72:
+                t.put(x, y, (120, 40, 20))
+    t = shade_icon(t)
+    outline(t, (22, 10, 8))
+    save_item(t, "corazon_primordial")
+
+
 def items():
     p = {"a": (150, 150, 170), "W": (232, 230, 255), "b": (110, 96, 150), "g": (60, 50, 70), "h": (40, 30, 34),
          "p": (150, 110, 255)}
@@ -1250,14 +1369,16 @@ def models():
             json.dump(data, f, indent=2)
             f.write("\n")
 
-    for n in ("daga_asesino", "espada_caballero", "hacha_berserker", "guadana_monarca", "baculo_arcano"):
+    for n in ("daga_asesino", "espada_caballero", "hacha_berserker", "guadana_monarca", "baculo_arcano",
+              "hoja_juicio", "colmillo_eclipse", "aguijon_carmesi"):
         write(n, {"parent": "minecraft:item/handheld", "textures": {"layer0": "elsistema:item/" + n}})
-    names = ["pocion_mana", "elixir_vida", "piedra_retorno", "velo_sombra"]
+    names = ["pocion_mana", "elixir_vida", "piedra_retorno", "velo_sombra", "corazon_primordial"]
     for v in ARMOR_ICONS.values():
         names.extend(v)
     for n in names:
         write(n, {"parent": "minecraft:item/generated", "textures": {"layer0": "elsistema:item/" + n}})
-    for e in ("goblin", "lobo_acero", "oso_hielo", "orco", "hormiga", "caballero", "coloso"):
+    for e in ("goblin", "lobo_acero", "oso_hielo", "orco", "hormiga", "caballero", "coloso",
+              "guardian_juicio", "bestia_eclipse", "reina_carmesi", "coloso_primordial"):
         write(e + "_huevo", {"parent": "minecraft:item/template_spawn_egg"})
 
 
@@ -1278,9 +1399,11 @@ def main():
     lobo()
     oso()
     hormiga()
+    secret_bosses()
     sombra()
     armors()
     items()
+    legendaries()
     armor_icons()
     models()
     locales()

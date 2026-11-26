@@ -55,5 +55,17 @@
   "item.elsistema.orco_huevo": "Huevo de orco",
   "item.elsistema.hormiga_huevo": "Huevo de hormiga soldado",
   "item.elsistema.caballero_huevo": "Huevo de caballero maldito",
-  "item.elsistema.coloso_huevo": "Huevo de coloso de piedra"
+  "item.elsistema.coloso_huevo": "Huevo de coloso de piedra",
+  "entity.elsistema.guardian_juicio": "Guardián del Juicio",
+  "entity.elsistema.bestia_eclipse": "Bestia del Eclipse",
+  "entity.elsistema.reina_carmesi": "Reina Carmesí",
+  "entity.elsistema.coloso_primordial": "Coloso Primordial",
+  "item.elsistema.guardian_juicio_huevo": "Huevo del Guardián del Juicio",
+  "item.elsistema.bestia_eclipse_huevo": "Huevo de la Bestia del Eclipse",
+  "item.elsistema.reina_carmesi_huevo": "Huevo de la Reina Carmesí",
+  "item.elsistema.coloso_primordial_huevo": "Huevo del Coloso Primordial",
+  "item.elsistema.hoja_juicio": "Hoja del Juicio",
+  "item.elsistema.colmillo_eclipse": "Colmillo del Eclipse",
+  "item.elsistema.aguijon_carmesi": "Aguijón Carmesí",
+  "item.elsistema.corazon_primordial": "Corazón Primordial"
 }

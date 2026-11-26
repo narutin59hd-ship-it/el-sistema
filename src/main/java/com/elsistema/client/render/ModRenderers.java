@@ -50,6 +50,13 @@ public final class ModRenderers {
         EntityRendererRegistry.register(ModEntities.LOBO, ctx -> new Beast(ctx, new BeastModel<>(ctx.bakeLayer(LOBO_LAYER)), tex("lobo_acero"), 0.6F));
         EntityRendererRegistry.register(ModEntities.OSO, ctx -> new Beast(ctx, new BeastModel<>(ctx.bakeLayer(OSO_LAYER)), tex("oso_hielo"), 1.0F));
         EntityRendererRegistry.register(ModEntities.HORMIGA, ctx -> new Beast(ctx, new InsectModel<>(ctx.bakeLayer(HORMIGA_LAYER)), tex("hormiga"), 0.8F));
+        // Jefes secretos
+        EntityRendererRegistry.register(ModEntities.GUARDIAN, ctx -> new Humanoid(ctx, tex("guardian_juicio"), 1.3F));
+        EntityRendererRegistry.register(ModEntities.PRIMORDIAL, ctx -> new Humanoid(ctx, tex("coloso_primordial"), 2.2F));
+        EntityRendererRegistry.register(ModEntities.ECLIPSE,
+                ctx -> new Beast(ctx, new BeastModel<>(ctx.bakeLayer(LOBO_LAYER)), tex("bestia_eclipse"), 1.1F, 1.9F));
+        EntityRendererRegistry.register(ModEntities.QUEEN,
+                ctx -> new Beast(ctx, new InsectModel<>(ctx.bakeLayer(HORMIGA_LAYER)), tex("reina_carmesi"), 1.4F, 1.8F));
 
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((entityType, entityRenderer, helper, context) ->
                 helper.register(new ShadowLayer((RenderLayerParent) entityRenderer)));
@@ -77,18 +84,30 @@ public final class ModRenderers {
         }
     }
 
-    /** Monstruos con modelo propio (lobo, oso y hormiga). */
+    /** Monstruos con modelo propio (lobo, oso y hormiga) y los jefes secretos con forma de bestia. */
     public static class Beast extends MobRenderer<DungeonMonster, EntityModel<DungeonMonster>> {
         private final ResourceLocation texture;
+        private final float size;
 
         public Beast(EntityRendererProvider.Context ctx, EntityModel<DungeonMonster> model, ResourceLocation texture, float shadow) {
+            this(ctx, model, texture, shadow, 1.0F);
+        }
+
+        public Beast(EntityRendererProvider.Context ctx, EntityModel<DungeonMonster> model, ResourceLocation texture, float shadow,
+                     float size) {
             super(ctx, model, shadow);
             this.texture = texture;
+            this.size = size;
         }
 
         @Override
         public ResourceLocation getTextureLocation(DungeonMonster entity) {
             return this.texture;
+        }
+
+        @Override
+        protected void scale(DungeonMonster entity, PoseStack poseStack, float partialTick) {
+            if (this.size != 1.0F) poseStack.scale(this.size, this.size, this.size);
         }
     }
 

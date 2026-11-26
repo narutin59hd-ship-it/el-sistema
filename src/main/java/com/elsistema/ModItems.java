@@ -45,6 +45,11 @@ public final class ModItems {
     public static Item ELIXIR;
     public static Item PIEDRA_RETORNO;
     public static Item VEIL;
+    // Recompensas ocultas (legendarias)
+    public static Item HOJA_JUICIO;
+    public static Item COLMILLO;
+    public static Item AGUIJON;
+    public static Item CORAZON;
     /** Armaduras por set (cazador, archimago, caballero negro, monarca) y pieza (casco, peto, grebas, botas). */
     public static final Item[][] ARMOR = new Item[4][4];
     private static final String[][] ARMOR_ID = {
@@ -74,6 +79,13 @@ public final class ModItems {
         ELIXIR = reg("elixir_vida", new ConsumableItem(1, new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
         PIEDRA_RETORNO = reg("piedra_retorno", new ConsumableItem(2, new Item.Properties().stacksTo(16).rarity(Rarity.UNCOMMON)));
         VEIL = reg("velo_sombra", new Item(new Item.Properties().stacksTo(1)));
+        HOJA_JUICIO = reg("hoja_juicio", new LegendarySword(ModArmor.Tiers.MONARCA, 6, -2.4F,
+                "Prende fuego a quien golpeas", "La espada del Guardián del Juicio"));
+        COLMILLO = reg("colmillo_eclipse", new LegendarySword(ModArmor.Tiers.MONARCA, 3, -1.8F,
+                "Marchita a quien golpeas y te cura un poco", "Arrancado a la Bestia del Eclipse"));
+        AGUIJON = reg("aguijon_carmesi", new LegendarySword(ModArmor.Tiers.MONARCA, 4, -2.0F,
+                "Envenena (Veneno II) a quien golpeas", "El aguijón de la Reina Carmesí"));
+        CORAZON = reg("corazon_primordial", new HeartItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC).fireResistant()));
         ArmorItem.Type[] types = {ArmorItem.Type.HELMET, ArmorItem.Type.CHESTPLATE, ArmorItem.Type.LEGGINGS, ArmorItem.Type.BOOTS};
         for (int set = 0; set < 4; set++) {
             for (int piece = 0; piece < 4; piece++) {
@@ -95,6 +107,10 @@ public final class ModItems {
             entries.accept(HACHA);
             entries.accept(GUADANA);
             entries.accept(BACULO);
+            entries.accept(HOJA_JUICIO);
+            entries.accept(COLMILLO);
+            entries.accept(AGUIJON);
+            entries.accept(CORAZON);
             for (Item[] set : ARMOR) {
                 for (Item piece : set) {
                     entries.accept(piece);
@@ -236,6 +252,72 @@ public final class ModItems {
         public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
             lines.add(Component.literal(this.desc).withStyle(ChatFormatting.GRAY));
             lines.add(Component.literal("Exclusiva de la Tienda del Sistema").withStyle(ChatFormatting.DARK_AQUA));
+        }
+    }
+
+    /** Armas legendarias: solo se consiguen con misiones ocultas. */
+    public static class LegendarySword extends SwordItem {
+        private final String effect;
+        private final String lore;
+
+        public LegendarySword(Tier tier, int damage, float speed, String effect, String lore) {
+            super(tier, new Item.Properties().attributes(SwordItem.createAttributes(tier, damage, speed))
+                    .rarity(Rarity.EPIC).fireResistant());
+            this.effect = effect;
+            this.lore = lore;
+        }
+
+        @Override
+        public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
+            lines.add(Component.literal("★ LEGENDARIA").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+            lines.add(Component.literal(this.effect).withStyle(ChatFormatting.LIGHT_PURPLE));
+            lines.add(Component.literal(this.lore).withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+            lines.add(Component.literal("Recompensa oculta del Sistema").withStyle(ChatFormatting.DARK_AQUA));
+        }
+
+        @Override
+        public boolean isFoil(ItemStack stack) {
+            return true;
+        }
+    }
+
+    /** Corazón Primordial: +2 sombras en tu ejército para siempre. */
+    public static class HeartItem extends Item {
+        public HeartItem(Item.Properties p) {
+            super(p);
+        }
+
+        @Override
+        public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+            ItemStack stack = player.getItemInHand(hand);
+            if (!level.isClientSide() && player instanceof ServerPlayer sp) {
+                Data d = Store.get(sp);
+                if (d.awakened != 1) {
+                    SystemLogic.notify(sp, Net.N_NOT_AWAKENED, 0, 0);
+                    return InteractionResultHolder.fail(stack);
+                }
+                d.bonusSlots += 2;
+                if (!sp.isCreative()) stack.shrink(1);
+                level.playSound((Player) null, sp.getX(), sp.getY(), sp.getZ(), SoundEvents.WITHER_SPAWN, SoundSource.PLAYERS, 0.4F, 1.6F);
+                ((ServerLevel) level).sendParticles(net.minecraft.core.particles.ParticleTypes.SCULK_SOUL,
+                        sp.getX(), sp.getY() + 1.0, sp.getZ(), 40, 0.5, 0.8, 0.5, 0.05);
+                SystemLogic.notify(sp, Net.N_SLOTS_UP, 2, Shadows.maxSlots(d));
+                SystemLogic.sync(sp, d);
+                Shadows.sendList(sp);
+            }
+            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+        }
+
+        @Override
+        public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
+            lines.add(Component.literal("★ LEGENDARIO").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+            lines.add(Component.literal("Clic derecho: +2 sombras en tu ejército para siempre").withStyle(ChatFormatting.LIGHT_PURPLE));
+            lines.add(Component.literal("Late con el poder del Coloso Primordial").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+        }
+
+        @Override
+        public boolean isFoil(ItemStack stack) {
+            return true;
         }
     }
 

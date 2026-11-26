@@ -1,19 +1,56 @@
-# El Sistema 1.2.0 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.3.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 100), rango de cazador (E, D, C, B, A, S), 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
-monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda. Todo con ventanas
-animadas del Sistema.
+monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, **misiones ocultas**,
+**jefes secretos** y el **cambio de clase**. Todo con ventanas animadas del Sistema.
 
 ## Controles
 
 - **V**: ventana del Sistema (o el despertar, si todavía no has despertado).
-  - Pestañas **Estado**, **Habilidades**, **Sombras** y **Tienda** (también con las teclas 1, 2, 3 y 4).
+  - Pestañas **Estado**, **Habilidades**, **Sombras**, **Tienda** y **Misiones** (también con las teclas 1 a 5).
 - **R**: habilidad de tu clase.
 - **G**: ¡Levántate! (extraer la sombra de una criatura muerta).
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.3.0
+
+### Cambio de clase (como en la serie)
+- Al llegar al **nivel 40** aparece una misión oculta: **El despertar de la clase**.
+- En la pestaña **Misiones** pulsa **INICIAR PRUEBA**: entras solo en una mazmorra especial
+  (rango B) con 4 oleadas de élite y un jefe secreto, el **Guardián del Juicio**.
+- Si lo derrotas, tu clase **muta** a una clase superior, con bonus nuevos y una habilidad mejorada:
+
+| Clase | Mutación | Habilidad nueva |
+|---|---|---|
+| Espadachín | **Señor de la Guerra** | Tormenta de acero: tajo enorme (x2.2), ralentiza y te da Fuerza |
+| Arquero | **Cazador Celestial** | Lluvia celestial: además cae una lluvia de flechas donde miras |
+| Mago | **Hechicero del Abismo** | Lanza del abismo: 32 bloques, más daño y estalla con Marchitamiento |
+| Asesino | **Nigromante** | Dominio de las sombras: tus sombras salen gratis con Fuerza II y Velocidad II |
+| Tanque | **Bastión Inmortal** | Muralla eterna: Resistencia III, Absorción IV, te curas un 30% |
+
+- Además ganas +5 puntos de estadística y la **Hoja del Juicio** (espada legendaria).
+- Si fallas, puedes repetir la prueba. Tras ganarla tienes 10 s para hacer **¡Levántate!** sobre el Guardián.
+
+### Misiones ocultas
+- No se ven hasta que cumples su condición secreta (en la lista salen como **???** con una pista).
+- Cazador nocturno, La legión silenciosa, Cazador de jefes, Más allá de tu rango y las de los jefes secretos.
+- Cada una da una **recompensa oculta**: puntos, oro, elixires, sombras extra para siempre o armas legendarias.
+
+### Hitos de nivel (recompensas ocultas)
+- Al llegar a los niveles 10, 20, 30, 50, 60, 70, 80, 90 y 100 el Sistema te da premios secretos
+  (puntos, oro, objetos y sombras extra). Si ya tenías esos niveles, los recibes al entrar.
+
+### Jefes secretos
+- **Bestia del Eclipse**: algunas noches aparece cerca de cazadores de nivel 30 o más (más a menudo con
+  luna llena). Huye al amanecer. Recompensa: **Colmillo del Eclipse** (marchita y te cura).
+- **Reina Carmesí**: a veces es el jefe de las mazmorras B, A y S. Nubes de veneno y soldados.
+  Recompensa: **Aguijón Carmesí** (Veneno II).
+- **Coloso Primordial**: a veces es el jefe de las mazmorras S. Terremotos que lanzan por los aires.
+  Recompensa: **Corazón Primordial** (+2 sombras para siempre).
+- Todos tienen barra de jefe, ataques especiales, una fase de furia y se les puede extraer la sombra.
 
 ## Novedades de la 1.2.0
 
@@ -82,5 +119,7 @@ Fabric Loader para 1.21.1, Fabric API y el `.jar` en la carpeta `mods`
 - `/sistema puntos 10`: te da 10 puntos de habilidad.
 - `/sistema puerta C`: abre una puerta de mazmorra de rango C delante de ti (E, D, C, B, A o S).
 - `/sistema cambiar`: vuelves a elegir raza y clase sin perder el nivel.
-- `/sistema reiniciar`: empiezas de cero (también pierdes tus sombras).
+- `/sistema reiniciar`: empiezas de cero (también pierdes tus sombras, misiones y mutación).
+- `/sistema jefe eclipse` (o `reina`, `coloso`, `guardian`): hace aparecer un jefe secreto delante de ti.
+- `/sistema prueba`: empieza la prueba del cambio de clase aunque no tengas nivel 40.
 - Huevos de los monstruos nuevos: en la pestaña de huevos del modo creativo.

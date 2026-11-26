@@ -55,5 +55,17 @@
   "item.elsistema.orco_huevo": "Orc Spawn Egg",
   "item.elsistema.hormiga_huevo": "Soldier Ant Spawn Egg",
   "item.elsistema.caballero_huevo": "Cursed Knight Spawn Egg",
-  "item.elsistema.coloso_huevo": "Stone Colossus Spawn Egg"
+  "item.elsistema.coloso_huevo": "Stone Colossus Spawn Egg",
+  "entity.elsistema.guardian_juicio": "Guardian of Judgment",
+  "entity.elsistema.bestia_eclipse": "Eclipse Beast",
+  "entity.elsistema.reina_carmesi": "Crimson Queen",
+  "entity.elsistema.coloso_primordial": "Primordial Colossus",
+  "item.elsistema.guardian_juicio_huevo": "Guardian of Judgment Spawn Egg",
+  "item.elsistema.bestia_eclipse_huevo": "Eclipse Beast Spawn Egg",
+  "item.elsistema.reina_carmesi_huevo": "Crimson Queen Spawn Egg",
+  "item.elsistema.coloso_primordial_huevo": "Primordial Colossus Spawn Egg",
+  "item.elsistema.hoja_juicio": "Blade of Judgment",
+  "item.elsistema.colmillo_eclipse": "Eclipse Fang",
+  "item.elsistema.aguijon_carmesi": "Crimson Stinger",
+  "item.elsistema.corazon_primordial": "Primordial Heart"
 }

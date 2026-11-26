@@ -119,7 +119,8 @@ public final class ClientSelfTest {
         ResourceManager rm = mc.getResourceManager();
         List<String> missing = new ArrayList<>();
         String[] textures = {"entity/goblin", "entity/orco", "entity/caballero", "entity/coloso", "entity/lobo_acero",
-                "entity/oso_hielo", "entity/hormiga", "entity/sombra"};
+                "entity/oso_hielo", "entity/hormiga", "entity/sombra", "entity/guardian_juicio", "entity/bestia_eclipse",
+                "entity/reina_carmesi", "entity/coloso_primordial"};
         for (String t : textures) {
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "textures/" + t + ".png");
             if (rm.getResource(rl).isEmpty()) missing.add(rl.toString());
@@ -164,7 +165,8 @@ public final class ClientSelfTest {
     private static void fakeData() {
         List<Integer> d = new ArrayList<>();
         int[] base = {1, 5, 2, 45, 1200, 5000, 3, 40, 22, 30, 55, 18, 140, 260, 0, 1, 123456, 4,
-                6, 3, 0, 0, 0, 10, 2, 4, 0, 0, 4, 2, 3, 0, 0, 5, 9, 3};
+                6, 3, 0, 0, 0, 10, 2, 4, 0, 0, 4, 2, 3, 0, 0, 5, 9, 3,
+                0, 7, 1, 1, 1, 0, 2, 0, 1, 0, 0, 0, 37, 4, 10, 0, 0, 0, 0};
         for (int v : base) {
             d.add(v);
         }
@@ -217,10 +219,17 @@ public final class ClientSelfTest {
         }
     }
 
+    private static void trial(int step) {
+        if (worldMode) {
+            SelfTest.trialRequest = step;
+            ElSistema.LOGGER.info("[SELFTEST-CLIENTE] pido el paso {} de la prueba del cambio de clase", step);
+        }
+    }
+
     private static void steps(Minecraft mc, int rt) {
         switch (rt) {
             case 0 -> note(Net.N_CORPSE, 10, 0);
-            case 20 -> shot(mc, "mundo, monstruos, sombras y HUD");
+            case 20 -> shot(mc, "mundo, monstruos, jefes secretos, sombras y HUD");
             case 24 -> note(Net.N_ARISE_OK, 1, 2);
             case 32 -> shot(mc, "¡Levántate!");
             case 60 -> {
@@ -228,12 +237,17 @@ public final class ClientSelfTest {
                         {Net.N_SHADOW_LEVEL, 1, 24}, {Net.N_NO_SHADOWS, 0, 0}, {Net.N_RANK_REQ, 3, 0}, {Net.N_MANA, 60, 0},
                         {Net.N_RETURN, 0, 0}, {Net.N_SHADOWS_OUT, 3, 0}, {Net.N_SHADOWS_IN, 2, 0}, {Net.N_BOUGHT, 16, 1},
                         {Net.N_TREE_UP, 2, 0}, {Net.N_NO_CORPSE, 0, 0}, {Net.N_ARISE_NO_MP, 40, 10}, {Net.N_GATE_OPEN, 2, 14},
-                        {Net.N_RANK_UP, 3, 2}, {Net.N_SHADOW_MARK, -5, 1}};
+                        {Net.N_RANK_UP, 3, 2}, {Net.N_SHADOW_MARK, -5, 1}, {Net.N_QUEST_FOUND, 1, 0},
+                        {Net.N_HIDDEN_REWARD, 3, 0}, {Net.N_SECRET_FLED, 1, 0}, {Net.N_TRIAL_DENIED, 1, 0},
+                        {Net.N_SLOTS_UP, 2, 22}, {Net.N_TRIAL_FAIL, 0, 1}, {Net.N_TRIAL_START, 3, 48}, {Net.N_QUEST_DONE, 3, 0},
+                        {Net.N_HIDDEN_REWARD, 8, 0}, {Net.N_SKILL, 2, 1}};
                 for (int[] n : all) {
                     note(n[0], n[1], n[2]);
                 }
             }
             case 72 -> shot(mc, "avisos");
+            case 76 -> note(Net.N_SECRET_BOSS, 3, 20);
+            case 86 -> shot(mc, "¡jefe secreto!");
             case 90 -> view(mc, 0, 0, 0);
             case 100 -> shot(mc, "pestaña ESTADO");
             case 104 -> view(mc, 1, 0, 0);
@@ -248,7 +262,11 @@ public final class ClientSelfTest {
             case 176 -> shot(mc, "tienda: armas");
             case 180 -> view(mc, 3, 0, 2);
             case 190 -> shot(mc, "tienda: armaduras");
-            case 194 -> {
+            case 194 -> view(mc, 4, 0, 0);
+            case 204 -> shot(mc, "pestaña MISIONES");
+            case 208 -> view(mc, 4, 1, 0);
+            case 218 -> shot(mc, "misiones: hitos de nivel");
+            case 222 -> {
                 try {
                     ElSistema.LOGGER.info("[SELFTEST-CLIENTE] {} textos de la ventana revisados", SystemScreen.selfCheck());
                 } catch (Throwable t) {
@@ -256,13 +274,34 @@ public final class ClientSelfTest {
                 }
                 mc.setScreen(null);
             }
-            case 198 -> {
+            case 226 -> trial(1);
+            case 336 -> {
+                if (worldMode && mc.player != null) mc.player.setXRot(-4.0F);
+            }
+            case 340 -> {
+                if (worldMode) shot(mc, "prueba del cambio de clase: oleada 1");
+            }
+            case 344 -> trial(2);
+            case 384 -> {
+                if (worldMode) shot(mc, "prueba: el jefe secreto (Guardián del Juicio)");
+            }
+            case 390 -> trial(3);
+            case 420 -> {
+                if (worldMode) shot(mc, "¡cambio de clase!");
+            }
+            case 424 -> trial(4);
+            case 440 -> view(mc, 0, 0, 0);
+            case 452 -> shot(mc, "pestaña ESTADO tras la mutación");
+            case 456 -> view(mc, 4, 0, 0);
+            case 468 -> shot(mc, "pestaña MISIONES tras la prueba");
+            case 472 -> {
+                mc.setScreen(null);
                 if (worldMode) mc.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
             }
-            case 214 -> {
+            case 490 -> {
                 if (worldMode) shot(mc, "tercera persona: armadura del Monarca y guadaña");
             }
-            case 250 -> finish(mc);
+            case 520 -> finish(mc);
             default -> {
             }
         }
@@ -271,6 +310,10 @@ public final class ClientSelfTest {
     private static void finish(Minecraft mc) {
         if (done) return;
         done = true;
+        if (worldMode && SelfTest.state != 1) {
+            failures++;
+            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: el servidor integrado terminó con estado {}", SelfTest.state);
+        }
         if (failures == 0) {
             ElSistema.LOGGER.info("[SELFTEST-CLIENTE] OK ({}, {} capturas)", worldMode ? "en el mundo" : "solo la ventana", shots);
         } else {

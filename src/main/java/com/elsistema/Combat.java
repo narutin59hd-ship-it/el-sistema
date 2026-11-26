@@ -9,6 +9,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
 /** Efectos de combate de los árboles: esquivar, devolver daño, robo de vida, fuego, veneno y última resistencia. */
 public final class Combat {
@@ -55,8 +56,18 @@ public final class Combat {
 
         if (attacker instanceof ServerPlayer ap && attacker != victim) {
             Data d = Store.get(ap);
-            if (src.getDirectEntity() == ap && ap.getMainHandItem().is(ModItems.GUADANA)) {
-                Shadows.focus(ap, victim);
+            if (src.getDirectEntity() == ap) {
+                ItemStack held = ap.getMainHandItem();
+                if (held.is(ModItems.GUADANA)) {
+                    Shadows.focus(ap, victim);
+                } else if (held.is(ModItems.HOJA_JUICIO)) {
+                    victim.setRemainingFireTicks(Math.max(victim.getRemainingFireTicks(), 100));
+                } else if (held.is(ModItems.COLMILLO)) {
+                    victim.addEffect(new MobEffectInstance(MobEffects.WITHER, 60, 0), ap);
+                    ap.heal(1.0F);
+                } else if (held.is(ModItems.AGUIJON)) {
+                    victim.addEffect(new MobEffectInstance(MobEffects.POISON, 80, 1), ap);
+                }
             }
             if (d.awakened == 1) {
                 double steal = d.fx(Trees.FX_LIFESTEAL);
