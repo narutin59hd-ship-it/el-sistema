@@ -26,6 +26,15 @@ public final class Defs {
     public static final String[] RANK = {"E", "D", "C", "B", "A", "S"};
     public static final int[] RANK_MIN = {1, 10, 25, 45, 65, 85};
     public static final int[] RANK_COLOR = {0xFFB0B0B0, 0xFF7BE38B, 0xFF5FB8FF, 0xFFB57BFF, 0xFFFFB347, 0xFFFF4D4D};
+    /** Nivel máximo de cada rango (para mazmorras y monstruos). */
+    public static final int[] RANK_MAX = {9, 24, 44, 64, 84, 100};
+
+    public static int rankIndex(String s) {
+        for (int i = 0; i < RANK.length; i++) {
+            if (RANK[i].equalsIgnoreCase(s)) return i;
+        }
+        return -1;
+    }
 
     public static int rank(int level) {
         int r = 0;
@@ -41,21 +50,24 @@ public final class Defs {
     public static final int ENANO = 2;
     public static final int ORCO = 3;
     public static final int DEMONIO = 4;
+    public static final int DRAGON = 5;
 
-    public static final String[] RACE_NAME = {"Humano", "Elfo", "Enano", "Orco", "Demonio"};
+    public static final String[] RACE_NAME = {"Humano", "Elfo", "Enano", "Orco", "Demonio", "Dragón"};
     public static final String[] RACE_DESC = {
             "Versátiles y ambiciosos. Crecen más rápido que nadie.",
             "Ágiles hijos del bosque, letales con el arco.",
             "Pequeños, duros como la roca y grandes mineros.",
             "Fuerza bruta en estado puro. Enormes y resistentes.",
-            "Nacidos de las llamas. Dominan el maná y el fuego."
+            "Nacidos de las llamas. Dominan el maná y el fuego.",
+            "Sangre de los antiguos dragones. Poderosos y temidos."
     };
     public static final String[][] RACE_BONUS = {
             {"+10% de experiencia", "+1 punto de estadística extra por nivel"},
             {"+10% de velocidad", "+20% de daño con flechas", "-1 corazón de vida"},
             {"Tamaño 80%", "+4 de armadura", "+25% de velocidad al picar", "+20% de resistencia al empuje", "-5% de velocidad"},
             {"Tamaño 115%", "+3 corazones de vida", "+2 de daño de ataque", "-5% de velocidad"},
-            {"Inmune al fuego y a la lava", "+30 de maná máximo", "+1 de daño de ataque", "-1 corazón de vida"}
+            {"Inmune al fuego y a la lava", "+30 de maná máximo", "+1 de daño de ataque", "-1 corazón de vida"},
+            {"Tamaño 110%", "+2 corazones de vida", "+2 de armadura", "+1 de daño de ataque", "-10% de experiencia"}
     };
 
     // ------------------------------------------------------------ Clases

@@ -39,7 +39,7 @@ public final class Skills {
     /** Espadachín: Tajo giratorio. */
     public static boolean slash(ServerPlayer p, Data d) {
         ServerLevel lvl = (ServerLevel) p.level();
-        double r = 4.5;
+        double r = 4.5 + d.fx(Trees.FX_SKILL_RADIUS);
         float dmg = (float) (p.getAttributeValue(Attributes.ATTACK_DAMAGE) * 1.5 * SystemLogic.skillMult(d));
         List<LivingEntity> list = lvl.getEntitiesOfClass(LivingEntity.class,
                 p.getBoundingBox().inflate(r, 1.5, r), e -> isTarget(e, p));
@@ -66,16 +66,21 @@ public final class Skills {
     public static boolean volley(ServerPlayer p, Data d) {
         ServerLevel lvl = (ServerLevel) p.level();
         double mult = SystemLogic.arrowBonus(d) * SystemLogic.skillMult(d);
-        for (int i = -3; i <= 3; i++) {
+        int count = 7 + (int) Math.round(d.fx(Trees.FX_EXTRA_ARROWS));
+        boolean fire = d.fx(Trees.FX_FIRE_ARROWS) > 0;
+        float spread = count > 7 ? 36.0F / (count - 1) : 6.0F;
+        for (int k = 0; k < count; k++) {
+            float i = k - (count - 1) / 2.0F;
             Arrow a = EntityType.ARROW.create(lvl);
             if (a == null) continue;
             a.setOwner(p);
             a.setPos(p.getX(), p.getEyeY() - 0.1, p.getZ());
-            a.shootFromRotation(p, p.getXRot(), p.getYRot() + i * 6.0F, 0.0F, 3.0F, 1.0F);
+            a.shootFromRotation(p, p.getXRot(), p.getYRot() + i * spread, 0.0F, 3.0F, 1.0F);
             a.setBaseDamage(a.getBaseDamage() * mult);
             a.setCritArrow(true);
             a.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
             a.addTag(SystemLogic.ARROW_TAG);
+            if (fire) a.setRemainingFireTicks(2000);
             lvl.addFreshEntity(a);
         }
         lvl.sendParticles(ParticleTypes.CRIT, p.getX(), p.getEyeY(), p.getZ(), 25, 0.4, 0.2, 0.4, 0.3);
@@ -121,9 +126,10 @@ public final class Skills {
     /** Asesino: Sigilo. */
     public static boolean stealth(ServerPlayer p, Data d) {
         ServerLevel lvl = (ServerLevel) p.level();
-        p.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 120, 0, false, false, true));
-        p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 120, 1, false, false, true));
-        p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 120, 0, false, false, true));
+        int time = 120 + (int) Math.round(d.fx(Trees.FX_SKILL_TIME) * 20);
+        p.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, time, 0, false, false, true));
+        p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, time, 1, false, false, true));
+        p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, time, 0, false, false, true));
         List<Mob> hunters = lvl.getEntitiesOfClass(Mob.class, p.getBoundingBox().inflate(24.0), m -> m.getTarget() == p);
         for (Mob m : hunters) {
             m.setTarget(null);
@@ -137,8 +143,9 @@ public final class Skills {
     /** Tanque: Fortaleza. */
     public static boolean fortress(ServerPlayer p, Data d) {
         ServerLevel lvl = (ServerLevel) p.level();
-        p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 160, 1, false, false, true));
-        p.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 160, 1, false, false, true));
+        int time = 160 + (int) Math.round(d.fx(Trees.FX_SKILL_TIME) * 20);
+        p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, time, 1, false, false, true));
+        p.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, time, 1, false, false, true));
         List<LivingEntity> list = lvl.getEntitiesOfClass(LivingEntity.class, p.getBoundingBox().inflate(6.0), e -> isTarget(e, p));
         for (LivingEntity e : list) {
             e.knockback(1.2, p.getX() - e.getX(), p.getZ() - e.getZ());

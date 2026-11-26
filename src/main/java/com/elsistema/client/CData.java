@@ -6,7 +6,7 @@ import java.util.List;
 public final class CData {
     private CData() {}
 
-    public static final int SIZE = 16;
+    public static final int SIZE = 28;
     private static int[] d = fresh();
 
     private static int[] fresh() {
@@ -52,4 +52,8 @@ public final class CData {
     public static int maxMp() { return Math.max(1, d[13]); }
     public static int cooldown() { return d[14]; }
     public static int cooldownTotal() { return Math.max(1, d[15]); }
+    public static int coins() { return d[16]; }
+    public static int skillPoints() { return d[17]; }
+    public static int raceRank(int node) { return d[18 + node]; }
+    public static int classRank(int node) { return d[23 + node]; }
 }

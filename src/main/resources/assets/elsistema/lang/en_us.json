@@ -1,5 +1,18 @@
 {
   "key.categories.elsistema": "The System",
-  "key.elsistema.status": "Status window",
-  "key.elsistema.skill": "Use class skill"
+  "key.elsistema.status": "System window",
+  "key.elsistema.skill": "Use class skill",
+  "item.elsistema.nucleo_e": "Mana Core (Rank E)",
+  "item.elsistema.nucleo_d": "Mana Core (Rank D)",
+  "item.elsistema.nucleo_c": "Mana Core (Rank C)",
+  "item.elsistema.nucleo_b": "Mana Core (Rank B)",
+  "item.elsistema.nucleo_a": "Mana Core (Rank A)",
+  "item.elsistema.nucleo_s": "Mana Core (Rank S)",
+  "item.elsistema.llave_e": "Dungeon Key (Rank E)",
+  "item.elsistema.llave_d": "Dungeon Key (Rank D)",
+  "item.elsistema.llave_c": "Dungeon Key (Rank C)",
+  "item.elsistema.llave_b": "Dungeon Key (Rank B)",
+  "item.elsistema.llave_a": "Dungeon Key (Rank A)",
+  "item.elsistema.llave_s": "Dungeon Key (Rank S)",
+  "item.elsistema.runa_habilidad": "Skill Rune"
 }

@@ -2,6 +2,8 @@ package com.elsistema.client;
 
 import com.elsistema.Defs;
 import com.elsistema.Net;
+import com.elsistema.Shop;
+import com.elsistema.Trees;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -27,10 +29,15 @@ public final class Hud {
     private static long bigStart = -1;
     private static String bigTitle = "";
     private static String bigSub = "";
+    private static int bigGlow = 0x9050B4FF;
+    private static int bigFlash = 0x663A8DFF;
     private static long callStart = -1;
     private static String callText = "";
+    private static int callColor = Ui.WHITE;
     private static long xpTime = -1;
     private static int xpAmount = 0;
+    private static long goldTime = -1;
+    private static int goldAmount = 0;
     private static long warnTime = -1;
     private static String warnText = "";
 
@@ -72,10 +79,18 @@ public final class Hud {
         ding();
     }
 
-    private static void big(String title, String sub) {
+    private static void big(String title, String sub, int glow, int flash) {
         bigStart = System.currentTimeMillis();
         bigTitle = title;
         bigSub = sub;
+        bigGlow = glow;
+        bigFlash = flash;
+    }
+
+    private static void callout(String text, int color) {
+        callStart = System.currentTimeMillis();
+        callText = text;
+        callColor = color;
     }
 
     private static void warn(String text) {
@@ -89,9 +104,10 @@ public final class Hud {
     public static void onNotify(int kind, int a, int b) {
         Minecraft mc = Minecraft.getInstance();
         String v = key(ElSistemaClient.STATUS);
+        long now = System.currentTimeMillis();
         switch (kind) {
             case Net.N_LEVEL_UP -> {
-                big("¡SUBISTE DE NIVEL!", "Nivel " + a + "   ·   +" + b + " puntos de estadística");
+                big("¡SUBISTE DE NIVEL!", "Nivel " + a + "   ·   +" + b + " puntos de estadística   ·   +1 de habilidad", 0x9050B4FF, 0x663A8DFF);
                 toast("NOTIFICACIÓN", Ui.CYAN, "Has subido al nivel " + a + ".",
                         "Tu salud y tu maná se han restaurado.",
                         "Pulsa " + v + " para repartir tus puntos.");
@@ -105,19 +121,19 @@ public final class Hud {
                 }
             }
             case Net.N_AWAKENED -> {
-                big("¡HAS DESPERTADO!", name(Defs.RACE_NAME, a) + "   ·   " + name(Defs.CLASS_NAME, b));
+                big("¡HAS DESPERTADO!", name(Defs.RACE_NAME, a) + "   ·   " + name(Defs.CLASS_NAME, b), 0x9050B4FF, 0x663A8DFF);
                 toast("NOTIFICACIÓN", Ui.CYAN, "Ahora eres un Jugador.",
-                        v + ": ventana de estado   ·   " + key(ElSistemaClient.SKILL) + ": habilidad");
+                        v + ": ventana del Sistema   ·   " + key(ElSistemaClient.SKILL) + ": habilidad");
             }
             case Net.N_XP -> {
-                long now = System.currentTimeMillis();
                 xpAmount = (xpTime > 0 && now - xpTime < 1500 ? xpAmount : 0) + a;
                 xpTime = now;
             }
-            case Net.N_SKILL -> {
-                callStart = System.currentTimeMillis();
-                callText = name(Defs.SKILL_NAME, a).toUpperCase(Locale.ROOT);
+            case Net.N_COINS -> {
+                goldAmount = (goldTime > 0 && now - goldTime < 1500 ? goldAmount : 0) + a;
+                goldTime = now;
             }
+            case Net.N_SKILL -> callout(name(Defs.SKILL_NAME, a).toUpperCase(Locale.ROOT), Ui.WHITE);
             case Net.N_COOLDOWN -> warn("Habilidad en enfriamiento: " + a + " s");
             case Net.N_NO_MP -> warn("Maná insuficiente (" + b + "/" + a + " MP)");
             case Net.N_RANK_UP -> toast("NOTIFICACIÓN", Defs.RANK_COLOR[Math.max(0, Math.min(5, a))],
@@ -127,6 +143,38 @@ public final class Hud {
             case Net.N_MAX_LEVEL -> toast("NOTIFICACIÓN", Ui.GOLD, "Has alcanzado el nivel máximo.",
                     "Ya no queda nadie por encima de ti.");
             case Net.N_WELCOME -> toast("NOTIFICACIÓN", Ui.CYAN, "Bienvenido de nuevo, Jugador.");
+            case Net.N_GATE_OPEN -> toast("¡ALERTA!", Defs.RANK_COLOR[Math.max(0, Math.min(5, a))],
+                    "Se ha abierto una puerta de mazmorra de rango " + name(Defs.RANK, a) + ".",
+                    "Está a " + b + " bloques de ti. Entra en ella para empezar.");
+            case Net.N_GATE_FAIL -> warn(a == 1 ? "La mazmorra no cabe aquí. Prueba en otro sitio." : "No hay sitio para abrir la puerta aquí.");
+            case Net.N_DUNGEON_ENTER -> big("MAZMORRA DE RANGO " + name(Defs.RANK, a),
+                    "Nivel " + b + "   ·   Elimina a todos los monstruos", 0x90B050FF, 0x55301060);
+            case Net.N_WAVE -> callout("OLEADA " + a + "/" + b, Ui.CYAN);
+            case Net.N_BOSS -> big("¡JEFE DE MAZMORRA!", "Rango " + name(Defs.RANK, a) + "   ·   Derrótalo para terminar", 0x90FF3030, 0x66B01010);
+            case Net.N_DUNGEON_CLEAR -> {
+                big("¡MAZMORRA COMPLETADA!", "+" + b + " de oro   ·   Recoge el botín: vuelves en 8 s", 0x90FFC857, 0x55FFC857);
+                toast("RECOMPENSA", Ui.GOLD, "Mazmorra de rango " + name(Defs.RANK, a) + " superada.",
+                        "Has recibido oro, EXP, núcleos de maná y botín.");
+            }
+            case Net.N_DUNGEON_FAIL -> toast("NOTIFICACIÓN", Ui.RED,
+                    a == 1 ? "Se acabó el tiempo. La mazmorra se ha cerrado." : "Has salido de la mazmorra.");
+            case Net.N_DODGE -> callout("¡ESQUIVADO!", Ui.CYAN);
+            case Net.N_LAST_STAND -> callout("¡ÚLTIMA RESISTENCIA!", Ui.GOLD);
+            case Net.N_RUNE -> toast("NOTIFICACIÓN", 0xFFB57BFF, "+1 punto de habilidad.",
+                    "Tienes " + a + ". Úsalos en la pestaña Habilidades (" + v + ").");
+            case Net.N_BOUGHT -> toast("TIENDA", Ui.GOLD, "Has comprado: " + name(Shop.NAME, a) + (b > 1 ? " x" + b : "") + ".");
+            case Net.N_NO_COINS -> warn("Oro insuficiente (" + b + "/" + a + ")");
+            case Net.N_SOLD -> {
+                if (a <= 0) {
+                    warn("No tienes núcleos de maná para vender.");
+                } else {
+                    toast("TIENDA", Ui.GOLD, "Has vendido " + a + " núcleos de maná.", "+" + b + " de oro");
+                }
+            }
+            case Net.N_TREE_UP -> {
+                Trees.Node[] t = Trees.tree(a == 0, a == 0 ? CData.race() : CData.cls());
+                if (t != null && b >= 0 && b < t.length) callout(t[b].name().toUpperCase(Locale.ROOT), 0xFFB57BFF);
+            }
             default -> {
             }
         }
@@ -143,19 +191,19 @@ public final class Hud {
         int sh = g.guiHeight();
         int bottom = CData.awakened() ? panel(g, f, now) : hint(g, f, now);
         warnLine(g, f, now, bottom);
-        xpGain(g, f, now);
+        floating(g, f, now);
         toasts(g, f, now, sw);
         big(g, f, now, sw, sh);
         callout(g, f, now, sw, sh);
     }
 
-    /** Panel de la esquina: nivel, rango, maná, EXP y habilidad. */
+    /** Panel de la esquina: nivel, rango, maná, EXP, oro y habilidad. */
     private static int panel(GuiGraphics g, Font f, long now) {
         int x1 = PX;
         int y1 = PY;
         int x2 = PX + PW;
         boolean pts = CData.points() > 0;
-        int y2 = y1 + (pts ? 70 : 60);
+        int y2 = y1 + (pts ? 80 : 70);
         Ui.panel(g, x1, y1, x2, y2, Ui.CYAN, 0.9F);
         Ui.shine(g, x1, y1, x2, y1 + 14, now, 0.9F);
 
@@ -179,23 +227,31 @@ public final class Hud {
         Ui.bar(g, bx, y1 + 37, bw, 5, max ? 1F : CData.xp() / (float) CData.need(), Ui.CYAN, 1F);
         Ui.text(g, f, max ? "MÁX" : CData.xp() + "/" + CData.need(), tx, y1 + 36, Ui.WHITE, 1F);
 
+        Ui.text(g, f, "ORO", x1 + 5, y1 + 46, Ui.GOLD, 1F);
+        Ui.text(g, f, String.valueOf(CData.coins()), bx, y1 + 46, Ui.WHITE, 1F);
+        if (CData.skillPoints() > 0) {
+            float pulse = 0.6F + 0.4F * (float) Math.sin(now / 300.0);
+            String sp = CData.skillPoints() + " PH";
+            Ui.glow(g, f, sp, x2 - 5 - f.width(sp), y1 + 46, 0xFFB57BFF, 0x50B57BFF, pulse);
+        }
+
         String skill = "[" + key(ElSistemaClient.SKILL) + "] " + name(Defs.SKILL_NAME, CData.cls());
-        Ui.text(g, f, skill, x1 + 5, y1 + 46, Ui.WHITE, 1F);
+        Ui.text(g, f, skill, x1 + 5, y1 + 56, Ui.WHITE, 1F);
         int cd = CData.cooldown();
         if (cd > 0) {
             String s = String.format(Locale.ROOT, "%.1fs", cd / 20F);
-            Ui.text(g, f, s, x2 - 5 - f.width(s), y1 + 46, Ui.GRAY, 1F);
+            Ui.text(g, f, s, x2 - 5 - f.width(s), y1 + 56, Ui.GRAY, 1F);
             float frac = cd / (float) CData.cooldownTotal();
-            g.fill(x1 + 5, y1 + 56, x1 + 5 + Math.round((PW - 10) * frac), y1 + 57, Ui.fade(Ui.CYAN, 0.8F));
+            g.fill(x1 + 5, y1 + 66, x1 + 5 + Math.round((PW - 10) * frac), y1 + 67, Ui.fade(Ui.CYAN, 0.8F));
         } else {
             float pulse = 0.6F + 0.4F * (float) Math.sin(now / 250.0);
             String s = "LISTO";
-            Ui.glow(g, f, s, x2 - 5 - f.width(s), y1 + 46, Ui.CYAN, Ui.GLOW, pulse);
+            Ui.glow(g, f, s, x2 - 5 - f.width(s), y1 + 56, Ui.CYAN, Ui.GLOW, pulse);
         }
         if (pts) {
             float pulse = 0.6F + 0.4F * (float) Math.sin(now / 300.0);
             Ui.text(g, f, "+" + CData.points() + " puntos sin usar  [" + key(ElSistemaClient.STATUS) + "]",
-                    x1 + 5, y1 + 60, Ui.GOLD, pulse);
+                    x1 + 5, y1 + 70, Ui.GOLD, pulse);
         }
         return y2;
     }
@@ -221,24 +277,37 @@ public final class Hud {
         Ui.glow(g, f, warnText, PX + 2, y + 6, Ui.RED, 0x50FF3030, a);
     }
 
-    /** "+12 EXP" que sube y se desvanece junto al panel. */
-    private static void xpGain(GuiGraphics g, Font f, long now) {
-        if (xpTime < 0 || !CData.awakened()) return;
-        long age = now - xpTime;
-        if (age > 1600) {
-            xpTime = -1;
-            xpAmount = 0;
-            return;
+    /** "+12 EXP" y "+5 oro" que suben y se desvanecen junto al panel. */
+    private static void floating(GuiGraphics g, Font f, long now) {
+        if (!CData.awakened()) return;
+        if (xpTime >= 0) {
+            long age = now - xpTime;
+            if (age > 1600) {
+                xpTime = -1;
+                xpAmount = 0;
+            } else {
+                float a = 1F - Ui.clamp01((age - 1000) / 600F);
+                int rise = Math.round(Ui.easeOut(age / 1600F) * 10F);
+                Ui.glow(g, f, "+" + xpAmount + " EXP", PX + PW + 8, PY + 36 - rise, Ui.CYAN, Ui.GLOW, a);
+            }
         }
-        float a = 1F - Ui.clamp01((age - 1000) / 600F);
-        int rise = Math.round(Ui.easeOut(age / 1600F) * 10F);
-        Ui.glow(g, f, "+" + xpAmount + " EXP", PX + PW + 8, PY + 36 - rise, Ui.CYAN, Ui.GLOW, a);
+        if (goldTime >= 0) {
+            long age = now - goldTime;
+            if (age > 1600) {
+                goldTime = -1;
+                goldAmount = 0;
+            } else {
+                float a = 1F - Ui.clamp01((age - 1000) / 600F);
+                int rise = Math.round(Ui.easeOut(age / 1600F) * 10F);
+                Ui.glow(g, f, "+" + goldAmount + " oro", PX + PW + 8, PY + 48 - rise, Ui.GOLD, 0x50FFC857, a);
+            }
+        }
     }
 
-    /** Ventanas de notificación que se despliegan arriba en el centro. */
+    /** Ventanas de notificación que se despliegan arriba en el centro (debajo de la barra de jefe). */
     private static void toasts(GuiGraphics g, Font f, long now, int sw) {
         TOASTS.removeIf(t -> now - t.start() > t.dur());
-        int y = 30;
+        int y = 44;
         for (Toast t : TOASTS) {
             long age = now - t.start();
             float in = Ui.easeOut(age / 280F);
@@ -265,7 +334,7 @@ public final class Hud {
         }
     }
 
-    /** Animación grande: destello azul, líneas que se abren y título que aparece de golpe. */
+    /** Animación grande: destello, líneas que se abren y título que aparece de golpe. */
     private static void big(GuiGraphics g, Font f, long now, int sw, int sh) {
         if (bigStart < 0) return;
         long age = now - bigStart;
@@ -275,23 +344,24 @@ public final class Hud {
         }
         float flash = 1F - Ui.clamp01(age / 650F);
         if (flash > 0F) {
-            g.fill(0, 0, sw, sh, Ui.fade(0x663A8DFF, flash));
+            g.fill(0, 0, sw, sh, Ui.fade(bigFlash, flash));
         }
         float out = Ui.clamp01((2800 - age) / 500F);
         float cy = sh * 0.42F;
         float lw = Ui.easeOut(age / 450F) * sw * 0.40F;
         int lx1 = Math.round(sw / 2F - lw);
         int lx2 = Math.round(sw / 2F + lw);
-        g.fill(lx1, Math.round(cy - 20), lx2, Math.round(cy - 19), Ui.fade(Ui.CYAN, out));
-        g.fill(lx1, Math.round(cy + 17), lx2, Math.round(cy + 18), Ui.fade(Ui.CYAN, out));
-        float scale = 3.4F - 1.2F * Ui.easeOutBack(age / 380F);
+        int lineColor = 0xFF000000 | (bigGlow & 0x00FFFFFF);
+        g.fill(lx1, Math.round(cy - 20), lx2, Math.round(cy - 19), Ui.fade(lineColor, out));
+        g.fill(lx1, Math.round(cy + 17), lx2, Math.round(cy + 18), Ui.fade(lineColor, out));
+        float scale = 3.2F - 1.1F * Ui.easeOutBack(age / 380F);
         float ta = out * Ui.clamp01(age / 120F);
-        Ui.bigCenter(g, f, bigTitle, sw / 2F, cy - 2F, scale, Ui.WHITE, 0x9050B4FF, ta);
+        Ui.bigCenter(g, f, bigTitle, sw / 2F, cy - 2F, scale, Ui.WHITE, bigGlow, ta);
         float sa = out * Ui.clamp01((age - 300F) / 300F);
-        Ui.center(g, f, bigSub, sw / 2, Math.round(cy + 24), Ui.CYAN, sa);
+        Ui.center(g, f, bigSub, sw / 2, Math.round(cy + 24), lineColor, sa);
     }
 
-    /** Nombre de la habilidad en grande al usarla. */
+    /** Texto en grande en la parte baja (habilidades, oleadas, esquivar...). */
     private static void callout(GuiGraphics g, Font f, long now, int sw, int sh) {
         if (callStart < 0) return;
         long age = now - callStart;
@@ -301,6 +371,6 @@ public final class Hud {
         }
         float scale = 2.2F - 0.6F * Ui.easeOutBack(age / 220F);
         float a = Ui.clamp01(age / 80F) * Ui.clamp01((1200 - age) / 350F);
-        Ui.bigCenter(g, f, "« " + callText + " »", sw / 2F, sh * 0.66F, scale, Ui.WHITE, 0x9050B4FF, a);
+        Ui.bigCenter(g, f, "« " + callText + " »", sw / 2F, sh * 0.66F, scale, callColor, 0x9050B4FF, a);
     }
 }

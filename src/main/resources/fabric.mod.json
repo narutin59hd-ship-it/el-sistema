@@ -3,7 +3,7 @@
   "id": "elsistema",
   "version": "${version}",
   "name": "El Sistema",
-  "description": "Despierta como Jugador: niveles, rango de cazador, estadisticas, razas y clases con ventanas del Sistema. V = estado, R = habilidad.",
+  "description": "Despierta como Jugador: niveles, rango de cazador, razas, clases, arboles de habilidades, monstruos con rango, mazmorras y tienda. V = Sistema, R = habilidad.",
   "authors": ["Tu"],
   "license": "MIT",
   "environment": "*",

@@ -1,5 +1,18 @@
 {
   "key.categories.elsistema": "El Sistema",
-  "key.elsistema.status": "Ventana de estado",
-  "key.elsistema.skill": "Usar habilidad de clase"
+  "key.elsistema.status": "Ventana del Sistema",
+  "key.elsistema.skill": "Usar habilidad de clase",
+  "item.elsistema.nucleo_e": "Núcleo de maná (Rango E)",
+  "item.elsistema.nucleo_d": "Núcleo de maná (Rango D)",
+  "item.elsistema.nucleo_c": "Núcleo de maná (Rango C)",
+  "item.elsistema.nucleo_b": "Núcleo de maná (Rango B)",
+  "item.elsistema.nucleo_a": "Núcleo de maná (Rango A)",
+  "item.elsistema.nucleo_s": "Núcleo de maná (Rango S)",
+  "item.elsistema.llave_e": "Llave de mazmorra (Rango E)",
+  "item.elsistema.llave_d": "Llave de mazmorra (Rango D)",
+  "item.elsistema.llave_c": "Llave de mazmorra (Rango C)",
+  "item.elsistema.llave_b": "Llave de mazmorra (Rango B)",
+  "item.elsistema.llave_a": "Llave de mazmorra (Rango A)",
+  "item.elsistema.llave_s": "Llave de mazmorra (Rango S)",
+  "item.elsistema.runa_habilidad": "Runa de habilidad"
 }

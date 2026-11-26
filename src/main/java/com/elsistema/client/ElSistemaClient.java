@@ -34,7 +34,7 @@ public class ElSistemaClient implements ClientModInitializer {
             while (STATUS.consumeClick()) {
                 if (client.screen == null && client.player != null) {
                     if (CData.awakened()) {
-                        client.setScreen(new StatusScreen());
+                        client.setScreen(new SystemScreen());
                     } else {
                         client.setScreen(new AwakeningScreen());
                     }

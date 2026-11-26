@@ -24,11 +24,29 @@ public final class Net {
     public static final int N_NOT_AWAKENED = 9;
     public static final int N_MAX_LEVEL = 10;
     public static final int N_WELCOME = 11;
+    public static final int N_COINS = 12;
+    public static final int N_GATE_OPEN = 13;
+    public static final int N_DUNGEON_ENTER = 14;
+    public static final int N_WAVE = 15;
+    public static final int N_BOSS = 16;
+    public static final int N_DUNGEON_CLEAR = 17;
+    public static final int N_DUNGEON_FAIL = 18;
+    public static final int N_DODGE = 19;
+    public static final int N_LAST_STAND = 20;
+    public static final int N_RUNE = 21;
+    public static final int N_BOUGHT = 22;
+    public static final int N_NO_COINS = 23;
+    public static final int N_SOLD = 24;
+    public static final int N_GATE_FAIL = 25;
+    public static final int N_TREE_UP = 26;
 
     // Acciones (cliente -> servidor)
     public static final int ACT_SKILL = 1;
     public static final int ACT_STAT = 2;
     public static final int ACT_CHOOSE = 3;
+    public static final int ACT_TREE = 4;
+    public static final int ACT_BUY = 5;
+    public static final int ACT_SELL = 6;
 
     /** Servidor -> cliente: todos los datos del Jugador. */
     public record SyncPayload(List<Integer> data) implements CustomPacketPayload {
@@ -61,7 +79,7 @@ public final class Net {
         }
     }
 
-    /** Cliente -> servidor: usar habilidad, subir estadística o elegir raza y clase. */
+    /** Cliente -> servidor: acciones del Jugador. */
     public record ActionPayload(int action, int a, int b) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<ActionPayload> TYPE =
                 new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "action"));

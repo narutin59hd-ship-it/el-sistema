@@ -16,7 +16,7 @@ import java.util.Locale;
 
 /** Despertar: aceptar el Sistema, elegir raza y elegir clase. */
 public class AwakeningScreen extends Screen {
-    private static final Item[] RACE_ICON = {Items.PLAYER_HEAD, Items.OAK_SAPLING, Items.IRON_PICKAXE, Items.IRON_AXE, Items.BLAZE_POWDER};
+    private static final Item[] RACE_ICON = {Items.PLAYER_HEAD, Items.OAK_SAPLING, Items.IRON_PICKAXE, Items.IRON_AXE, Items.BLAZE_POWDER, Items.DRAGON_HEAD};
     private static final Item[] CLASS_ICON = {Items.DIAMOND_SWORD, Items.BOW, Items.AMETHYST_SHARD, Items.ECHO_SHARD, Items.SHIELD};
     private static final String[] MESSAGE = {
             "Has cumplido los requisitos de la Misión Secreta:",
@@ -26,7 +26,7 @@ public class AwakeningScreen extends Screen {
     };
     private static final int LIST_W = 104;
     private static final int ENTRY_H = 22;
-    private static final int ENTRY_STEP = 26;
+    private static final int ENTRY_STEP = 24;
 
     private final long openTime = System.currentTimeMillis();
     private int stage = 0;
@@ -262,7 +262,8 @@ public class AwakeningScreen extends Screen {
         boolean races = stage == 1;
         int lx = x1 + 10;
         int ly = y1 + 28;
-        for (int i = 0; i < 5; i++) {
+        int count = races ? Defs.RACE_NAME.length : Defs.CLASS_NAME.length;
+        for (int i = 0; i < count; i++) {
             int ey = ly + i * ENTRY_STEP;
             if (Ui.inside(mx, my, lx, ey, LIST_W, ENTRY_H)) {
                 if (races) {

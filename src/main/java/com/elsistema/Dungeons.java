@@ -1,0 +1,729 @@
+package com.elsistema;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.BossEvent;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Puertas de mazmorra: aparecen cerca del Jugador (o con una llave). Al entrar te llevan a una sala
+ * cerrada muy alta en el cielo con oleadas de monstruos del rango de la puerta y un jefe final.
+ * Al terminar, la sala se borra entera y vuelves a donde estaba la puerta.
+ */
+public final class Dungeons {
+    private Dungeons() {}
+
+    private static final int SIZE = 23;
+    private static final int H = 9;
+    private static final int[] WAVES = {3, 3, 4, 4, 5, 5};
+    private static final int GATE_LIFE = 6000;
+    private static final int RUN_LIMIT = 20 * 60 * 15;
+    private static final float[][] RGB = {
+            {0.75F, 0.75F, 0.75F}, {0.45F, 0.95F, 0.5F}, {0.35F, 0.75F, 1.0F},
+            {0.75F, 0.45F, 1.0F}, {1.0F, 0.7F, 0.25F}, {1.0F, 0.25F, 0.25F}};
+    private static final String[] BOSS_NAME = {
+            "Rey de los no muertos", "Reina araña", "Verdugo carmesí",
+            "Caballero de la muerte", "Bestia del caos", "Monarca de las sombras"};
+
+    private static final List<EntityType<? extends Mob>> BOSS = List.<EntityType<? extends Mob>>of(
+            EntityType.ZOMBIE, EntityType.SPIDER, EntityType.VINDICATOR,
+            EntityType.WITHER_SKELETON, EntityType.RAVAGER, EntityType.WITHER_SKELETON);
+
+    private static final List<List<EntityType<? extends Mob>>> POOL = List.of(
+            List.<EntityType<? extends Mob>>of(EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER),
+            List.<EntityType<? extends Mob>>of(EntityType.ZOMBIE, EntityType.HUSK, EntityType.SKELETON,
+                    EntityType.STRAY, EntityType.SPIDER, EntityType.CAVE_SPIDER),
+            List.<EntityType<? extends Mob>>of(EntityType.HUSK, EntityType.STRAY, EntityType.WITCH,
+                    EntityType.VINDICATOR, EntityType.PILLAGER, EntityType.BOGGED),
+            List.<EntityType<? extends Mob>>of(EntityType.VINDICATOR, EntityType.PILLAGER, EntityType.BLAZE,
+                    EntityType.WITHER_SKELETON, EntityType.WITCH),
+            List.<EntityType<? extends Mob>>of(EntityType.WITHER_SKELETON, EntityType.BLAZE, EntityType.VINDICATOR,
+                    EntityType.EVOKER, EntityType.RAVAGER),
+            List.<EntityType<? extends Mob>>of(EntityType.WITHER_SKELETON, EntityType.EVOKER, EntityType.RAVAGER,
+                    EntityType.BLAZE, EntityType.VINDICATOR));
+
+    private static final List<Gate> GATES = new ArrayList<>();
+    private static int nextId = 1;
+
+    private static final class Gate {
+        final int id;
+        final ServerLevel level;
+        final BlockPos pos;
+        final int rank;
+        final int lvl;
+        int age = 0;
+        Run run;
+
+        Gate(int id, ServerLevel level, BlockPos pos, int rank, int lvl) {
+            this.id = id;
+            this.level = level;
+            this.pos = pos;
+            this.rank = rank;
+            this.lvl = lvl;
+        }
+
+        double cx() {
+            return pos.getX() + 0.5;
+        }
+
+        double cy() {
+            return pos.getY() + 1.0;
+        }
+
+        double cz() {
+            return pos.getZ() + 0.5;
+        }
+    }
+
+    private static final class Run {
+        final int x0;
+        final int y0;
+        final int z0;
+        final List<BlockPos> placed = new ArrayList<>();
+        final Set<UUID> players = new LinkedHashSet<>();
+        final List<UUID> mobs = new ArrayList<>();
+        ServerBossEvent bar;
+        int wave = 0;
+        int total = 3;
+        int waveSize = 1;
+        int timer = 60;
+        int age = 0;
+        int endTimer = -1;
+        boolean won = false;
+
+        Run(int x0, int y0, int z0) {
+            this.x0 = x0;
+            this.y0 = y0;
+            this.z0 = z0;
+        }
+
+        double cx() {
+            return x0 + SIZE / 2 + 0.5;
+        }
+
+        double cz() {
+            return z0 + SIZE / 2 + 0.5;
+        }
+    }
+
+    // ================================================================ abrir puertas
+
+    /** Abre una puerta de mazmorra cerca del Jugador. level <= 0 = nivel aleatorio del rango. */
+    public static boolean openGate(ServerPlayer p, int rank, int level, boolean ahead) {
+        if (rank < 0 || rank > 5) return false;
+        ServerLevel lvl = (ServerLevel) p.level();
+        BlockPos pos = findSpot(p, ahead);
+        if (pos == null) {
+            if (ahead) SystemLogic.notify(p, Net.N_GATE_FAIL, 0, 0);
+            return false;
+        }
+        RandomSource r = p.getRandom();
+        int min = rank == 0 ? 1 : Defs.RANK_MAX[rank - 1] + 1;
+        int max = Defs.RANK_MAX[rank];
+        int gl = level > 0 ? level : min + r.nextInt(max - min + 1);
+        Gate g = new Gate(nextId++, lvl, pos, rank, gl);
+        GATES.add(g);
+        sound(g, SoundEvents.END_PORTAL_SPAWN, 0.8F, 1.3F);
+        for (ServerPlayer o : lvl.players()) {
+            double dist = Math.sqrt(o.distanceToSqr(g.cx(), g.cy(), g.cz()));
+            if (dist < 80) {
+                SystemLogic.notify(o, Net.N_GATE_OPEN, rank, (int) dist);
+            }
+        }
+        return true;
+    }
+
+    private static BlockPos findSpot(ServerPlayer p, boolean ahead) {
+        ServerLevel l = (ServerLevel) p.level();
+        RandomSource r = p.getRandom();
+        Vec3 look = p.getLookAngle();
+        double lx = look.x;
+        double lz = look.z;
+        double len = Math.sqrt(lx * lx + lz * lz);
+        if (len < 0.01) {
+            lx = 1;
+            lz = 0;
+            len = 1;
+        }
+        lx /= len;
+        lz /= len;
+        for (int tries = 0; tries < 24; tries++) {
+            double dx;
+            double dz;
+            double dist;
+            if (ahead) {
+                dist = 3.0 + tries % 4;
+                dx = lx;
+                dz = lz;
+            } else {
+                double ang = r.nextDouble() * Math.PI * 2.0;
+                dist = 10 + r.nextInt(8);
+                dx = Math.cos(ang);
+                dz = Math.sin(ang);
+            }
+            int x = (int) Math.floor(p.getX() + dx * dist);
+            int z = (int) Math.floor(p.getZ() + dz * dist);
+            int baseY = p.getBlockY();
+            for (int dy = 3; dy >= -5; dy--) {
+                BlockPos pos = new BlockPos(x, baseY + dy, z);
+                if (l.getBlockState(pos).isAir() && l.getBlockState(pos.above()).isAir()
+                        && l.getBlockState(pos.above(2)).isAir() && !l.getBlockState(pos.below()).isAir()) {
+                    return pos;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Cada cierto tiempo puede abrirse una puerta aleatoria cerca de un Jugador. */
+    public static void playerTick(ServerPlayer p, Data d) {
+        if (d.awakened != 1 || d.inDungeon == 1 || p.isSpectator() || !p.isAlive()) return;
+        d.gateTimer += 20;
+        if (d.gateTimer < 7200) return;
+        d.gateTimer = 0;
+        if (p.getRandom().nextInt(100) >= 35) return;
+        for (Gate g : GATES) {
+            if (g.level == p.level() && p.distanceToSqr(g.cx(), g.cy(), g.cz()) < 96 * 96) return;
+        }
+        int pr = Defs.rank(d.level);
+        int roll = p.getRandom().nextInt(100);
+        int rank = roll < 15 ? pr - 1 : roll < 85 ? pr : pr + 1;
+        openGate(p, Math.max(0, Math.min(5, rank)), -1, false);
+    }
+
+    // ================================================================ tick
+
+    public static void tick(MinecraftServer server) {
+        if (GATES.isEmpty()) return;
+        Iterator<Gate> it = GATES.iterator();
+        while (it.hasNext()) {
+            Gate g = it.next();
+            g.age++;
+            boolean remove;
+            try {
+                remove = tickGate(g);
+            } catch (Exception e) {
+                ElSistema.LOGGER.error("Error en una mazmorra", e);
+                try {
+                    cleanup(g);
+                } catch (Exception e2) {
+                    ElSistema.LOGGER.error("Error al limpiar una mazmorra", e2);
+                }
+                remove = true;
+            }
+            if (remove) it.remove();
+        }
+    }
+
+    private static boolean tickGate(Gate g) {
+        if (g.age % 4 == 0) particles(g);
+        if (g.age % 80 == 0) sound(g, SoundEvents.PORTAL_AMBIENT, 0.5F, 1.4F);
+        boolean canJoin = g.run == null || !g.run.won;
+        if (canJoin) {
+            for (ServerPlayer p : new ArrayList<>(g.level.players())) {
+                if (!p.isAlive() || p.isSpectator()) continue;
+                if (g.run != null && g.run.players.contains(p.getUUID())) continue;
+                if (p.distanceToSqr(g.cx(), g.cy(), g.cz()) > 2.25) continue;
+                Data d = Store.get(p);
+                if (d.inDungeon == 1) continue;
+                if (d.awakened != 1) {
+                    if (g.age % 40 == 0) SystemLogic.notify(p, Net.N_NOT_AWAKENED, 0, 0);
+                    continue;
+                }
+                if (g.run == null && !build(g)) {
+                    SystemLogic.notify(p, Net.N_GATE_FAIL, 1, 0);
+                    closeEffects(g);
+                    return true;
+                }
+                join(g, p);
+            }
+        }
+        if (g.run == null) {
+            if (g.age > GATE_LIFE) {
+                closeEffects(g);
+                return true;
+            }
+            return false;
+        }
+        return runTick(g);
+    }
+
+    // ================================================================ sala
+
+    private static boolean clear(ServerLevel l, int x0, int y0, int z0) {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (int x = 0; x < SIZE; x++) {
+            for (int z = 0; z < SIZE; z++) {
+                for (int y = 0; y < H; y++) {
+                    m.set(x0 + x, y0 + y, z0 + z);
+                    if (!l.getBlockState(m).isAir()) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static BlockState glass(int rank) {
+        return switch (rank) {
+            case 0 -> Blocks.LIGHT_GRAY_STAINED_GLASS.defaultBlockState();
+            case 1 -> Blocks.LIME_STAINED_GLASS.defaultBlockState();
+            case 2 -> Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState();
+            case 3 -> Blocks.PURPLE_STAINED_GLASS.defaultBlockState();
+            case 4 -> Blocks.ORANGE_STAINED_GLASS.defaultBlockState();
+            default -> Blocks.RED_STAINED_GLASS.defaultBlockState();
+        };
+    }
+
+    private static BlockState blockAt(int x, int y, int z, BlockState glass) {
+        boolean ex = x == 0 || x == SIZE - 1;
+        boolean ez = z == 0 || z == SIZE - 1;
+        if (y == 0) {
+            if (ex || ez) return Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState();
+            if (x % 5 == 1 && z % 5 == 1) return Blocks.SEA_LANTERN.defaultBlockState();
+            return (x + z) % 2 == 0 ? Blocks.DEEPSLATE_TILES.defaultBlockState() : Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        }
+        if (y == H - 1) {
+            if (!ex && !ez && x % 5 == 1 && z % 5 == 1) return Blocks.SEA_LANTERN.defaultBlockState();
+            return Blocks.BLACKSTONE.defaultBlockState();
+        }
+        if (ex || ez) {
+            if (ex && ez) return Blocks.CRYING_OBSIDIAN.defaultBlockState();
+            if (y == 3) return glass;
+            return Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState();
+        }
+        return null;
+    }
+
+    private static boolean isArenaBlock(BlockState st) {
+        return st.is(Blocks.POLISHED_BLACKSTONE_BRICKS) || st.is(Blocks.SEA_LANTERN) || st.is(Blocks.DEEPSLATE_TILES)
+                || st.is(Blocks.POLISHED_DEEPSLATE) || st.is(Blocks.BLACKSTONE) || st.is(Blocks.CRYING_OBSIDIAN)
+                || st.is(Blocks.LIGHT_GRAY_STAINED_GLASS) || st.is(Blocks.LIME_STAINED_GLASS)
+                || st.is(Blocks.LIGHT_BLUE_STAINED_GLASS) || st.is(Blocks.PURPLE_STAINED_GLASS)
+                || st.is(Blocks.ORANGE_STAINED_GLASS) || st.is(Blocks.RED_STAINED_GLASS);
+    }
+
+    private static boolean build(Gate g) {
+        ServerLevel l = g.level;
+        int y0 = l.getMaxBuildHeight() - H - 12;
+        if (y0 < g.pos.getY() + 20) return false;
+        for (int attempt = 0; attempt < 6; attempt++) {
+            int x0 = g.pos.getX() - SIZE / 2 + attempt * 64;
+            int z0 = g.pos.getZ() - SIZE / 2;
+            if (!clear(l, x0, y0, z0)) continue;
+            Run r = new Run(x0, y0, z0);
+            BlockState glass = glass(g.rank);
+            for (int x = 0; x < SIZE; x++) {
+                for (int z = 0; z < SIZE; z++) {
+                    for (int y = 0; y < H; y++) {
+                        BlockState st = blockAt(x, y, z, glass);
+                        if (st != null) {
+                            BlockPos pos = new BlockPos(x0 + x, y0 + y, z0 + z);
+                            l.setBlock(pos, st, 2);
+                            r.placed.add(pos);
+                        }
+                    }
+                }
+            }
+            r.total = WAVES[g.rank];
+            r.bar = new ServerBossEvent(Component.literal("Mazmorra de rango " + Defs.RANK[g.rank] + " · Preparándose..."),
+                    BossEvent.BossBarColor.PURPLE, BossEvent.BossBarOverlay.PROGRESS);
+            r.bar.setProgress(1.0F);
+            g.run = r;
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean inside(Run r, Entity e) {
+        return e.getX() >= r.x0 + 1 && e.getX() <= r.x0 + SIZE - 1
+                && e.getZ() >= r.z0 + 1 && e.getZ() <= r.z0 + SIZE - 1
+                && e.getY() >= r.y0 && e.getY() <= r.y0 + H;
+    }
+
+    private static boolean near(Run r, Entity e, double range) {
+        double dx = e.getX() - r.cx();
+        double dz = e.getZ() - r.cz();
+        return dx * dx + dz * dz < range * range && e.getY() > r.y0 - 80;
+    }
+
+    // ================================================================ jugadores
+
+    private static void join(Gate g, ServerPlayer p) {
+        Run r = g.run;
+        r.players.add(p.getUUID());
+        r.bar.addPlayer(p);
+        Data d = Store.get(p);
+        d.inDungeon = 1;
+        d.retX = g.cx() + 2.0;
+        d.retY = g.pos.getY();
+        d.retZ = g.cz();
+        d.arenaX = r.x0;
+        d.arenaY = r.y0;
+        d.arenaZ = r.z0;
+        p.teleportTo(r.cx(), r.y0 + 1, r.cz());
+        p.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 40, 0, false, false, false));
+        p.playNotifySound(SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8F, 0.6F);
+        SystemLogic.notify(p, Net.N_DUNGEON_ENTER, g.rank, g.lvl);
+    }
+
+    /** Saca a un jugador de la mazmorra (si está vivo y cerca, lo devuelve junto a la puerta). */
+    private static void leave(ServerPlayer p, Run r) {
+        r.bar.removePlayer(p);
+        Data d = Store.get(p);
+        if (d.inDungeon == 1 && p.isAlive() && near(r, p, 64)) {
+            p.teleportTo(d.retX, d.retY, d.retZ);
+        }
+        d.inDungeon = 0;
+    }
+
+    private static ServerPlayer nearestPlayer(Gate g, Entity from) {
+        MinecraftServer server = g.level.getServer();
+        ServerPlayer best = null;
+        double bestD = Double.MAX_VALUE;
+        for (UUID id : g.run.players) {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p == null || !p.isAlive()) continue;
+            double dd = p.distanceToSqr(from);
+            if (dd < bestD) {
+                bestD = dd;
+                best = p;
+            }
+        }
+        return best;
+    }
+
+    // ================================================================ oleadas
+
+    private static boolean runTick(Gate g) {
+        Run r = g.run;
+        r.age++;
+        MinecraftServer server = g.level.getServer();
+        Iterator<UUID> pit = r.players.iterator();
+        while (pit.hasNext()) {
+            ServerPlayer p = server.getPlayerList().getPlayer(pit.next());
+            if (p == null) {
+                pit.remove();
+                continue;
+            }
+            if (!p.isAlive() || p.level() != g.level || !near(r, p, 48)) {
+                if (!r.won) SystemLogic.notify(p, Net.N_DUNGEON_FAIL, 0, 0);
+                leave(p, r);
+                pit.remove();
+                continue;
+            }
+            if (!inside(r, p)) {
+                p.teleportTo(r.cx(), r.y0 + 1, r.cz());
+            }
+        }
+        if (r.players.isEmpty()) {
+            cleanup(g);
+            return true;
+        }
+        if (!r.won && r.age > RUN_LIMIT) {
+            for (UUID id : r.players) {
+                ServerPlayer p = server.getPlayerList().getPlayer(id);
+                if (p != null) SystemLogic.notify(p, Net.N_DUNGEON_FAIL, 1, 0);
+            }
+            cleanup(g);
+            return true;
+        }
+        if (r.endTimer >= 0) {
+            r.endTimer--;
+            if (r.endTimer <= 0) {
+                cleanup(g);
+                return true;
+            }
+            return false;
+        }
+        if (r.timer > 0) {
+            r.timer--;
+            if (r.timer == 0) spawnWave(g);
+            return false;
+        }
+        if (r.age % 10 == 0) {
+            int alive = 0;
+            for (UUID u : r.mobs) {
+                Entity e = g.level.getEntity(u);
+                if (e != null && e.isAlive()) {
+                    alive++;
+                    if (r.age % 40 == 0 && !inside(r, e)) {
+                        e.teleportTo(r.cx(), r.y0 + 1, r.cz() + 4);
+                    }
+                }
+            }
+            r.bar.setProgress(Math.max(0.0F, Math.min(1.0F, alive / (float) r.waveSize)));
+            if (alive == 0) {
+                if (r.wave >= r.total) {
+                    victory(g);
+                } else {
+                    r.timer = 80;
+                    r.bar.setName(Component.literal("Mazmorra de rango " + Defs.RANK[g.rank] + " · Siguiente oleada..."));
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void spawnWave(Gate g) {
+        Run r = g.run;
+        r.wave++;
+        boolean boss = r.wave >= r.total;
+        List<EntityType<? extends Mob>> pool = POOL.get(g.rank);
+        RandomSource rnd = g.level.getRandom();
+        List<UUID> list = new ArrayList<>();
+        int n = boss ? 2 + g.rank / 2 : 3 + g.rank + r.wave;
+        Ranks.spawning = true;
+        try {
+            for (int i = 0; i < n; i++) {
+                Mob m = spawnMob(g, pool.get(rnd.nextInt(pool.size())), false);
+                if (m != null) list.add(m.getUUID());
+            }
+            if (boss) {
+                Mob b = spawnMob(g, BOSS.get(g.rank), true);
+                if (b != null) list.add(b.getUUID());
+            }
+        } finally {
+            Ranks.spawning = false;
+        }
+        r.mobs.clear();
+        r.mobs.addAll(list);
+        r.waveSize = Math.max(1, list.size());
+        if (boss) {
+            r.bar.setName(Component.literal("★ JEFE: " + BOSS_NAME[g.rank] + " · Rango " + Defs.RANK[g.rank]));
+            r.bar.setColor(BossEvent.BossBarColor.RED);
+        } else {
+            r.bar.setName(Component.literal("Mazmorra de rango " + Defs.RANK[g.rank] + " · Oleada " + r.wave + "/" + r.total));
+            r.bar.setColor(BossEvent.BossBarColor.PURPLE);
+        }
+        r.bar.setProgress(1.0F);
+        MinecraftServer server = g.level.getServer();
+        for (UUID id : r.players) {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p == null) continue;
+            if (boss) {
+                SystemLogic.notify(p, Net.N_BOSS, g.rank, 0);
+                p.playNotifySound(SoundEvents.RAVAGER_ROAR, SoundSource.HOSTILE, 1.0F, 0.6F);
+            } else {
+                SystemLogic.notify(p, Net.N_WAVE, r.wave, r.total);
+            }
+        }
+    }
+
+    private static Mob spawnMob(Gate g, EntityType<? extends Mob> type, boolean boss) {
+        Run r = g.run;
+        RandomSource rnd = g.level.getRandom();
+        BlockPos pos;
+        if (boss) {
+            pos = new BlockPos(r.x0 + SIZE / 2, r.y0 + 1, r.z0 + SIZE / 2 + 5);
+        } else {
+            int x;
+            int z;
+            do {
+                x = 2 + rnd.nextInt(SIZE - 4);
+                z = 2 + rnd.nextInt(SIZE - 4);
+            } while (Math.abs(x - SIZE / 2) < 4 && Math.abs(z - SIZE / 2) < 4);
+            pos = new BlockPos(r.x0 + x, r.y0 + 1, r.z0 + z);
+        }
+        Mob m = type.spawn(g.level, pos, MobSpawnType.MOB_SUMMONED);
+        if (m == null) return null;
+        m.setPersistenceRequired();
+        m.addTag("es_dg");
+        int lvl = Math.max(1, Math.min(Defs.MAX_LEVEL, g.lvl + (boss ? 5 : rnd.nextInt(5) - 2)));
+        Ranks.apply(m, g.rank, lvl, boss);
+        if (boss) {
+            m.setGlowingTag(true);
+            MutableComponent name = Component.literal("★ " + BOSS_NAME[g.rank] + " ").withStyle(Ranks.COLOR[g.rank], ChatFormatting.BOLD);
+            name.append(Component.literal("[" + Defs.RANK[g.rank] + "] Nv." + lvl).withStyle(ChatFormatting.WHITE));
+            m.setCustomName(name);
+            m.setCustomNameVisible(true);
+        }
+        ServerPlayer target = nearestPlayer(g, m);
+        if (target != null) m.setTarget(target);
+        g.level.sendParticles(ParticleTypes.REVERSE_PORTAL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
+        return m;
+    }
+
+    private static List<ItemStack> loot(int rank) {
+        return switch (rank) {
+            case 0 -> List.of(new ItemStack(Items.IRON_INGOT, 4));
+            case 1 -> List.of(new ItemStack(Items.IRON_INGOT, 8), new ItemStack(Items.GOLD_INGOT, 3));
+            case 2 -> List.of(new ItemStack(Items.DIAMOND, 2), new ItemStack(Items.GOLD_INGOT, 5));
+            case 3 -> List.of(new ItemStack(Items.DIAMOND, 4), new ItemStack(Items.EMERALD, 4));
+            case 4 -> List.of(new ItemStack(Items.DIAMOND, 6), new ItemStack(Items.NETHERITE_SCRAP, 1));
+            default -> List.of(new ItemStack(Items.DIAMOND, 10), new ItemStack(Items.NETHERITE_SCRAP, 2),
+                    new ItemStack(Items.ENCHANTED_GOLDEN_APPLE));
+        };
+    }
+
+    private static void victory(Gate g) {
+        Run r = g.run;
+        r.won = true;
+        r.endTimer = 160;
+        r.bar.setName(Component.literal("¡Mazmorra completada! Volviendo en 8 s..."));
+        r.bar.setColor(BossEvent.BossBarColor.GREEN);
+        r.bar.setProgress(1.0F);
+        MinecraftServer server = g.level.getServer();
+        RandomSource rnd = g.level.getRandom();
+        int rank = g.rank;
+        for (UUID id : r.players) {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p == null) continue;
+            SystemLogic.addXp(p, (int) (60 * (rank + 1) * (1 + g.lvl / 10.0)));
+            int gold = SystemLogic.addCoins(p, (int) (40 * (rank + 1) * (rank + 1) * (1 + g.lvl / 20.0)));
+            Shop.give(p, new ItemStack(ModItems.CORES[rank], 2 + rnd.nextInt(3)));
+            if (rnd.nextInt(100) < 25) Shop.give(p, new ItemStack(ModItems.RUNE));
+            if (rnd.nextInt(100) < 25) Shop.give(p, new ItemStack(ModItems.KEYS[rank]));
+            if (rank < 5 && rnd.nextInt(100) < 10) Shop.give(p, new ItemStack(ModItems.KEYS[rank + 1]));
+            for (ItemStack s : loot(rank)) {
+                Shop.give(p, s);
+            }
+            SystemLogic.notify(p, Net.N_DUNGEON_CLEAR, rank, gold);
+            p.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
+        }
+        g.level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, r.cx(), r.y0 + 2.0, r.cz(), 120, 3.0, 1.5, 3.0, 0.4);
+    }
+
+    // ================================================================ cerrar y limpiar
+
+    private static void cleanup(Gate g) {
+        Run r = g.run;
+        if (r != null) {
+            ServerLevel l = g.level;
+            AABB box = new AABB(r.x0 - 2, r.y0 - 40, r.z0 - 2, r.x0 + SIZE + 2, r.y0 + H + 3, r.z0 + SIZE + 2);
+            double gx = g.cx();
+            double gy = g.pos.getY() + 0.2;
+            double gz = g.cz();
+            for (Entity e : l.getEntitiesOfClass(Entity.class, box, e -> e instanceof ItemEntity || e instanceof ExperienceOrb)) {
+                e.teleportTo(gx, gy, gz);
+            }
+            for (UUID u : r.mobs) {
+                Entity e = l.getEntity(u);
+                if (e != null) e.discard();
+            }
+            for (Mob m : l.getEntitiesOfClass(Mob.class, box, m -> true)) {
+                m.discard();
+            }
+            MinecraftServer server = l.getServer();
+            for (UUID id : new ArrayList<>(r.players)) {
+                ServerPlayer p = server.getPlayerList().getPlayer(id);
+                if (p != null) leave(p, r);
+            }
+            r.players.clear();
+            r.bar.removeAllPlayers();
+            for (BlockPos pos : r.placed) {
+                l.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+            }
+        }
+        closeEffects(g);
+    }
+
+    private static void closeEffects(Gate g) {
+        g.level.sendParticles(ParticleTypes.REVERSE_PORTAL, g.cx(), g.cy() + 0.5, g.cz(), 60, 0.6, 1.0, 0.6, 0.2);
+        sound(g, SoundEvents.BEACON_DEACTIVATE, 1.0F, 0.8F);
+    }
+
+    /** Si un jugador se desconecta dentro, lo saca antes de guardar. */
+    public static void onDisconnect(ServerPlayer p) {
+        for (Gate g : GATES) {
+            if (g.run != null && g.run.players.remove(p.getUUID())) {
+                leave(p, g.run);
+            }
+        }
+    }
+
+    /** Al cerrar el servidor: saca a todos y borra las salas. */
+    public static void shutdown() {
+        for (Gate g : GATES) {
+            try {
+                cleanup(g);
+            } catch (Exception e) {
+                ElSistema.LOGGER.error("Error al cerrar una mazmorra", e);
+            }
+        }
+        GATES.clear();
+    }
+
+    /** Si el juego se cerró de golpe dentro de una mazmorra, al volver te saca y borra los restos de la sala. */
+    public static void recover(ServerPlayer p, Data d) {
+        if (d.inDungeon != 1) return;
+        for (Gate g : GATES) {
+            if (g.run != null && g.run.players.contains(p.getUUID())) return;
+        }
+        ServerLevel l = (ServerLevel) p.level();
+        if (d.arenaY > 100) {
+            BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+            for (int x = 0; x < SIZE; x++) {
+                for (int z = 0; z < SIZE; z++) {
+                    for (int y = 0; y < H; y++) {
+                        m.set(d.arenaX + x, d.arenaY + y, d.arenaZ + z);
+                        if (isArenaBlock(l.getBlockState(m))) {
+                            l.setBlock(m.immutable(), Blocks.AIR.defaultBlockState(), 2);
+                        }
+                    }
+                }
+            }
+        }
+        p.teleportTo(d.retX, d.retY, d.retZ);
+        d.inDungeon = 0;
+    }
+
+    // ================================================================ efectos
+
+    private static void sound(Gate g, SoundEvent s, float volume, float pitch) {
+        g.level.playSound((Player) null, g.cx(), g.cy(), g.cz(), s, SoundSource.HOSTILE, volume, pitch);
+    }
+
+    private static void particles(Gate g) {
+        ServerLevel l = g.level;
+        float[] c = RGB[g.rank];
+        DustParticleOptions dust = new DustParticleOptions(new Vector3f(c[0], c[1], c[2]), 1.6F);
+        double cx = g.cx();
+        double cy = g.cy() + 0.5;
+        double cz = g.cz();
+        double t = g.age * 0.15;
+        for (int i = 0; i < 12; i++) {
+            double a = t + i * Math.PI * 2.0 / 12.0;
+            l.sendParticles(dust, cx + Math.cos(a) * 1.2, cy + Math.sin(a) * 1.6, cz, 1, 0.0, 0.0, 0.0, 0.0);
+        }
+        l.sendParticles(ParticleTypes.PORTAL, cx, cy, cz, 6, 0.3, 0.8, 0.1, 0.4);
+        if (g.age % 20 == 0) {
+            for (int y = 0; y < 24; y += 2) {
+                l.sendParticles(ParticleTypes.END_ROD, cx, cy + 2 + y, cz, 1, 0.05, 0.3, 0.05, 0.0);
+            }
+        }
+    }
+}

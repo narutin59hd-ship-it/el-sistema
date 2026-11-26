@@ -1,36 +1,66 @@
-# El Sistema (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.1.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 100), rango de cazador (E, D, C, B, A, S), 5 estadísticas,
-5 razas y 5 clases con habilidad propia. Todo con ventanas azules animadas del Sistema.
+6 razas y 5 clases con habilidad propia, árboles de habilidades, monstruos con rango, mazmorras
+y una tienda. Todo con ventanas azules animadas del Sistema.
 
 ## Controles
 
-- **V**: ventana de estado (o el despertar, si todavía no has despertado).
+- **V**: ventana del Sistema (o el despertar, si todavía no has despertado).
+  - Pestañas **Estado**, **Habilidades** y **Tienda** (también con las teclas 1, 2 y 3).
 - **R**: habilidad de tu clase.
-- Se cambian en Opciones > Controles > El Sistema.
+- **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
+- Las teclas se cambian en Opciones > Controles > El Sistema.
 
-## Compilar con GitHub (igual que con Niveles Locos)
+## Novedades de la 1.1.0
 
-1. En GitHub crea un repositorio **nuevo**, por ejemplo `el-sistema`.
-2. Pulsa **uploading an existing file** y arrastra TODO lo que hay dentro de esta carpeta,
-   incluida la carpeta `.github`. Pulsa **Commit changes**.
-3. Comprueba que en el repositorio existe `.github/workflows/build.yml`. Si no se subió,
-   créalo con **Add file > Create new file** y pega el contenido de ese archivo.
-4. Ve a la pestaña **Actions** y espera el tick verde (unos 5 minutos).
-5. Descarga el mod:
-   - **Lo más fácil:** en la página principal del repositorio, a la derecha, en **Releases**,
-     abre la última y descarga `el-sistema-1.0.0.jar`.
-   - O bien en **Actions** > la ejecución > **Artifacts** > `el-sistema-mod` (viene dentro de un zip).
+### Monstruos con rango y nivel
+- Todos los monstruos aparecen con un rango (E a S) y un nivel parecido al tuyo (a veces más alto).
+- Al mirarlos ves su nombre: por ejemplo `[C] Zombi Nv.31`.
+- Cuanto más rango y nivel: más vida, más daño, más armadura, más tamaño y mejores recompensas.
+- Al matarlos ganas EXP y **oro**, y pueden soltar:
+  - **Núcleo de maná** (del rango del monstruo): se vende en la tienda.
+  - **Llave de mazmorra**: abre una puerta de mazmorra de su rango.
+  - **Runa de habilidad** (rara): +1 punto de habilidad.
 
-Si sale una X roja, abre el paso en rojo y copia el error.
+### Mazmorras
+- De vez en cuando se abre una **puerta de mazmorra** cerca de ti (te avisa el Sistema).
+  También puedes abrir una con una llave (clic derecho).
+- Entra en la puerta: te lleva a una sala cerrada con **oleadas** de monstruos de ese rango
+  y un **jefe** al final.
+- Al ganar: oro, EXP, núcleos, botín y a veces llaves y runas. Luego vuelves a la puerta.
+- Si mueres o sales, la mazmorra se cierra (tus cosas aparecen junto a la puerta).
+- Dentro de la mazmorra no se pueden romper bloques.
+
+### Tienda (pestaña Tienda)
+- Compra comida, pociones, armaduras, espadas, tótems, manzanas, runas y llaves con oro.
+- Botón para **vender todos tus núcleos de maná** de golpe.
+- Mayús + clic compra 5.
+
+### Raza Dragón y árboles de habilidades
+- Nueva raza **Dragón**: más grande, más vida, armadura y daño, pero gana un 10% menos de EXP.
+- Cada raza (6) y cada clase (5) tiene su **propio árbol de habilidades** de 5 nudos.
+- Ganas **1 punto de habilidad por nivel** (y con las runas). Si ya tenías nivel, se te dan
+  los puntos de los niveles que ya habías subido.
+- Pestaña **Habilidades**: árbol de tu raza a la izquierda y el de tu clase a la derecha.
+  Pasa el ratón por un nudo para ver qué hace y haz clic para mejorarlo.
+
+## Compilar con GitHub
+
+El repositorio compila solo con GitHub Actions al subir cambios. El `.jar` aparece en
+**Releases** (a la derecha de la página principal del repositorio).
 
 ## Instalar
 
-Igual que el otro mod: Fabric Loader para 1.21.1, Fabric API y el `.jar` en la carpeta `mods`.
-Puede estar instalado a la vez que Niveles Locos.
+Fabric Loader para 1.21.1, Fabric API y el `.jar` en la carpeta `mods`
+(quita el `el-sistema-1.0.0.jar` antiguo). Puede estar instalado a la vez que Niveles Locos.
+Tu progreso de la 1.0.0 se mantiene.
 
 ## Comandos de prueba (con trucos activados)
 
 - `/sistema exp 500`: te da 500 de EXP.
+- `/sistema oro 5000`: te da 5000 de oro.
+- `/sistema puntos 10`: te da 10 puntos de habilidad.
+- `/sistema puerta C`: abre una puerta de mazmorra de rango C delante de ti (E, D, C, B, A o S).
 - `/sistema cambiar`: vuelves a elegir raza y clase sin perder el nivel.
 - `/sistema reiniciar`: empiezas de cero.

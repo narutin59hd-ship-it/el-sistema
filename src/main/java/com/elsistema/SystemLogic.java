@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.ItemTags;
@@ -24,7 +25,7 @@ import net.minecraft.world.entity.projectile.AbstractArrow;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Lógica del Sistema: experiencia, niveles, estadísticas, razas, clases y maná. */
+/** Lógica del Sistema: experiencia, niveles, estadísticas, razas, clases, árboles, oro y maná. */
 public final class SystemLogic {
     private SystemLogic() {}
 
@@ -37,6 +38,15 @@ public final class SystemLogic {
             Attributes.MAX_HEALTH, Attributes.ARMOR, Attributes.ATTACK_DAMAGE, Attributes.ATTACK_SPEED,
             Attributes.MOVEMENT_SPEED, Attributes.KNOCKBACK_RESISTANCE, Attributes.SCALE,
             Attributes.BLOCK_BREAK_SPEED, Attributes.LUCK);
+
+    /** Atributos de los árboles (mismo orden que Trees.A_*). */
+    private static final List<Holder<Attribute>> TREE_ATTRS = List.of(
+            Attributes.MAX_HEALTH, Attributes.ARMOR, Attributes.ATTACK_DAMAGE, Attributes.ATTACK_SPEED,
+            Attributes.MOVEMENT_SPEED, Attributes.KNOCKBACK_RESISTANCE, Attributes.BLOCK_BREAK_SPEED,
+            Attributes.ARMOR_TOUGHNESS);
+    private static final Operation[] TREE_OPS = {
+            Operation.ADD_VALUE, Operation.ADD_VALUE, Operation.ADD_VALUE, Operation.ADD_VALUE,
+            Operation.ADD_MULTIPLIED_BASE, Operation.ADD_VALUE, Operation.ADD_MULTIPLIED_BASE, Operation.ADD_VALUE};
 
     /** Ventajas de cada raza (mismo orden que Defs.RACE_NAME). */
     private static final List<List<Mod>> RACE_MODS = List.of(
@@ -57,6 +67,11 @@ public final class SystemLogic {
                     new Mod(Attributes.MOVEMENT_SPEED, -0.05, Operation.ADD_MULTIPLIED_BASE)),
             List.of(
                     new Mod(Attributes.MAX_HEALTH, -2.0, Operation.ADD_VALUE),
+                    new Mod(Attributes.ATTACK_DAMAGE, 1.0, Operation.ADD_VALUE)),
+            List.of(
+                    new Mod(Attributes.SCALE, 0.1, Operation.ADD_VALUE),
+                    new Mod(Attributes.MAX_HEALTH, 4.0, Operation.ADD_VALUE),
+                    new Mod(Attributes.ARMOR, 2.0, Operation.ADD_VALUE),
                     new Mod(Attributes.ATTACK_DAMAGE, 1.0, Operation.ADD_VALUE)));
 
     /** Ventajas pasivas de cada clase (mismo orden que Defs.CLASS_NAME). */
@@ -95,7 +110,7 @@ public final class SystemLogic {
     }
 
     public static void sync(ServerPlayer p, Data d) {
-        List<Integer> l = new ArrayList<>(16);
+        List<Integer> l = new ArrayList<>(28);
         l.add(d.awakened);
         l.add(d.race);
         l.add(d.cls);
@@ -110,10 +125,18 @@ public final class SystemLogic {
         l.add(maxMp(d));
         l.add(d.cooldown);
         l.add(Math.max(1, d.cooldownTotal));
+        l.add((int) Math.min(Integer.MAX_VALUE, d.coins));
+        l.add(d.skillPoints);
+        for (int i = 0; i < 5; i++) {
+            l.add(d.raceRank(i));
+        }
+        for (int i = 0; i < 5; i++) {
+            l.add(d.classRank(i));
+        }
         ServerPlayNetworking.send(p, new Net.SyncPayload(l));
     }
 
-    private static void playAt(ServerPlayer p, net.minecraft.sounds.SoundEvent sound, float volume, float pitch) {
+    private static void playAt(ServerPlayer p, SoundEvent sound, float volume, float pitch) {
         p.level().playSound((Player) null, p.getX(), p.getY(), p.getZ(), sound, SoundSource.PLAYERS, volume, pitch);
     }
 
@@ -123,33 +146,41 @@ public final class SystemLogic {
         int m = 50 + 3 * d.bonus(3);
         if (d.awakened == 1 && d.cls == Defs.MAGO) m += 50;
         if (d.awakened == 1 && d.race == Defs.DEMONIO) m += 30;
-        return m;
+        return m + (int) Math.round(d.fx(Trees.FX_MP_MAX));
     }
 
     public static double mpRegen(Data d) {
         double r = 1.0 + 0.05 * d.bonus(3);
         if (d.awakened == 1 && d.cls == Defs.MAGO) r *= 2.0;
-        return r;
+        return r * (1.0 + d.fx(Trees.FX_MP_REGEN) / 100.0);
     }
 
-    /** Multiplicador de daño de las habilidades: +1% por punto de INT y +1% por nivel. */
+    /** Multiplicador de daño de las habilidades: +1% por INT, +1% por nivel y los árboles. */
     public static double skillMult(Data d) {
-        return 1.0 + 0.01 * d.bonus(3) + 0.01 * (d.level - 1);
+        return 1.0 + 0.01 * d.bonus(3) + 0.01 * (d.level - 1) + d.fx(Trees.FX_SKILL_DMG) / 100.0;
     }
 
-    /** Reducción de enfriamiento por PERCEPCIÓN (máx. 50%). */
+    /** Reducción de enfriamiento por PERCEPCIÓN y árboles (máx. 60%). */
     public static double cdr(Data d) {
-        return Math.min(0.5, 0.005 * d.bonus(4));
+        return Math.min(0.6, 0.005 * d.bonus(4) + d.fx(Trees.FX_SKILL_CD) / 100.0);
     }
 
-    /** Multiplicador de daño de las flechas del Jugador (elfo y arquero). */
+    /** Multiplicador de daño de las flechas del Jugador. */
     public static double arrowBonus(Data d) {
         double b = 1.0;
         if (d.awakened == 1) {
             if (d.race == Defs.ELFO) b += 0.2;
             if (d.cls == Defs.ARQUERO) b += 0.3;
+            b += d.fx(Trees.FX_ARROW_DMG) / 100.0;
         }
         return b;
+    }
+
+    private static double xpMult(Data d) {
+        double m = 1.0 + d.fx(Trees.FX_XP) / 100.0;
+        if (d.race == Defs.HUMANO) m += 0.1;
+        if (d.race == Defs.DRAGON) m -= 0.1;
+        return m;
     }
 
     // ================================================================ Atributos
@@ -166,6 +197,12 @@ public final class SystemLogic {
             setMod(p, ALL.get(i), "raza_" + i, 0.0, Operation.ADD_VALUE);
             setMod(p, ALL.get(i), "clase_" + i, 0.0, Operation.ADD_VALUE);
         }
+        for (int k = 0; k < 5; k++) {
+            for (Holder<Attribute> a : TREE_ATTRS) {
+                setMod(p, a, "arbol_raza_" + k, 0.0, Operation.ADD_VALUE);
+                setMod(p, a, "arbol_clase_" + k, 0.0, Operation.ADD_VALUE);
+            }
+        }
         if (d.awakened == 1) {
             if (d.race >= 0 && d.race < RACE_MODS.size()) {
                 for (Mod m : RACE_MODS.get(d.race)) {
@@ -177,12 +214,24 @@ public final class SystemLogic {
                     setMod(p, m.attr(), "clase_" + ALL.indexOf(m.attr()), m.amount(), m.op());
                 }
             }
+            applyTree(p, Trees.tree(true, d.race), d.race >= 0 ? d.raceTree[d.race] : null, "arbol_raza_");
+            applyTree(p, Trees.tree(false, d.cls), d.cls >= 0 ? d.classTree[d.cls] : null, "arbol_clase_");
         }
         d.swordOn = false;
         setMod(p, Attributes.ATTACK_DAMAGE, "clase_espada", 0.0, Operation.ADD_VALUE);
         updateSword(p, d);
         if (p.getHealth() > p.getMaxHealth()) {
             p.setHealth(p.getMaxHealth());
+        }
+    }
+
+    private static void applyTree(ServerPlayer p, Trees.Node[] tree, int[] ranks, String prefix) {
+        if (tree == null || ranks == null) return;
+        for (int k = 0; k < tree.length; k++) {
+            int a = tree[k].fx() - Trees.ATTR;
+            if (a >= 0 && a < TREE_ATTRS.size() && ranks[k] > 0) {
+                setMod(p, TREE_ATTRS.get(a), prefix + k, ranks[k] * tree[k].val(), TREE_OPS[a]);
+            }
         }
     }
 
@@ -195,14 +244,12 @@ public final class SystemLogic {
         }
     }
 
-    // ================================================================ EXP y niveles
+    // ================================================================ EXP, niveles y oro
 
     public static void addXp(ServerPlayer p, int amount) {
         Data d = Store.get(p);
         if (d.awakened != 1 || amount <= 0 || d.level >= Defs.MAX_LEVEL) return;
-        if (d.race == Defs.HUMANO) {
-            amount = (int) Math.round(amount * 1.1);
-        }
+        amount = Math.max(1, (int) Math.round(amount * xpMult(d)));
         d.xp += amount;
         notify(p, Net.N_XP, amount, 0);
 
@@ -215,6 +262,8 @@ public final class SystemLogic {
             int pts = d.race == Defs.HUMANO ? 4 : 3;
             d.points += pts;
             gained += pts;
+            d.skillPoints++;
+            d.spGranted++;
         }
         if (d.level >= Defs.MAX_LEVEL) {
             d.xp = 0;
@@ -235,6 +284,17 @@ public final class SystemLogic {
             }
         }
         sync(p, d);
+    }
+
+    /** Suma oro (con los bonus de los árboles). Devuelve la cantidad final. */
+    public static int addCoins(ServerPlayer p, int amount) {
+        Data d = Store.get(p);
+        if (d.awakened != 1 || amount <= 0) return 0;
+        int total = Math.max(1, (int) Math.round(amount * (1.0 + d.fx(Trees.FX_COINS) / 100.0)));
+        d.coins += total;
+        notify(p, Net.N_COINS, total, 0);
+        sync(p, d);
+        return total;
     }
 
     private static void levelUpSounds(ServerPlayer p) {
@@ -269,6 +329,7 @@ public final class SystemLogic {
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             Data d = Store.get(p);
             if (d.cooldown > 0) d.cooldown--;
+            if (d.lastStand > 0) d.lastStand--;
             if (d.joinDelay > 0) {
                 d.joinDelay--;
                 if (d.joinDelay == 0) {
@@ -276,17 +337,32 @@ public final class SystemLogic {
                 }
             }
             if (d.anim > 0) animTick(p, d);
+            // Alas (Dragón): mantener Mayús en el aire para planear
+            if (d.awakened == 1 && p.isAlive() && !p.onGround() && p.isShiftKeyDown()
+                    && (p.fallDistance > 1.0F || p.hasEffect(MobEffects.SLOW_FALLING)) && d.fx(Trees.FX_GLIDE) > 0) {
+                p.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 10, 0, true, false, false));
+            }
             if (t % 20 == 0) {
                 if (p.isAlive()) d.health = p.getHealth();
                 if (d.awakened == 1) {
                     int max = maxMp(d);
                     d.mp = Math.min(max, d.mp + mpRegen(d));
                 }
+                Dungeons.playerTick(p, d);
+            }
+            if (t % 100 == 0 && d.awakened == 1 && p.isAlive()) {
+                double regen = d.fx(Trees.FX_REGEN);
+                if (regen > 0 && p.getHealth() < p.getMaxHealth()) p.heal((float) regen);
             }
             if (t % 10 == 0) {
                 updateSword(p, d);
-                if (d.awakened == 1 && d.race == Defs.DEMONIO) {
-                    p.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 40, 0, true, false, false));
+                if (d.awakened == 1) {
+                    if (d.race == Defs.DEMONIO || d.fx(Trees.FX_FIRE_IMMUNE) > 0) {
+                        p.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 40, 0, true, false, false));
+                    }
+                    if (d.fx(Trees.FX_NIGHT_VISION) > 0) {
+                        p.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 320, 0, true, false, false));
+                    }
                 }
                 sync(p, d);
             }
@@ -303,6 +379,9 @@ public final class SystemLogic {
             case Net.ACT_SKILL -> useSkill(p);
             case Net.ACT_STAT -> addStat(p, a, b);
             case Net.ACT_CHOOSE -> choose(p, a, b);
+            case Net.ACT_TREE -> treeUp(p, a == 0, b);
+            case Net.ACT_BUY -> Shop.buy(p, a, b);
+            case Net.ACT_SELL -> Shop.sellCores(p);
             default -> {
             }
         }
@@ -353,6 +432,25 @@ public final class SystemLogic {
         sync(p, d);
     }
 
+    /** Sube un rango de un nudo del árbol de la raza (race = true) o de la clase. */
+    public static void treeUp(ServerPlayer p, boolean race, int node) {
+        Data d = Store.get(p);
+        if (d.awakened != 1 || node < 0 || node > 4 || d.skillPoints <= 0) return;
+        Trees.Node[] tree = Trees.tree(race, race ? d.race : d.cls);
+        if (tree == null) return;
+        int[] ranks = race ? d.raceTree[d.race] : d.classTree[d.cls];
+        Trees.Node n = tree[node];
+        if (ranks[node] >= n.max() || d.level < n.lvl()) return;
+        int parent = Trees.PARENT[node];
+        if (parent >= 0 && ranks[parent] <= 0) return;
+        ranks[node]++;
+        d.skillPoints--;
+        applyAll(p, d);
+        p.playNotifySound(SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 0.8F, 1.4F);
+        notify(p, Net.N_TREE_UP, race ? 0 : 1, node);
+        sync(p, d);
+    }
+
     public static void choose(ServerPlayer p, int race, int cls) {
         Data d = Store.get(p);
         if (d.awakened == 1) return;
@@ -391,6 +489,11 @@ public final class SystemLogic {
         d.stats = new int[]{Defs.BASE_STAT, Defs.BASE_STAT, Defs.BASE_STAT, Defs.BASE_STAT, Defs.BASE_STAT};
         d.mp = 50.0;
         d.cooldown = 0;
+        d.coins = 0;
+        d.skillPoints = 0;
+        d.spGranted = 0;
+        d.raceTree = new int[Trees.RACE.length][5];
+        d.classTree = new int[Trees.CLASS.length][5];
         applyAll(p, d);
         sync(p, d);
         notify(p, Net.N_AWAKEN_PROMPT, 0, 0);
@@ -405,6 +508,7 @@ public final class SystemLogic {
             p.setHealth(Math.min(d.health, p.getMaxHealth()));
         }
         if (d.mp > maxMp(d)) d.mp = maxMp(d);
+        Dungeons.recover(p, d);
         d.joinDelay = 60;
         sync(p, d);
     }
@@ -417,15 +521,22 @@ public final class SystemLogic {
         sync(p, d);
     }
 
-    /** Las flechas que dispara el Jugador hacen más daño si es elfo o arquero. */
+    /** Al aparecer una entidad: flechas del Jugador más fuertes y monstruos con rango. */
     public static void onEntityLoad(Entity entity) {
-        if (!(entity instanceof AbstractArrow arrow)) return;
-        if (arrow.getTags().contains(ARROW_TAG)) return;
-        if (!(arrow.getOwner() instanceof ServerPlayer sp)) return;
-        arrow.addTag(ARROW_TAG);
-        double b = arrowBonus(Store.get(sp));
-        if (b > 1.0) {
-            arrow.setBaseDamage(arrow.getBaseDamage() * b);
+        if (entity instanceof AbstractArrow arrow) {
+            if (arrow.getTags().contains(ARROW_TAG)) return;
+            if (!(arrow.getOwner() instanceof ServerPlayer sp)) return;
+            arrow.addTag(ARROW_TAG);
+            Data d = Store.get(sp);
+            double b = arrowBonus(d);
+            if (b > 1.0) {
+                arrow.setBaseDamage(arrow.getBaseDamage() * b);
+            }
+            if (d.fx(Trees.FX_FIRE_ARROWS) > 0) {
+                arrow.setRemainingFireTicks(2000);
+            }
+            return;
         }
+        Ranks.onLoad(entity);
     }
 }
