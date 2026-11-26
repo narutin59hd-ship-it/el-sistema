@@ -12,18 +12,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Desempaquetar el codigo subido (codigo.b64)
+      - name: Aplicar el codigo subido (cambios.b64 o codigo.b64)
         run: |
+          CAMBIO=0
+          if [ -f cambios.b64 ]; then
+            base64 -d -i cambios.b64 | xz -d > /tmp/cambios.patch
+            rm cambios.b64
+            git apply --whitespace=nowarn /tmp/cambios.patch
+            CAMBIO=1
+          fi
           if [ -f codigo.b64 ]; then
             base64 -d -i codigo.b64 > /tmp/codigo.zip
             unzip -t /tmp/codigo.zip
             rm -rf src build.gradle gradle.properties settings.gradle LEEME.md codigo.b64
             unzip -o /tmp/codigo.zip
+            CAMBIO=1
+          fi
+          if [ "$CAMBIO" = 1 ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
-            git commit -m "Desempaquetar codigo.b64" || true
-            git push || echo "No se pudo guardar el codigo desempaquetado"
+            git commit -m "Aplicar el codigo subido" || true
+            git push || echo "No se pudo guardar el codigo en el repositorio"
           fi
       - uses: actions/setup-java@v4
         with:
