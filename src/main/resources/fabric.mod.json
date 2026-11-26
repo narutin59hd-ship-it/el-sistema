@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "elsistema",
+  "version": "${version}",
+  "name": "El Sistema",
+  "description": "Despierta como Jugador: niveles, rango de cazador, estadisticas, razas y clases con ventanas del Sistema. V = estado, R = habilidad.",
+  "authors": ["Tu"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.elsistema.ElSistema"],
+    "client": ["com.elsistema.client.ElSistemaClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
