@@ -236,12 +236,38 @@ public final class Hud {
             }
             case Net.N_CITY -> {
                 switch (a) {
-                    case 0 -> big("CIUDAD DE LOS CAZADORES", "Habla con los vecinos: tiendas, herrería y contratos", 0x905FD7FF, 0x443A8DFF);
+                    case 0 -> big("CIUDAD DE LOS CAZADORES", "Misiones > Ciudad del Sistema: viaja al momento a cada sitio", 0x905FD7FF,
+                            0x443A8DFF);
                     case 1 -> note("Has vuelto de la Ciudad de los Cazadores.", Ui.CYAN);
                     case 2 -> warn("No puedes viajar a la ciudad desde una mazmorra.");
                     case 3 -> warn("Ya estás en la ciudad.");
                     case 4 -> warn("La ciudad no existe en este mundo.");
+                    case 6 -> toast("CIUDAD DE LOS CAZADORES", Ui.CYAN, "Se está construyendo: " + b + " %",
+                            "Te llevaré en cuanto esté terminada");
+                    case 8 -> {
+                        if (b >= 0 && b < com.elsistema.CityPlaces.count()) {
+                            note(com.elsistema.CityPlaces.LIST[b].name() + " · " + com.elsistema.CityPlaces.LIST[b].who(), Ui.CYAN);
+                        }
+                    }
+                    case 9 -> warn("Estás combatiendo en la arena: ríndete en la piedra imán del foso.");
+                    case 10 -> toast("CIUDAD DE LOS CAZADORES", Ui.GOLD, "Se está reconstruyendo (" + b + " %)",
+                            "Vuelves a casa un momento; volverás al acabar");
                     default -> warn("No estás en la ciudad.");
+                }
+            }
+            case Net.N_ARENA -> {
+                switch (a) {
+                    case 0 -> big("ARENA DEL SISTEMA", "Combate de rango " + com.elsistema.Defs.RANK[Math.max(0, Math.min(5, b))]
+                            + " · 3 oleadas", 0x90FFB35A, 0x55402000);
+                    case 1 -> note(b >= com.elsistema.Arena.WAVES ? "¡El Campeón de la Arena!" : "Oleada " + b + "/" + com.elsistema.Arena.WAVES,
+                            b >= com.elsistema.Arena.WAVES ? Ui.RED : Ui.GOLD);
+                    case 2 -> {
+                        int r = Math.max(0, Math.min(5, b));
+                        big("¡VICTORIA EN LA ARENA!", "+" + com.elsistema.Arena.PRIZE_COINS[r] + " de oro y ◆ " + com.elsistema.Arena.PRIZE_ESS[r],
+                                0x90FFC857, 0x55402800);
+                        sound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 0.6F, 1.0F);
+                    }
+                    default -> warn(b == 1 ? "Has caído en la arena." : b == 2 ? "Se acabó el tiempo del combate." : "Te has rendido en la arena.");
                 }
             }
             case Net.N_SIDE -> {
@@ -257,11 +283,22 @@ public final class Hud {
             }
             case Net.N_CITY_BUY -> {
                 CityShop.Offer[] o = CityShop.offers(a);
-                if (b >= 0 && b < o.length) note("Comprado: " + o[b].name(), Ui.GREEN);
+                if (a == CityNpc.GATEKEEPER && b >= 0 && b < o.length) {
+                    note("Hugo abre la puerta de rango " + com.elsistema.Defs.RANK[b] + ": entra por el anillo", Ui.PURPLE);
+                } else if (a == CityNpc.TRAINER) {
+                    note("¡Al foso!", Ui.GOLD);
+                } else if (b >= 0 && b < o.length) {
+                    note((a == CityNpc.HEALER ? "Atendido: " : "Comprado: ") + o[b].name(), Ui.GREEN);
+                }
             }
-            case Net.N_CITY_BUY_FAIL -> warn(a == 2 ? "Ya has comprado los 5 pergaminos de sombra."
-                    : a == 1 ? "No tienes esencias suficientes (" + CData.essences() + "/" + b + ")"
-                    : "No tienes oro suficiente (" + CData.coins() + "/" + b + ")");
+            case Net.N_CITY_BUY_FAIL -> warn(switch (a) {
+                case 1 -> "No tienes esencias suficientes (" + CData.essences() + "/" + b + ")";
+                case 2 -> "Ya has comprado los 5 pergaminos de sombra.";
+                case 3 -> "Necesitas ser cazador de rango " + com.elsistema.Defs.RANK[Math.max(0, Math.min(5, b))] + " o más.";
+                case 4 -> "Ya hay una puerta abierta en la estación: entra o espera a que se cierre.";
+                case 5 -> "La arena está ocupada: espera a que acabe el combate.";
+                default -> "No tienes oro suficiente (" + CData.coins() + "/" + b + ")";
+            });
             case Net.N_LAST_BREATH -> big("ÚLTIMO ALIENTO", "Tu armadura te ha salvado de la muerte", 0x90FF5A5A, 0x66400000);
             case Net.N_SKILL -> callout(Defs.skillName(a, b == 1).toUpperCase(Locale.ROOT), b == 1 ? Ui.GOLD : Ui.WHITE);
             case Net.N_COOLDOWN -> warn("Habilidad en enfriamiento: " + a + " s");

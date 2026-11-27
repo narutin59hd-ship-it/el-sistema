@@ -576,7 +576,92 @@ public final class ClientSelfTest {
                 packCheck(true, "al volver a ponerlo");
                 ElSistema.LOGGER.info("[SELFTEST-CLIENTE] tonos: {}", Tonos.status());
             }
-            case 1976 -> finish(mc);
+            // ---------------------------------------------------- 1.9.0: la ciudad nueva
+            case 1976 -> {
+                mc.setScreen(null);
+                mc.options.hideGui = true;
+                trial(30);
+            }
+            case 2100 -> {
+                if (worldMode) shot(mc, "ciudad nueva: la plaza del Cristal con su haz de luz");
+                trial(31);
+            }
+            case 2170 -> {
+                if (worldMode) shot(mc, "ciudad nueva: el paseo, la plaza y la Torre de la Asociación");
+                trial(32);
+            }
+            case 2230 -> {
+                if (worldMode) shot(mc, "vestíbulo de la Asociación: recepción, rangos y ascensores");
+                trial(33);
+            }
+            case 2290 -> trial(34);
+            case 2350 -> {
+                if (worldMode) shot(mc, "mirador de la Asociación (subido en ascensor)");
+                mc.options.hideGui = false;
+                trial(35);
+            }
+            case 2390 -> trial(36);
+            case 2420 -> {
+                if (worldMode) shot(mc, "Centro Médico de Irene");
+                mc.setScreen(null);
+                trial(37);
+            }
+            case 2460 -> trial(38);
+            case 2490 -> {
+                if (worldMode) shot(mc, "Comedor del Cazador de Tomás");
+                mc.setScreen(null);
+                trial(39);
+            }
+            case 2530 -> trial(40);
+            case 2560 -> {
+                if (worldMode) shot(mc, "Tienda 24 h de Paco");
+                mc.setScreen(null);
+                trial(41);
+            }
+            case 2600 -> {
+                if (worldMode) shot(mc, "Estación de Puertas: Hugo abre puertas de tu rango");
+                mc.setScreen(null);
+                trial(42);
+            }
+            case 2670 -> {
+                if (worldMode) shot(mc, "Estación de Puertas: puerta de rango E abierta delante del anillo");
+                trial(43);
+            }
+            case 2710 -> trial(44);
+            case 2730 -> mc.setScreen(null);
+            case 2810 -> {
+                if (worldMode) shot(mc, "Arena del Sistema: primera oleada");
+                trial(45);
+            }
+            case 2814 -> trial(46);
+            case 2890 -> {
+                if (worldMode) shot(mc, "Parque Central (viaje al momento desde el Sistema)");
+                view(mc, 4, 2, 0);
+            }
+            case 2904 -> {
+                shot(mc, "MISIONES > CIUDAD: los sitios de la ciudad con IR");
+                mc.setScreen(null);
+                mc.options.hideGui = true;
+                trial(47);
+            }
+            case 2974 -> {
+                if (worldMode) shot(mc, "el río, el paseo y los puentes");
+                trial(48);
+            }
+            case 3034 -> {
+                if (worldMode) shot(mc, "tu apartamento: salón, biblioteca y taller");
+                trial(49);
+            }
+            case 3110 -> {
+                if (worldMode) shot(mc, "la ciudad al atardecer");
+                trial(50);
+            }
+            case 3190 -> {
+                if (worldMode) shot(mc, "la ciudad de noche: ventanas, farolas y el haz del Cristal");
+                mc.options.hideGui = false;
+                trial(51);
+            }
+            case 3220 -> finish(mc);
             default -> {
             }
         }

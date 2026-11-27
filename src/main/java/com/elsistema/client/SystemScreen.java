@@ -1606,6 +1606,18 @@ public class SystemScreen extends Screen {
                 this.onClose();
                 return true;
             }
+            if (CData.inCity()) {
+                int rows = placeRows();
+                for (int r = 0; r < rows && cityScroll + r < com.elsistema.CityPlaces.count(); r++) {
+                    int[] gb = goButton(r);
+                    if (Ui.inside(mx, my, gb[0], gb[1], gb[2], gb[3])) {
+                        send(Net.ACT_CITY, 10 + cityScroll + r, 0);
+                        Hud.sound(SoundEvents.AMETHYST_BLOCK_RESONATE, 1.0F, 1.3F);
+                        this.onClose();
+                        return true;
+                    }
+                }
+            }
             return false;
         }
         if (qsub() != 0) return false;
@@ -1646,12 +1658,24 @@ public class SystemScreen extends Screen {
         return new Box(b.x1() + 8, b.y2() - 24, b.x2() - 8, b.y2() - 7);
     }
 
-    private static final String[][] CITY_PLACES = {
-            {"Asociación de Cazadores", "Lucía: contratos"},
-            {"Herrería", "Bruno: mejoras y habilidades ocultas"},
-            {"Alquimia", "Selene: pociones y elixires"},
-            {"Esencias", "Ezequiel: rarezas por esencias"},
-            {"Gremio de cazadores", "Darío: contratos difíciles"}};
+    // 1.9.0: los sitios de la ciudad (con botón IR para ir al momento estando en ella)
+    private int cityScroll = 0;
+    private static final int PLACE_ROW = 11;
+
+    private Box placeList() {
+        Box ib = cityInfo();
+        return new Box(ib.x1() + 4, ib.y1() + 33, ib.x2() - 4, cityButton().y1() - 4);
+    }
+
+    private int placeRows() {
+        return Math.max(1, placeList().h() / PLACE_ROW);
+    }
+
+    private int[] goButton(int row) {
+        Box l = placeList();
+        int ry = l.y1() + row * PLACE_ROW;
+        return new int[]{l.x2() - 20, ry, 19, PLACE_ROW - 1};
+    }
 
     private List<String> cityTab(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
         Font f = this.font;
@@ -1662,15 +1686,29 @@ public class SystemScreen extends Screen {
         int y = ib.y1() + 7;
         Ui.glow(g, f, fit(f, "CIUDAD DE LOS CAZADORES", ib.w() - 16), lx, y, Ui.WHITE, Ui.GLOW, a);
         y += 13;
-        Ui.text(g, f, fit(f, CData.inCity() ? "Estás en la ciudad" : "Un mapa aparte con tiendas en persona", ib.w() - 16), lx, y,
-                CData.inCity() ? Ui.GREEN : Ui.GRAY, a);
-        y += 14;
-        for (String[] p : CITY_PLACES) {
-            if (y > ib.y2() - 40) break;
-            Ui.text(g, f, fit(f, "◆ " + p[0], ib.w() - 16), lx, y, Ui.CYAN, a);
-            y += 10;
-            Ui.text(g, f, fit(f, p[1], ib.w() - 24), lx + 8, y, Ui.MUTED, a);
-            y += 12;
+        boolean in = CData.inCity();
+        Ui.text(g, f, fit(f, in ? "Estás en la ciudad: pulsa IR para ir a un sitio" : "Viaja a la ciudad para ir a cada sitio",
+                ib.w() - 16), lx, y, in ? Ui.GREEN : Ui.GRAY, a);
+        Box pl = placeList();
+        int rows = placeRows();
+        int n = com.elsistema.CityPlaces.count();
+        cityScroll = Math.max(0, Math.min(Math.max(0, n - rows), cityScroll));
+        for (int r = 0; r < rows && cityScroll + r < n; r++) {
+            int i = cityScroll + r;
+            com.elsistema.CityPlaces.Place p = com.elsistema.CityPlaces.LIST[i];
+            int ry = pl.y1() + r * PLACE_ROW;
+            boolean rowHover = Ui.inside(mx, my, pl.x1(), ry, pl.w(), PLACE_ROW - 1);
+            if (rowHover) g.fill(pl.x1(), ry, pl.x2(), ry + PLACE_ROW - 1, Ui.fade(0x40203A50, a));
+            Ui.text(g, f, fit(f, "◆ " + p.name(), pl.w() - (in ? 26 : 6)), pl.x1() + 3, ry + 1, i == 0 ? Ui.WHITE : Ui.CYAN, a);
+            if (in) {
+                int[] gb = goButton(r);
+                Ui.button(g, f, "IR", gb[0], gb[1], gb[2], gb[3], mx, my, Ui.CYAN, true, a);
+            }
+            if (rowHover) tip = List.of(p.name(), p.who(), in ? "Pulsa IR para ir al momento" : "Primero viaja a la ciudad");
+        }
+        if (n > rows) {
+            String more = (cityScroll > 0 ? "▲" : " ") + (cityScroll + rows < n ? "▼" : " ");
+            Ui.text(g, f, more, ib.x2() - 8 - f.width(more), ib.y1() + 7, Ui.CYAN, a * 0.8F);
         }
         Box b = cityButton();
         float pulse = 0.75F + 0.25F * (float) Math.sin(now / 300.0);
@@ -2389,6 +2427,11 @@ public class SystemScreen extends Screen {
         if (tab == 2 && listBox().in(mx, my)) {
             int max = Math.max(0, ClientShadows.list().size() - visibleRows());
             scroll = Math.max(0, Math.min(max, scroll - (int) Math.signum(scrollY)));
+            return true;
+        }
+        if (tab == 4 && qsub() == 2 && placeList().in(mx, my)) {
+            int max = Math.max(0, com.elsistema.CityPlaces.count() - placeRows());
+            cityScroll = Math.max(0, Math.min(max, cityScroll - (int) Math.signum(scrollY)));
             return true;
         }
         if (tab == 4 && qsub() == 0 && questList().in(mx, my)) {

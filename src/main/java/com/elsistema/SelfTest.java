@@ -90,11 +90,16 @@ public final class SelfTest {
                 Shadows.arise(player);
                 ElSistema.LOGGER.info("[SELFTEST] ¡Levántate! intento {}", arises);
             }
-            // 1.7.0: la Ciudad de los Cazadores se construye y aparecen sus vecinos
+            // 1.7.0 / 1.9.0: la Ciudad de los Cazadores se construye poco a poco y aparecen sus vecinos
             if (player == null && ticks == startAt + 5) cityBuild(server);
-            if (player == null && ticks == startAt + 150) City.checkNpcs(City.level(server));
-            if (player == null && ticks == startAt + 210) cityCheck(server);
-            if (ticks == startAt + 220) {
+            if (player == null && cityPhase == 1 && City.isReady(City.level(server))) {
+                cityCheck(server);
+                cityPhase = 2;
+            }
+            if (player == null && cityPhase == 1 && ticks > startAt + 30000) {
+                throw new IllegalStateException("la ciudad no se terminó de construir (" + City.buildPercent() + " %)");
+            }
+            if (ticks >= startAt + 220 && (player != null || cityPhase == 2)) {
                 finish(server, player);
             }
         } catch (Throwable t) {
@@ -371,6 +376,7 @@ public final class SelfTest {
             case 16 -> animArise(p);
             case 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 -> cityStep(p, step);
             case 27, 28, 29 -> lightStep(p, step);
+            case 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51 -> tourStep(p, step);
             default -> {
             }
         }
@@ -378,34 +384,42 @@ public final class SelfTest {
 
     // ================================================================ 1.7.0: la ciudad
 
+    private static int cityPhase = 0;
+
     private static void cityBuild(MinecraftServer server) {
         ServerLevel city = City.level(server);
         if (city == null) throw new IllegalStateException("no existe la dimensión de la ciudad");
-        if (!City.ensureBuilt(city)) throw new IllegalStateException("la ciudad ya estaba construida en un mundo nuevo");
-        for (int cx = -4; cx <= 3; cx++) {
-            for (int cz = -4; cz <= 3; cz++) {
-                city.setChunkForced(cx, cz, true);
-            }
-        }
-        if (!city.getBlockState(new BlockPos(-1, City.G + 2, -1)).is(net.minecraft.world.level.block.Blocks.LIGHT_BLUE_STAINED_GLASS)) {
-            throw new IllegalStateException("falta el Cristal del Sistema en la plaza");
-        }
-        ElSistema.LOGGER.info("[SELFTEST] ciudad construida");
+        if (!City.building()) throw new IllegalStateException("la ciudad no se está construyendo en un mundo nuevo");
+        City.budgetMs = 300;
+        cityPhase = 1;
+        ElSistema.LOGGER.info("[SELFTEST] la ciudad se está construyendo ({} %)", City.buildPercent());
     }
 
     private static void cityCheck(MinecraftServer server) {
         ServerLevel city = City.level(server);
-        java.util.Set<Integer> roles = new java.util.HashSet<>();
-        for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, new net.minecraft.world.phys.AABB(-70, 50, -70, 70, 120, 70))) {
-            roles.add(n.role());
-        }
-        if (roles.size() != CityNpc.ROLES) throw new IllegalStateException("faltan vecinos en la ciudad: " + roles);
-        for (int cx = -4; cx <= 3; cx++) {
-            for (int cz = -4; cz <= 3; cz++) {
-                city.setChunkForced(cx, cz, false);
+        if (!City.missingBlocks.isEmpty()) throw new IllegalStateException("bloques que no existen en la ciudad: " + City.missingBlocks);
+        int G = City.G;
+        Object[][] want = {
+                {new BlockPos(0, G, 0), net.minecraft.world.level.block.Blocks.BEACON, "el faro del Cristal del Sistema"},
+                {new BlockPos(0, G + 1, 0), net.minecraft.world.level.block.Blocks.LIGHT_BLUE_STAINED_GLASS, "el haz del Cristal"},
+                {new BlockPos(0, G + 72, -28), net.minecraft.world.level.block.Blocks.POLISHED_DIORITE, "el suelo del mirador"},
+                {new BlockPos(CityBuilder.LIFT_LOBBY_X1, G - 1, CityBuilder.LIFT_LOBBY_Z), net.minecraft.world.level.block.Blocks.PEARLESCENT_FROGLIGHT,
+                        "el ascensor del vestíbulo"},
+                {new BlockPos(CityBuilder.ARENA_PAD_X, CityBuilder.ARENA_FLOOR - 1, CityBuilder.ARENA_PAD_Z),
+                        net.minecraft.world.level.block.Blocks.LODESTONE, "la salida de la arena"},
+                {new BlockPos(0, G - 2, CityBuilder.RIVER_Z1 + 3), net.minecraft.world.level.block.Blocks.WATER, "el río"},
+                {new BlockPos(CityBuilder.HOME_X0 + 6, G, CityBuilder.HOME_Z0 + 6), net.minecraft.world.level.block.Blocks.ENCHANTING_TABLE,
+                        "la mesa de encantamientos del apartamento"}};
+        for (Object[] w : want) {
+            BlockPos pos = (BlockPos) w[0];
+            if (!city.getBlockState(pos).is((net.minecraft.world.level.block.Block) w[1])) {
+                throw new IllegalStateException("falta " + w[2] + " en " + pos.toShortString() + " (hay " + city.getBlockState(pos) + ")");
             }
         }
-        ElSistema.LOGGER.info("[SELFTEST] OK ciudad: {} vecinos en su sitio", roles.size());
+        if (City.lastRoles != CityNpc.ROLES) {
+            throw new IllegalStateException("faltan vecinos en la ciudad: " + City.lastRoles + " de " + CityNpc.ROLES);
+        }
+        ElSistema.LOGGER.info("[SELFTEST] OK ciudad nueva: {} sitios comprobados y {} vecinos en su sitio", want.length, City.lastRoles);
     }
 
     private static CityNpc npc(ServerPlayer p, int role) {
@@ -419,7 +433,7 @@ public final class SelfTest {
     /** Pone al Jugador a 3 bloques delante de un tendero, mirándole. */
     private static void faceNpc(ServerPlayer p, int role) {
         BlockPos h = City.npcHome(role);
-        boolean south = role == CityNpc.RECEPTION || role == CityNpc.SMITH || role == CityNpc.ALCHEMIST;
+        boolean south = City.facesSouth(role);
         double z = h.getZ() + 0.5 + (south ? 3.5 : -3.5);
         p.teleportTo(p.serverLevel(), h.getX() + 0.5, City.G, z, south ? 180.0F : 0.0F, 8.0F);
     }
@@ -494,19 +508,141 @@ public final class SelfTest {
             case 24 -> {
                 p.getAbilities().flying = true;
                 p.onUpdateAbilities();
-                p.teleportTo(p.serverLevel(), 14.5, City.G + 46, 62.5, 160.0F, 24.0F);
+                p.teleportTo(p.serverLevel(), 70.5, City.G + 72, 128.5, 152.0F, 24.0F);
             }
             case 25 -> {
                 p.getAbilities().flying = false;
                 p.onUpdateAbilities();
                 // la ciudad usa la hora del mundo normal (los demás mundos no pueden cambiarla)
                 p.getServer().overworld().setDayTime(18000L);
-                p.teleportTo(p.serverLevel(), 0.5, City.G, 9.5, 180.0F, -8.0F);
+                p.teleportTo(p.serverLevel(), 0.5, City.G, 9.5, 180.0F, -14.0F);
             }
             case 26 -> {
                 City.back(p, d);
                 if (City.inCity(p)) throw new IllegalStateException("no se volvió de la ciudad");
                 ElSistema.LOGGER.info("[SELFTEST] OK vuelta de la ciudad");
+            }
+            default -> {
+            }
+        }
+    }
+
+    // ================================================================ 1.9.0: la ciudad nueva (capturas del cliente)
+
+    private static void look(ServerPlayer p, double x, double y, double z, float yaw, float pitch) {
+        p.teleportTo(p.serverLevel(), x, y, z, yaw, pitch);
+        p.resetFallDistance();
+    }
+
+    private static void tourStep(ServerPlayer p, int step) {
+        Data d = Store.get(p);
+        ServerLevel lvl = p.serverLevel();
+        int G = City.G;
+        switch (step) {
+            case 30 -> {
+                p.getServer().overworld().setDayTime(5000L);
+                p.getServer().overworld().setWeatherParameters(20000, 0, false, false);
+                p.getInventory().clearContent();
+                if (!City.inCity(p)) City.travel(p, d);
+                if (!City.inCity(p)) throw new IllegalStateException("no se viajó a la ciudad nueva");
+                p.getAbilities().flying = true;
+                p.onUpdateAbilities();
+                look(p, 13.5, G + 7, 19.5, 146.0F, 14.0F);
+                ElSistema.LOGGER.info("[SELFTEST] paseo por la ciudad nueva");
+            }
+            case 31 -> look(p, 0.5, G + 30, 62.5, 180.0F, 12.0F);
+            case 32 -> look(p, 0.5, G, -21.5, 180.0F, 6.0F);
+            case 33 -> look(p, CityBuilder.LIFT_LOBBY_X1 + 1.0, G, CityBuilder.LIFT_LOBBY_Z + 1.0, 0.0F, 0.0F);
+            case 34 -> {
+                if (Math.abs(p.getY() - CityBuilder.DECK_Y) > 0.6) {
+                    throw new IllegalStateException("el ascensor no subió al mirador (y = " + p.getY() + ")");
+                }
+                ElSistema.LOGGER.info("[SELFTEST] OK ascensor: en el mirador a {} bloques de altura", (int) (p.getY() - G));
+                look(p, 0.5, CityBuilder.DECK_Y, -26.5, 0.0F, 22.0F);
+            }
+            case 35 -> {
+                p.setHealth(6.0F);
+                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.POISON, 600, 0));
+                faceNpc(p, CityNpc.HEALER);
+            }
+            case 36 -> {
+                City.interact(p, npc(p, CityNpc.HEALER));
+                CityShop.buy(p, CityNpc.HEALER, 2);
+                if (p.getHealth() < p.getMaxHealth() - 0.01F || p.hasEffect(net.minecraft.world.effect.MobEffects.POISON)) {
+                    throw new IllegalStateException("la revisión completa no curó (vida " + p.getHealth() + ")");
+                }
+                ElSistema.LOGGER.info("[SELFTEST] OK Centro Médico: revisión completa");
+            }
+            case 37 -> faceNpc(p, CityNpc.COOK);
+            case 38 -> {
+                City.interact(p, npc(p, CityNpc.COOK));
+                CityShop.buy(p, CityNpc.COOK, 0);
+                if (p.getInventory().countItem(net.minecraft.world.item.Items.COOKED_BEEF) < 8) throw new IllegalStateException("el Comedor no dio el menú");
+                ElSistema.LOGGER.info("[SELFTEST] OK Comedor: menú del cazador");
+            }
+            case 39 -> faceNpc(p, CityNpc.SHOPKEEPER);
+            case 40 -> {
+                City.interact(p, npc(p, CityNpc.SHOPKEEPER));
+                CityShop.buy(p, CityNpc.SHOPKEEPER, 0);
+                if (p.getInventory().countItem(net.minecraft.world.item.Items.TORCH) < 32) throw new IllegalStateException("la Tienda 24 h no dio antorchas");
+                ElSistema.LOGGER.info("[SELFTEST] OK Tienda 24 h: antorchas");
+                faceNpc(p, CityNpc.GATEKEEPER);
+            }
+            case 41 -> {
+                d.hunterRank = Math.max(d.hunterRank, 2);
+                City.interact(p, npc(p, CityNpc.GATEKEEPER));
+            }
+            case 42 -> {
+                CityShop.buy(p, CityNpc.GATEKEEPER, 0);
+                if (!Dungeons.gateNear(lvl, CityShop.gatePos(), 2.0)) throw new IllegalStateException("Hugo no abrió la puerta");
+                ElSistema.LOGGER.info("[SELFTEST] OK Estación de Puertas: puerta de rango E abierta");
+                look(p, CityBuilder.GATE_X + 5.5, G + 1, CityBuilder.GATE_Z + 9.5, 152.0F, 8.0F);
+            }
+            case 43 -> faceNpc(p, CityNpc.TRAINER);
+            case 44 -> {
+                City.interact(p, npc(p, CityNpc.TRAINER));
+                CityShop.buy(p, CityNpc.TRAINER, 0);
+                if (!Arena.fighting(p)) throw new IllegalStateException("no empezó el combate en la arena");
+                ElSistema.LOGGER.info("[SELFTEST] OK arena: combate de rango E empezado");
+            }
+            case 45 -> {
+                if (Arena.wave() < 1 || Arena.alive() < 1) {
+                    throw new IllegalStateException("no salió la primera oleada (" + Arena.wave() + ", " + Arena.alive() + ")");
+                }
+                ElSistema.LOGGER.info("[SELFTEST] OK arena: oleada {} con {} monstruos", Arena.wave(), Arena.alive());
+            }
+            case 46 -> {
+                long before = d.coins;
+                Arena.selfTestWin(p);
+                if (Arena.busy() || d.coins <= before) throw new IllegalStateException("la victoria en la arena no dio el premio");
+                ElSistema.LOGGER.info("[SELFTEST] OK arena: victoria (+{} de oro)", d.coins - before);
+                City.goTo(p, d, 14);
+                if (p.distanceToSqr(CityPlaces.LIST[14].x(), CityPlaces.LIST[14].y(), CityPlaces.LIST[14].z()) > 4.0) {
+                    throw new IllegalStateException("no se fue al Parque Central");
+                }
+                ElSistema.LOGGER.info("[SELFTEST] OK viaje dentro de la ciudad: {}", CityPlaces.LIST[14].name());
+                look(p, 0.5, G + 9, 44.5, 0.0F, 26.0F);
+            }
+            case 47 -> look(p, 30.5, G + 8, 99.5, 45.0F, 12.0F);
+            case 48 -> {
+                City.goTo(p, d, 12);
+                look(p, CityBuilder.HOME_X0 + 16.5, G, CityBuilder.HOME_Z0 + 3.5, 60.0F, 15.0F);
+            }
+            case 49 -> {
+                p.getServer().overworld().setDayTime(12600L);
+                look(p, -96.5, G + 64, -104.5, -42.0F, 22.0F);
+            }
+            case 50 -> {
+                p.getServer().overworld().setDayTime(18000L);
+                look(p, 52.5, G + 22, 40.5, 135.0F, 12.0F);
+            }
+            case 51 -> {
+                p.getAbilities().flying = false;
+                p.onUpdateAbilities();
+                p.getServer().overworld().setDayTime(6000L);
+                City.back(p, d);
+                if (City.inCity(p)) throw new IllegalStateException("no se volvió de la ciudad nueva");
+                ElSistema.LOGGER.info("[SELFTEST] OK fin del paseo por la ciudad");
             }
             default -> {
             }

@@ -1,13 +1,18 @@
 """Aspectos (64x64, formato de jugador) de los habitantes de la Ciudad de los Cazadores (1.7.0).
 
 Diseños propios: la recepcionista de la Asociación, el herrero, la alquimista, el mercader de esencias,
-el maestro del gremio y cuatro vecinos. Sólo usa la biblioteca estándar de Python.
+el maestro del gremio y cuatro vecinos; desde la 1.9.0 también la doctora, el cocinero, el guardián de la Estación
+de Puertas, la instructora de la Arena, el dependiente de la Tienda 24 h y ocho vecinos más. Sólo usa la biblioteca
+estándar de Python.
 """
 import os
 import struct
 import zlib
 
-NAMES = ["recepcionista", "herrero", "alquimista", "mercader", "gremio", "cazadora", "estudiante", "oficinista", "vecino"]
+NAMES = ["recepcionista", "herrero", "alquimista", "mercader", "gremio", "cazadora", "estudiante", "oficinista", "vecino",
+         # 1.9.0: la ciudad nueva
+         "doctora", "cocinero", "guardian", "instructora", "dependiente", "novato", "periodista", "abuela", "repartidor",
+         "policia", "musico", "jardinera", "turista"]
 
 
 def noise(x, y, seed=0):
@@ -384,6 +389,45 @@ def hat_fn(S):
                     return (120, 220, 230) if x in (1, 2, 5, 6) else col
                 return mul(col, 0.6)
             return None
+        if kind == "cap":
+            # gorra con visera (la visera es la fila 2 de delante)
+            if f == "top":
+                return col if not (x in (3, 4) and y in (3, 4)) else mul(col, 0.8)
+            if f == "bottom":
+                return None
+            if y < 2:
+                return col if not (f == "front" and y == 1 and x in (3, 4)) else S.get("hat_band", mul(col, 1.3))
+            if y == 2 and f == "front" and 1 <= x <= 6:
+                return mul(col, 0.65)
+            return None
+        if kind == "chef":
+            # gorro de cocinero alto y blanco
+            if f == "top":
+                return mul(col, 0.97 + 0.06 * noise(x, y, 77))
+            if f == "bottom":
+                return None
+            if y < 2:
+                return mul(col, 0.92 + 0.08 * noise(x, y, 78))
+            if y == 2:
+                return S.get("hat_band", (210, 210, 216))
+            return None
+        if kind == "headband":
+            if f in ("top", "bottom"):
+                return None
+            if y == 1:
+                return col if not (f == "back" and x in (3, 4)) else mul(col, 0.8)
+            if f == "back" and y == 2 and x in (3, 4):
+                return col
+            return None
+        if kind == "headphones":
+            if f == "top":
+                return mul(col, 0.4) if x in (3, 4) else None
+            if f in ("right", "left"):
+                if y in (0, 1) and 2 <= x <= 5:
+                    return mul(col, 0.4)
+                if 2 <= y <= 4 and 2 <= x <= 5:
+                    return col if not (y == 3 and x in (3, 4)) else mul(col, 0.7)
+            return None
         return None
 
     return fn
@@ -441,6 +485,54 @@ SKINS = {
     "vecino": dict(skin=(214, 172, 140), hair=(196, 196, 200), style="bald", eyes=(70, 60, 50), mustache=(200, 200, 204),
                    glasses=(120, 100, 60), shirt=(170, 60, 52), torso="check", coat=(200, 176, 132), coat_trim=(150, 126, 90),
                    pants=(100, 78, 58), shoes=(60, 44, 32), sleeve=(200, 176, 132)),
+    # ------------------------------------------------------------------ 1.9.0
+    "doctora": dict(skin=(236, 204, 180), hair=(62, 40, 30), style="bun", eyes=(60, 96, 130), shirt=(150, 202, 228),
+                    torso="plain", buttons=(110, 160, 196), coat=(246, 246, 250), coat_trim=(196, 208, 220), long_coat=True,
+                    badge=(226, 60, 60), pants=(120, 172, 210), shoes=(236, 236, 240), sleeve=(246, 246, 250),
+                    glasses=(60, 70, 90)),
+    "cocinero": dict(skin=(220, 176, 140), hair=(72, 50, 36), style="short", eyes=(60, 44, 32), mustache=(72, 50, 36),
+                     shirt=(248, 248, 250), torso="apron", apron=(44, 44, 52), belt=(44, 44, 52), pants=(70, 70, 78),
+                     pinstripe=True, shoes=(30, 30, 32), sleeve=(248, 248, 250), sleeve_len=7, hat="chef",
+                     hat_color=(250, 250, 252)),
+    "guardian": dict(skin=(150, 106, 80), hair=(22, 18, 18), style="short", eyes=(40, 30, 24), beard=(28, 22, 20),
+                     shirt=(32, 34, 44), torso="strap", strap=(196, 168, 64), coat=(40, 44, 62), coat_trim=(176, 110, 236),
+                     coat_open=False, pauldron=(92, 98, 114), pants=(36, 38, 50), cargo=True, shoes=(24, 22, 26),
+                     sleeve=(40, 44, 62), glove=(30, 30, 36), badge=(186, 124, 255), hat="cap", hat_color=(40, 44, 62),
+                     hat_band=(186, 124, 255)),
+    "instructora": dict(skin=(222, 176, 140), hair=(30, 26, 32), style="bun", eyes=(96, 62, 40), scar=True,
+                        shirt=(214, 58, 48), torso="plain", pants=(40, 40, 48), cargo=True, belt=(30, 30, 34),
+                        buckle=(220, 180, 70), shoes=(236, 236, 236), sleeve_len=0, glove=(46, 46, 52), hat="headband",
+                        hat_color=(246, 246, 246)),
+    "dependiente": dict(skin=(230, 190, 160), hair=(124, 72, 40), style="part", eyes=(60, 50, 40), shirt=(62, 172, 84),
+                        torso="plain", buttons=(240, 240, 240), badge=(250, 250, 250), pants=(52, 58, 78), shoes=(64, 52, 42),
+                        sleeve_len=4, hat="cap", hat_color=(62, 172, 84), hat_band=(250, 250, 250)),
+    "novato": dict(skin=(232, 198, 170), hair=(70, 112, 204), style="short", eyes=(80, 124, 204), shirt=(232, 232, 238),
+                   torso="plain", coat=(58, 68, 92), coat_trim=(210, 210, 220), pants=(70, 72, 82), shoes=(204, 60, 60),
+                   sleeve=(58, 68, 92), glove=(40, 40, 46)),
+    "periodista": dict(skin=(240, 206, 182), hair=(152, 90, 50), style="long", eyes=(70, 112, 70), shirt=(236, 232, 226),
+                       torso="plain", coat=(172, 142, 100), coat_trim=(122, 96, 66), long_coat=True, badge=(240, 220, 80),
+                       pants=(60, 60, 72), skirt=(60, 60, 72), stockings=(52, 46, 46), shoes=(40, 30, 30),
+                       sleeve=(172, 142, 100)),
+    "abuela": dict(skin=(220, 184, 160), hair=(222, 222, 228), style="bun", eyes=(70, 60, 60), glasses=(162, 142, 92),
+                   shirt=(152, 82, 122), torso="plain", buttons=(240, 240, 240), coat=(122, 72, 98), coat_trim=(172, 122, 152),
+                   pants=(82, 62, 72), skirt=(92, 72, 102), stockings=(192, 172, 162), shoes=(62, 42, 42),
+                   sleeve=(122, 72, 98)),
+    "repartidor": dict(skin=(200, 150, 110), hair=(40, 30, 24), style="short", eyes=(50, 40, 30), shirt=(240, 150, 40),
+                       torso="strap", strap=(62, 52, 42), pants=(52, 56, 66), cargo=True, shoes=(40, 40, 46), sleeve_len=5,
+                       hat="cap", hat_color=(240, 150, 40), hat_band=(250, 250, 250)),
+    "policia": dict(skin=(214, 172, 140), hair=(30, 26, 24), style="short", eyes=(50, 40, 30), mustache=(30, 26, 24),
+                    shirt=(62, 92, 152), torso="tie", tie=(20, 24, 40), badge=(232, 202, 82), pants=(30, 36, 62),
+                    belt=(20, 20, 22), buckle=(222, 202, 92), shoes=(20, 20, 24), sleeve_len=6, hat="cap",
+                    hat_color=(30, 40, 82), hat_band=(232, 202, 82)),
+    "musico": dict(skin=(190, 140, 110), hair=(32, 26, 22), style="long", eyes=(50, 40, 30), beard=(32, 26, 22),
+                   shirt=(40, 40, 46), torso="plain", coat=(112, 70, 40), coat_trim=(82, 50, 30), pants=(62, 68, 92),
+                   shoes=(30, 30, 30), sleeve=(112, 70, 40), hat="headphones", hat_color=(232, 60, 92)),
+    "jardinera": dict(skin=(236, 200, 170), hair=(204, 162, 62), style="long", eyes=(70, 122, 60), shirt=(240, 236, 220),
+                      torso="apron", apron=(92, 132, 62), pants=(112, 92, 62), shoes=(82, 62, 42), sleeve_len=6,
+                      glove=(122, 162, 82), hat="headband", hat_color=(222, 192, 112)),
+    "turista": dict(skin=(236, 206, 176), hair=(20, 20, 24), style="part", eyes=(40, 30, 30), glasses=(24, 24, 28),
+                    shirt=(62, 182, 202), torso="strap", strap=(30, 30, 30), pants=(202, 182, 142), shoes=(242, 242, 242),
+                    sleeve_len=4, hat="cap", hat_color=(250, 250, 250), hat_band=(62, 182, 202)),
 }
 
 

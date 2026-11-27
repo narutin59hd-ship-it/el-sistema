@@ -50,7 +50,11 @@ public class ElSistema implements ModInitializer {
             Fx.forget(handler.player.getUUID());
         });
 
+        // 1.9.0: la Ciudad de los Cazadores se construye (o se reconstruye si es de una versión vieja) al arrancar
+        ServerLifecycleEvents.SERVER_STARTED.register(City::onServerStarted);
+
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            City.onServerStopping(server);
             SecretBoss.reset();
             Dungeons.shutdown();
             Shadows.shutdown(server);
@@ -105,12 +109,30 @@ public class ElSistema implements ModInitializer {
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) ->
                 !(player instanceof ServerPlayer sp) || Store.get(sp).inDungeon != 1 && (!City.inCity(sp) || sp.isCreative()));
 
-        // La ciudad no se puede romper ni llenar de bloques (salvo en creativo)
+        // La ciudad no se puede romper ni llenar de bloques (salvo en creativo). Con un bloque en la mano sí se pueden
+        // abrir cofres, puertas, camas y mesas de trabajo (1.9.0): lo que no se puede es ponerlo, ni quemar o cavar.
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             if (player instanceof ServerPlayer sp && City.inCity(sp) && !sp.isCreative()) {
                 net.minecraft.world.item.ItemStack held = sp.getItemInHand(hand);
-                if (held.getItem() instanceof net.minecraft.world.item.BlockItem
-                        || held.getItem() instanceof net.minecraft.world.item.BucketItem) {
+                net.minecraft.world.item.Item it = held.getItem();
+                boolean grief = it instanceof net.minecraft.world.item.BlockItem
+                        || it instanceof net.minecraft.world.item.BucketItem
+                        || it instanceof net.minecraft.world.item.FlintAndSteelItem
+                        || it instanceof net.minecraft.world.item.FireChargeItem
+                        || it instanceof net.minecraft.world.item.HoeItem
+                        || it instanceof net.minecraft.world.item.ShovelItem
+                        || it instanceof net.minecraft.world.item.AxeItem
+                        || it instanceof net.minecraft.world.item.BoneMealItem
+                        || it instanceof net.minecraft.world.item.SpawnEggItem
+                        || it instanceof net.minecraft.world.item.HoneycombItem
+                        || it instanceof net.minecraft.world.item.HangingEntityItem
+                        || it instanceof net.minecraft.world.item.ArmorStandItem
+                        || it instanceof net.minecraft.world.item.EndCrystalItem;
+                if (grief) {
+                    if (!sp.isSecondaryUseActive() && hand == net.minecraft.world.InteractionHand.MAIN_HAND) {
+                        net.minecraft.world.InteractionResult r = world.getBlockState(hit.getBlockPos()).useWithoutItem(world, sp, hit);
+                        if (r.consumesAction()) return r;
+                    }
                     return net.minecraft.world.InteractionResult.FAIL;
                 }
             }
@@ -178,7 +200,18 @@ public class ElSistema implements ModInitializer {
                                     if (City.inCity(sp)) City.back(sp, d);
                                     else City.travel(sp, d);
                                     return 1;
-                                }))
+                                })
+                                .then(Commands.literal("reconstruir")
+                                        .executes(ctx -> {
+                                            net.minecraft.server.level.ServerLevel city = City.level(ctx.getSource().getServer());
+                                            if (city == null || !City.startBuild(city, true)) {
+                                                ctx.getSource().sendFailure(Component.literal("[Sistema] La ciudad ya se está construyendo."));
+                                                return 0;
+                                            }
+                                            ctx.getSource().sendSuccess(() -> Component.literal(
+                                                    "[Sistema] Reconstruyendo la Ciudad de los Cazadores..."), true);
+                                            return 1;
+                                        })))
                         .then(Commands.literal("sombras")
                                 .then(Commands.argument("cantidad", IntegerArgumentType.integer(1, 1000))
                                         .executes(ctx -> {

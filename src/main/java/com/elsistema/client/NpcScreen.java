@@ -23,8 +23,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Ventana de un tendero de la ciudad: la herrería de Bruno (mejoras y habilidades ocultas con esencias),
- * las tiendas de Selene y Ezequiel y los contratos de la Asociación y del gremio (misiones secundarias).
+ * Ventana de un tendero de la ciudad: la herrería de Bruno (mejoras y habilidades ocultas con esencias), las tiendas
+ * (Selene, Ezequiel, Tomás, Irene, Paco), la Estación de Puertas de Hugo, la Arena de Vera y los contratos de la
+ * Asociación y del gremio (misiones secundarias).
  */
 public class NpcScreen extends Screen {
     private static final int ROW = 26;
@@ -72,12 +73,17 @@ public class NpcScreen extends Screen {
 
     private int accent() {
         return switch (role) {
-            case CityNpc.SMITH -> 0xFFFF9A4A;
-            case CityNpc.ALCHEMIST -> 0xFF6BFF9A;
-            case CityNpc.MERCHANT -> Ui.PURPLE;
-            case CityNpc.GUILD -> 0xFFFF6A5A;
+            case CityNpc.SMITH, CityNpc.COOK -> 0xFFFF9A4A;
+            case CityNpc.ALCHEMIST, CityNpc.SHOPKEEPER -> 0xFF6BFF9A;
+            case CityNpc.MERCHANT, CityNpc.GATEKEEPER -> Ui.PURPLE;
+            case CityNpc.GUILD, CityNpc.HEALER -> 0xFFFF6A5A;
+            case CityNpc.TRAINER -> Ui.GOLD;
             default -> Ui.CYAN;
         };
+    }
+
+    private boolean isShop() {
+        return role != CityNpc.SMITH && CityShop.offers(role).length > 0;
     }
 
     @Override
@@ -102,11 +108,9 @@ public class NpcScreen extends Screen {
         String money = "ORO " + CData.coins() + "   ◆ " + CData.essences();
         Ui.text(g, f, money, x2 - 10 - f.width(money), y1 + 7, Hud.ESSENCE, a);
         Ui.divider(g, x1, x2, y1 + 20, a);
-        List<String> tip = switch (role) {
-            case CityNpc.SMITH -> forge(g, f, x1, y1, x2, y2, mx, my, a);
-            case CityNpc.ALCHEMIST, CityNpc.MERCHANT -> shop(g, f, x1, y1, x2, y2, mx, my, a);
-            default -> contracts(g, f, x1, y1, x2, y2, mx, my, a, now);
-        };
+        List<String> tip = role == CityNpc.SMITH ? forge(g, f, x1, y1, x2, y2, mx, my, a)
+                : isShop() ? shop(g, f, x1, y1, x2, y2, mx, my, a)
+                : contracts(g, f, x1, y1, x2, y2, mx, my, a, now);
         if (tip != null && a >= 1F) Ui.tooltip(g, f, tip, mx, my, this.width, this.height);
     }
 
@@ -267,15 +271,61 @@ public class NpcScreen extends Screen {
     // ================================================================ tiendas
 
     private static ItemStack offerIcon(int role, int i) {
-        if (role == CityNpc.ALCHEMIST) {
-            return switch (i) {
-                case 0 -> PotionContents.createItemStack(Items.POTION, Potions.STRONG_HEALING);
-                case 1 -> PotionContents.createItemStack(Items.POTION, Potions.LONG_STRENGTH);
-                case 2 -> PotionContents.createItemStack(Items.POTION, Potions.LONG_SWIFTNESS);
-                case 3 -> PotionContents.createItemStack(Items.POTION, Potions.LONG_FIRE_RESISTANCE);
-                case 4 -> new ItemStack(Items.LAPIS_LAZULI);
-                default -> new ItemStack(Items.GOLDEN_APPLE);
-            };
+        switch (role) {
+            case CityNpc.ALCHEMIST -> {
+                return switch (i) {
+                    case 0 -> PotionContents.createItemStack(Items.POTION, Potions.STRONG_HEALING);
+                    case 1 -> PotionContents.createItemStack(Items.POTION, Potions.LONG_STRENGTH);
+                    case 2 -> PotionContents.createItemStack(Items.POTION, Potions.LONG_SWIFTNESS);
+                    case 3 -> PotionContents.createItemStack(Items.POTION, Potions.LONG_FIRE_RESISTANCE);
+                    case 4 -> new ItemStack(Items.LAPIS_LAZULI);
+                    default -> new ItemStack(Items.GOLDEN_APPLE);
+                };
+            }
+            case CityNpc.COOK -> {
+                return new ItemStack(switch (i) {
+                    case 0 -> Items.COOKED_BEEF;
+                    case 1 -> Items.BREAD;
+                    case 2 -> Items.RABBIT_STEW;
+                    case 3 -> Items.CAKE;
+                    case 4 -> Items.GOLDEN_APPLE;
+                    default -> Items.COOKED_CHICKEN;
+                });
+            }
+            case CityNpc.HEALER -> {
+                return switch (i) {
+                    case 0 -> PotionContents.createItemStack(Items.POTION, Potions.HEALING);
+                    case 1 -> new ItemStack(Items.MILK_BUCKET);
+                    case 2 -> PotionContents.createItemStack(Items.POTION, Potions.REGENERATION);
+                    default -> new ItemStack(Items.TOTEM_OF_UNDYING);
+                };
+            }
+            case CityNpc.SHOPKEEPER -> {
+                return new ItemStack(switch (i) {
+                    case 0 -> Items.TORCH;
+                    case 1 -> Items.ARROW;
+                    case 2 -> Items.ENDER_PEARL;
+                    case 3 -> Items.FIREWORK_ROCKET;
+                    case 4 -> Items.EXPERIENCE_BOTTLE;
+                    default -> Items.FILLED_MAP;
+                });
+            }
+            case CityNpc.GATEKEEPER -> {
+                int r = Math.max(0, Math.min(5, i));
+                return ModItems.KEYS[r] == null ? new ItemStack(Items.ENDER_EYE) : new ItemStack(ModItems.KEYS[r]);
+            }
+            case CityNpc.TRAINER -> {
+                return new ItemStack(switch (i) {
+                    case 0 -> Items.WOODEN_SWORD;
+                    case 1 -> Items.STONE_SWORD;
+                    case 2 -> Items.IRON_SWORD;
+                    case 3 -> Items.GOLDEN_SWORD;
+                    case 4 -> Items.DIAMOND_SWORD;
+                    default -> Items.NETHERITE_SWORD;
+                });
+            }
+            default -> {
+            }
         }
         return switch (i) {
             case 0 -> new ItemStack(Items.EXPERIENCE_BOTTLE);
@@ -303,15 +353,34 @@ public class NpcScreen extends Screen {
             if (a >= 0.99F) g.renderItem(offerIcon(role, i), x1 + 11, ry + 2);
             Ui.text(g, f, o.name(), x1 + 31, ry + 3, Ui.WHITE, a);
             Ui.text(g, f, fit(f, o.desc(), x2 - x1 - 140), x1 + 31, ry + 12, Ui.GRAY, a * 0.9F);
-            boolean ok = o.essences() ? CData.essences() >= o.price() : CData.coins() >= o.price();
+            int need = CityShop.rankNeeded(role, i);
+            boolean rankOk = need < 0 || CData.hunterRank() >= need;
+            boolean ok = (o.essences() ? CData.essences() >= o.price() : CData.coins() >= o.price()) && rankOk;
             String price = o.essences() ? "◆ " + o.price() : o.price() + " oro";
             int[] b = buyButton(i);
             Ui.text(g, f, price, b[0] - 8 - f.width(price), ry + 7, o.essences() ? Hud.ESSENCE : Ui.GOLD, a);
-            boolean hover = Ui.button(g, f, "COMPRAR", b[0], b[1], b[2], b[3], mx, my, ok ? accent() : Ui.RED, true, a);
-            if (hover && !ok) tip = List.of(o.name(), o.essences() ? "Te faltan esencias" : "Te falta oro");
+            String label = switch (role) {
+                case CityNpc.GATEKEEPER -> rankOk ? "ABRIR" : "RANGO " + com.elsistema.Defs.RANK[Math.max(0, need)];
+                case CityNpc.TRAINER -> rankOk ? "LUCHAR" : "RANGO " + com.elsistema.Defs.RANK[Math.max(0, need)];
+                case CityNpc.HEALER -> "PEDIR";
+                default -> "COMPRAR";
+            };
+            boolean hover = Ui.button(g, f, label, b[0], b[1], b[2], b[3], mx, my, ok ? accent() : Ui.RED, true, a);
+            if (hover && !ok) {
+                tip = List.of(o.name(), !rankOk ? "Necesitas ser cazador de rango " + com.elsistema.Defs.RANK[Math.max(0, need)]
+                        : o.essences() ? "Te faltan esencias" : "Te falta oro");
+            }
         }
-        hint(g, f, role == CityNpc.MERCHANT ? "Las esencias son el alma de los monstruos: gánalas cazando"
-                : "Las pociones van a tu inventario; los elixires hacen efecto al momento", x1, x2, y2, a);
+        String h = switch (role) {
+            case CityNpc.MERCHANT -> "Las esencias son el alma de los monstruos: gánalas cazando";
+            case CityNpc.COOK -> "La comida va a tu inventario; el banquete hace efecto al momento";
+            case CityNpc.HEALER -> "Las curas hacen efecto al momento; el tótem va a tu inventario";
+            case CityNpc.SHOPKEEPER -> "Todo va a tu inventario. ¡Vuelve cuando quieras!";
+            case CityNpc.GATEKEEPER -> "La puerta se abre delante del anillo: crúzala para entrar en la mazmorra";
+            case CityNpc.TRAINER -> "Una persona a la vez · la piedra imán del foso te sube si te rindes";
+            default -> "Las pociones van a tu inventario; los elixires hacen efecto al momento";
+        };
+        hint(g, f, h, x1, x2, y2, a);
         return tip;
     }
 
@@ -407,13 +476,15 @@ public class NpcScreen extends Screen {
                 Hud.click();
                 return true;
             }
-        } else if (role == CityNpc.ALCHEMIST || role == CityNpc.MERCHANT) {
+        } else if (isShop()) {
             CityShop.Offer[] offers = CityShop.offers(role);
             for (int i = 0; i < offers.length; i++) {
                 int[] b = buyButton(i);
                 if (Ui.inside(mx, my, b[0], b[1], b[2], b[3])) {
                     send(Net.ACT_CITY_BUY, role, i);
                     Hud.click();
+                    // la puerta y la arena se ven mejor sin la ventana delante
+                    if (role == CityNpc.GATEKEEPER || role == CityNpc.TRAINER) this.onClose();
                     return true;
                 }
             }

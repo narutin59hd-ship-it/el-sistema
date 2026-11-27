@@ -67,7 +67,7 @@ public final class Dungeons {
             "Caverna helada", "Nido de hormigas", "Templo del coloso"};
 
     /** Jefe de cada rango (monstruos propios de las mazmorras). */
-    private static EntityType<? extends Mob> boss(int rank) {
+    static EntityType<? extends Mob> boss(int rank) {
         return switch (rank) {
             case 0 -> ModEntities.GOBLIN;
             case 1 -> ModEntities.LOBO;
@@ -79,7 +79,7 @@ public final class Dungeons {
     }
 
     /** Monstruos de cada rango: solo aparecen dentro de las mazmorras. */
-    private static List<EntityType<? extends Mob>> pool(int rank) {
+    static List<EntityType<? extends Mob>> pool(int rank) {
         return switch (rank) {
             case 0 -> List.<EntityType<? extends Mob>>of(ModEntities.GOBLIN, ModEntities.GOBLIN, ModEntities.LOBO);
             case 1 -> List.<EntityType<? extends Mob>>of(ModEntities.GOBLIN, ModEntities.LOBO, ModEntities.LOBO);
@@ -186,12 +186,26 @@ public final class Dungeons {
     /** Abre una puerta de mazmorra cerca del Jugador. level <= 0 = nivel aleatorio del rango. */
     public static boolean openGate(ServerPlayer p, int rank, int level, boolean ahead) {
         if (rank < 0 || rank > 5) return false;
-        ServerLevel lvl = (ServerLevel) p.level();
         BlockPos pos = findSpot(p, ahead);
         if (pos == null) {
             if (ahead) SystemLogic.notify(p, Net.N_GATE_FAIL, 0, 0);
             return false;
         }
+        return openGateAt(p, pos, rank, level);
+    }
+
+    /** ¿Hay una puerta abierta a menos de r bloques de pos en ese mundo? */
+    public static boolean gateNear(ServerLevel l, BlockPos pos, double r) {
+        for (Gate g : GATES) {
+            if (g.level == l && g.special == 0 && g.pos.distSqr(pos) < r * r) return true;
+        }
+        return false;
+    }
+
+    /** 1.9.0: abre una puerta justo en pos (la Estación de Puertas de la ciudad). */
+    public static boolean openGateAt(ServerPlayer p, BlockPos pos, int rank, int level) {
+        if (rank < 0 || rank > 5) return false;
+        ServerLevel lvl = (ServerLevel) p.level();
         RandomSource r = p.getRandom();
         int min = rank == 0 ? 1 : Defs.RANK_MAX[rank - 1] + 1;
         int max = Defs.RANK_MAX[rank];

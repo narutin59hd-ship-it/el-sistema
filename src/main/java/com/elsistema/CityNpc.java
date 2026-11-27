@@ -25,7 +25,7 @@ import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
-/** Habitantes de la Ciudad de los Cazadores: tenderos (no se mueven) y vecinos que pasean por la plaza. */
+/** Habitantes de la Ciudad de los Cazadores: tenderos (no se mueven de su puesto) y vecinos que pasean por su barrio. */
 public class CityNpc extends PathfinderMob {
     public static final int RECEPTION = 0;
     public static final int SMITH = 1;
@@ -36,14 +36,36 @@ public class CityNpc extends PathfinderMob {
     public static final int STUDENT = 6;
     public static final int CLERK = 7;
     public static final int NEIGHBOR = 8;
-    public static final int ROLES = 9;
+    // 1.9.0: la ciudad nueva (centro médico, comedor, estación de puertas, arena, tienda 24 h y más vecinos)
+    public static final int HEALER = 9;
+    public static final int COOK = 10;
+    public static final int GATEKEEPER = 11;
+    public static final int TRAINER = 12;
+    public static final int SHOPKEEPER = 13;
+    public static final int NOVICE = 14;
+    public static final int REPORTER = 15;
+    public static final int GRANDMA = 16;
+    public static final int COURIER = 17;
+    public static final int POLICE = 18;
+    public static final int MUSICIAN = 19;
+    public static final int GARDENER = 20;
+    public static final int TOURIST = 21;
+    public static final int ROLES = 22;
 
-    public static final String[] NAME = {"Lucía", "Bruno", "Selene", "Ezequiel", "Darío", "Noa", "Iván", "Marta", "Ramón"};
+    public static final String[] NAME = {"Lucía", "Bruno", "Selene", "Ezequiel", "Darío", "Noa", "Iván", "Marta", "Ramón",
+            "Irene", "Tomás", "Hugo", "Vera", "Paco", "Sora", "Elena", "Carmen", "Leo", "Agente Ruiz", "Mateo", "Inés", "Kenji"};
     public static final String[] TITLE = {"Recepcionista de la Asociación", "Herrero", "Alquimista", "Mercader de esencias",
-            "Maestro del gremio", "Cazadora de rango C", "Estudiante", "Oficinista", "Vecino"};
+            "Maestro del gremio", "Cazadora de rango C", "Estudiante", "Oficinista", "Vecino",
+            "Doctora del Centro Médico", "Cocinero del Comedor", "Guardián de la Estación de Puertas", "Instructora de la Arena",
+            "Dependiente de la Tienda 24 h", "Cazador novato", "Periodista", "Vecina", "Repartidor", "Policía", "Músico callejero",
+            "Jardinera", "Turista"};
     /** Nombre de la textura (textures/entity/ciudadano/...). */
     public static final String[] SKIN = {"recepcionista", "herrero", "alquimista", "mercader", "gremio", "cazadora",
-            "estudiante", "oficinista", "vecino"};
+            "estudiante", "oficinista", "vecino", "doctora", "cocinero", "guardian", "instructora", "dependiente", "novato",
+            "periodista", "abuela", "repartidor", "policia", "musico", "jardinera", "turista"};
+    /** Los que atienden un puesto (no se mueven de él); los demás pasean por su barrio. */
+    private static final boolean[] KEEPER = {true, true, true, true, true, false, false, false, false,
+            true, true, true, true, true, false, false, false, false, false, false, false, false};
     /** Lo que dicen los vecinos al hablar con ellos. */
     public static final String[][] LINES = {
             {"Bienvenido a la Asociación de Cazadores.", "En el tablón tengo contratos para ti."},
@@ -53,16 +75,59 @@ public class CityNpc extends PathfinderMob {
             {"El gremio siempre busca cazadores de verdad.", "Tengo contratos para los valientes."},
             {"Dicen que en las puertas de rango S hay jefes que nadie ha visto.",
                     "Si fallas un ¡Levántate!, prueba otra vez: tienes tres intentos.",
-                    "Por la noche las runas de los colosos brillan. Es precioso... y aterrador."},
+                    "Por la noche las runas de los colosos brillan. Es precioso... y aterrador.",
+                    "Hugo, el de la Estación de Puertas, te abre una puerta de tu rango cuando quieras."},
             {"Este año me presento al examen de rango E. ¡Deséame suerte!",
-                    "¿Has visto el cristal de la plaza? Dicen que lo puso el Sistema.",
-                    "Mi hermano dice que las sombras suben de nivel contigo."},
+                    "¿Has visto el haz de luz del Cristal? Dicen que lo puso el Sistema.",
+                    "Mi hermano dice que las sombras suben de nivel contigo.",
+                    "Desde el mirador de la Asociación se ve toda la ciudad. ¡Sube en el ascensor!"},
             {"Ocho horas rellenando informes de puertas... qué día.",
                     "La herrería de Bruno cobra en esencias. Ni oro ni nada.",
-                    "Si te cansas de tantas partículas, mira los ajustes del Sistema."},
+                    "Si te cansas de tantas partículas, mira los ajustes del Sistema.",
+                    "En el Centro Comercial Nexo hay de todo. Bueno, casi."},
             {"Esta ciudad era tranquila antes de las puertas.",
                     "Un consejo: en el gremio pagan bien por los jefes.",
-                    "He oído que hay armaduras que te salvan de la muerte."}};
+                    "He oído que hay armaduras que te salvan de la muerte.",
+                    "¿Ya tienes tu apartamento? Está al sur de la plaza, junto al paseo."},
+            {"Te curo las heridas y te quito los venenos. Para eso estoy.",
+                    "Una revisión completa te deja como nuevo, maná incluido.",
+                    "No vuelvas de una puerta de rango S hecho un colador, ¿eh?"},
+            {"¡Bienvenido al Comedor del Cazador! Hoy el estofado está de muerte.",
+                    "Un cazador con hambre es un cazador muerto.",
+                    "El banquete te deja fuerte para toda una mazmorra."},
+            {"Por esa puerta sólo pasan cazadores registrados.",
+                    "Te abro una puerta de tu rango cuando quieras. La tarifa la pone la Asociación.",
+                    "Las de rango S... mejor que no te lo cuente."},
+            {"En la arena no hay botín, pero sí gloria. Y esencias.",
+                    "Tres oleadas. Si caes, a la próxima lo haces mejor.",
+                    "La piedra imán del foso te sube si quieres rendirte."},
+            {"Abierto las 24 horas, los 365 días. Hasta con puertas abiertas.",
+                    "Antorchas, flechas, perlas... Lo básico para cazar.",
+                    "¿Bolsa? Son dos de oro. Es broma."},
+            {"¡Acabo de despertar! Rango E, pero algún día seré de rango S.",
+                    "El examen de ascenso se hace en la Asociación. Da miedo.",
+                    "¿Tú también empezaste matando goblins?"},
+            {"Elena, del Diario de los Cazadores. ¿Una declaración?",
+                    "Dicen que hay un cazador que levanta a los muertos. ¿Le conoces?",
+                    "La arena llena las portadas cada semana."},
+            {"Ay, hijo, ten cuidado en esas puertas.",
+                    "En mis tiempos no había monstruos, había palomas.",
+                    "Los cerezos del parque están preciosos esta época."},
+            {"¡Paso, paso! Llevo pociones para el Centro Médico.",
+                    "Esta ciudad es enorme. Menos mal que tengo buenas piernas.",
+                    "Si te pierdes, usa el Sistema: Misiones > Ciudad te lleva a cada sitio."},
+            {"Todo tranquilo en la Ciudad de los Cazadores.",
+                    "Romper la ciudad está prohibido. Ni lo intentes.",
+                    "Si ves una puerta abierta en la calle, avisa a la Asociación."},
+            {"♪ Esta canción va por los cazadores que no volvieron ♪",
+                    "La acústica del paseo es la mejor de la ciudad.",
+                    "Una moneda para el músico, ¿cazador?"},
+            {"Riego los cerezos cada mañana. Por eso están tan bonitos.",
+                    "El jardín de la Asociación es mi favorito: tiene estanque.",
+                    "Las flores de la orilla del río las planté yo."},
+            {"¡Qué ciudad! Torres, puentes, un haz de luz...",
+                    "Vine a ver a los cazadores famosos. ¿Eres uno?",
+                    "¿Me haces una foto con el Cristal del Sistema de fondo?"}};
 
     private static final EntityDataAccessor<Integer> ROLE = SynchedEntityData.defineId(CityNpc.class, EntityDataSerializers.INT);
     private BlockPos home = BlockPos.ZERO;
@@ -97,7 +162,12 @@ public class CityNpc extends PathfinderMob {
 
     /** Los vecinos pasean; los tenderos y las recepcionistas se quedan en su puesto. */
     public boolean wanders() {
-        return role() >= HUNTER;
+        return !KEEPER[role()];
+    }
+
+    /** ¿Este oficio atiende un puesto (tienda, mostrador o ventanilla)? */
+    public static boolean keeper(int role) {
+        return role >= 0 && role < ROLES && KEEPER[role];
     }
 
     public void setHome(BlockPos pos) {

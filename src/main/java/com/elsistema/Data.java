@@ -85,6 +85,9 @@ public class Data {
     public transient int bossTimer = 0;
     /** Ticks para comprobar que están todos los vecinos de la ciudad. */
     public transient int cityCheck = 0;
+    /** 1.9.0: ticks dentro de la cabina del ascensor y bloqueo hasta que salgas de ella (al llegar). */
+    public transient int liftTicks = 0;
+    public transient int liftLock = 0;
     /** Enfriamiento de «Último aliento» (armadura de la herrería). */
     public transient int lastBreath = 0;
     /** Maná máximo extra de la armadura (Pozo de maná). */

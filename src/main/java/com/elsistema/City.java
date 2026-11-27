@@ -1,7 +1,6 @@
 package com.elsistema;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -9,31 +8,28 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LeavesBlock;
-import net.minecraft.world.level.block.StairBlock;
-import net.minecraft.world.level.block.WallSignBlock;
-import net.minecraft.world.level.block.entity.SignBlockEntity;
-import net.minecraft.world.level.block.entity.SignText;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
- * La Ciudad de los Cazadores: una dimensión propia (data/elsistema/dimension/ciudad.json) con una ciudad que se
- * construye la primera vez que alguien viaja a ella. En la plaza está el Cristal del Sistema; al norte la Asociación
- * de Cazadores; por la avenida del este la herrería, la alquimia, el mercader de esencias y el gremio. Las tiendas
- * sólo se pueden usar en persona (hablando con su tendero).
+ * La Ciudad de los Cazadores: una dimensión propia (data/elsistema/dimension/ciudad.json). Desde la 1.9.0 es una
+ * ciudad entera de 7x7 manzanas (ver CityBuilder) que se construye poco a poco (sin congelar el servidor) la primera
+ * vez que arranca el mundo: plaza con el Cristal del Sistema y su haz de luz, Torre de la Asociación con ascensor al
+ * mirador, Arena, Estación de Puertas, tiendas, Centro Médico, Comedor, Gremio, parques, río con puentes y tu
+ * apartamento. Las tiendas sólo se usan en persona (hablando con su tendero).
  */
 public final class City {
     private City() {}
@@ -43,12 +39,31 @@ public final class City {
     /** Altura del suelo (donde se pisa). */
     public static final int G = 64;
     /** Versión de la ciudad: si cambia, se vuelve a construir. */
-    private static final int VERSION = 1;
-    private static final int HALF = 62;
-    /** Lotes de 20x20 separados por calles de 6: lote k va de k*26-10 a k*26+9. */
-    private static final int CELL = 26;
-    private static final double SPAWN_X = 0.0;
-    private static final double SPAWN_Z = 6.5;
+    private static final int VERSION = 2;
+    private static final BlockPos MARKER = new BlockPos(VERSION, 1, 0);
+    private static final double SPAWN_X = 0.5;
+    private static final double SPAWN_Z = 8.5;
+    /** Toda la ciudad (para buscar a sus habitantes). */
+    private static final AABB AREA = new AABB(-CityBuilder.OUT - 4, G - 10, -CityBuilder.OUT - 4,
+            CityBuilder.OUT + 4, G + 110, CityBuilder.SOUTH + 4);
+
+    private static final TicketType<ChunkPos> TICKET = TicketType.create("elsistema_ciudad", Comparator.comparingLong(ChunkPos::toLong));
+
+    /** La obra en curso (null si no se está construyendo). */
+    private static CityBuilder job;
+    private static long jobStart;
+    private static int jobTicks;
+    /** ¿Está la ciudad de esta versión? (se mira una vez y se recuerda) */
+    private static volatile boolean ready = false;
+    /** Para la prueba automática: la ciudad construida (la mira el cliente de prueba desde su hilo). */
+    public static volatile boolean builtFlag = false;
+    /** Milisegundos de obra por tick (la prueba del servidor usa más para acabar antes). */
+    public static long budgetMs = 25;
+    /** Para la prueba automática: oficios distintos en la ciudad al acabar la obra y bloques que no existían. */
+    public static int lastRoles = 0;
+    public static List<String> missingBlocks = List.of();
+    /** Quien quiso ir a la ciudad mientras se construía: va en cuanto esté. */
+    private static final Set<UUID> WAITING = new LinkedHashSet<>();
 
     public static boolean inCity(Player p) {
         return p.level().dimension() == CITY;
@@ -58,16 +73,149 @@ public final class City {
         return server.getLevel(CITY);
     }
 
+    // ================================================================ la obra
+
+    /** ¿Está construida la ciudad de esta versión? */
+    public static boolean isReady(ServerLevel city) {
+        if (ready) return true;
+        if (job != null) return false;
+        if (city.getBlockState(MARKER).is(Blocks.LODESTONE)) {
+            ready = true;
+            builtFlag = true;
+        }
+        return ready;
+    }
+
+    public static boolean building() {
+        return job != null;
+    }
+
+    public static int buildPercent() {
+        return job == null ? 100 : job.percent();
+    }
+
+    /** Al arrancar el servidor: si falta la ciudad (o es de una versión vieja) se empieza a construir. */
+    public static void onServerStarted(MinecraftServer server) {
+        ready = false;
+        builtFlag = false;
+        job = null;
+        WAITING.clear();
+        ServerLevel city = level(server);
+        if (city != null && !isReady(city)) startBuild(city, false);
+    }
+
+    public static void onServerStopping(MinecraftServer server) {
+        if (job != null) {
+            ElSistema.LOGGER.warn("[ciudad] se cierra el servidor con la obra a medias ({} %): se terminará la próxima vez", job.percent());
+            releaseTickets(job.l);
+        }
+        job = null;
+        ready = false;
+        WAITING.clear();
+        Arena.reset();
+    }
+
+    /** Empieza la obra (force: aunque ya esté construida, para /sistema ciudad reconstruir). */
+    public static boolean startBuild(ServerLevel city, boolean force) {
+        if (job != null) return false;
+        if (!force && isReady(city)) return false;
+        ready = false;
+        builtFlag = false;
+        if (force) city.setBlock(MARKER, Blocks.STONE.defaultBlockState(), 2);
+        job = new CityBuilder(city);
+        job.plan();
+        jobStart = System.currentTimeMillis();
+        jobTicks = 0;
+        addTickets(city);
+        ElSistema.LOGGER.info("[ciudad] empieza la obra de la Ciudad de los Cazadores v{} ({} pasos)", VERSION, job.steps.size());
+        return true;
+    }
+
+    private static void addTickets(ServerLevel city) {
+        for (int cx = (-CityBuilder.OUT) >> 4; cx <= CityBuilder.OUT >> 4; cx++) {
+            for (int cz = (-CityBuilder.OUT) >> 4; cz <= CityBuilder.SOUTH >> 4; cz++) {
+                ChunkPos cp = new ChunkPos(cx, cz);
+                city.getChunkSource().addRegionTicket(TICKET, cp, 0, cp);
+            }
+        }
+    }
+
+    private static void releaseTickets(ServerLevel city) {
+        for (int cx = (-CityBuilder.OUT) >> 4; cx <= CityBuilder.OUT >> 4; cx++) {
+            for (int cz = (-CityBuilder.OUT) >> 4; cz <= CityBuilder.SOUTH >> 4; cz++) {
+                ChunkPos cp = new ChunkPos(cx, cz);
+                city.getChunkSource().removeRegionTicket(TICKET, cp, 0, cp);
+            }
+        }
+    }
+
+    private static void tickJob(MinecraftServer server) {
+        if (job == null) return;
+        ServerLevel city = job.l;
+        jobTicks++;
+        // Nadie puede estar en la ciudad mientras se construye: vuelven a casa y regresan al acabar
+        if (jobTicks % 10 == 1) {
+            for (ServerPlayer p : List.copyOf(city.players())) {
+                if (p.getY() > G + 150) continue; // dentro de una mazmorra (en el cielo de la ciudad)
+                Data d = Store.get(p);
+                back(p, d);
+                WAITING.add(p.getUUID());
+                SystemLogic.notify(p, Net.N_CITY, 10, job.percent());
+            }
+        }
+        boolean done = job.run(budgetMs * 1_000_000L);
+        if (jobTicks % 200 == 0) {
+            for (UUID id : WAITING) {
+                ServerPlayer p = server.getPlayerList().getPlayer(id);
+                if (p != null) SystemLogic.notify(p, Net.N_CITY, 6, job.percent());
+            }
+            ElSistema.LOGGER.info("[ciudad] obra al {} % ({} bloques)", job.percent(), job.count);
+        }
+        if (done) finishBuild(server, city);
+    }
+
+    private static void finishBuild(MinecraftServer server, ServerLevel city) {
+        CityBuilder b = job;
+        // Fuera los vecinos de la ciudad vieja: cada uno vuelve a aparecer en su sitio nuevo
+        int gone = 0;
+        for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, AREA, n -> true)) {
+            n.discard();
+            gone++;
+        }
+        city.setBlock(MARKER, Blocks.LODESTONE.defaultBlockState(), 2);
+        job = null;
+        ready = true;
+        builtFlag = true;
+        int made = checkNpcs(city);
+        Set<Integer> roles = new HashSet<>();
+        for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, AREA, n -> n.isAlive())) roles.add(n.role());
+        lastRoles = roles.size();
+        missingBlocks = List.copyOf(b.missing);
+        releaseTickets(city);
+        long ms = System.currentTimeMillis() - jobStart;
+        ElSistema.LOGGER.info("Ciudad de los Cazadores v{} construida: {} bloques en {} s ({} ticks); {} vecinos nuevos ({} viejos fuera){}",
+                VERSION, b.count, ms / 1000, jobTicks, made, gone, b.missing.isEmpty() ? "" : "; faltan bloques: " + b.missing);
+        for (UUID id : List.copyOf(WAITING)) {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p == null || !p.isAlive()) continue;
+            Data d = Store.get(p);
+            if (d.inDungeon == 1 || Dungeons.inDungeon(p)) continue;
+            travel(p, d);
+        }
+        WAITING.clear();
+    }
+
     // ================================================================ viajar
 
-    /** ACT_CITY: a = 0 ir a la ciudad, 1 volver al sitio de donde viniste. */
+    /** ACT_CITY: a = 0 ir a la ciudad, 1 volver al sitio de donde viniste, 10 + i ir al sitio i de la ciudad. */
     public static void action(ServerPlayer p, int op) {
         Data d = Store.get(p);
         if (d.awakened != 1) {
             SystemLogic.notify(p, Net.N_NOT_AWAKENED, 0, 0);
             return;
         }
-        if (op == 0) travel(p, d);
+        if (op >= 10) goTo(p, d, op - 10);
+        else if (op == 0) travel(p, d);
         else back(p, d);
     }
 
@@ -85,7 +233,12 @@ public final class City {
             SystemLogic.notify(p, Net.N_CITY, 4, 0);
             return;
         }
-        ensureBuilt(city);
+        if (!isReady(city)) {
+            if (job == null) startBuild(city, false);
+            WAITING.add(p.getUUID());
+            SystemLogic.notify(p, Net.N_CITY, 6, buildPercent());
+            return;
+        }
         d.cityDim = p.level().dimension().location().toString();
         d.cityX = p.getX();
         d.cityY = p.getY();
@@ -98,6 +251,7 @@ public final class City {
         Fx.send(city, net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL, SPAWN_X, G + 1.0, SPAWN_Z, 40, 0.4, 0.9, 0.4, 0.05);
         SystemLogic.notify(p, Net.N_CITY, 0, 0);
         d.cityCheck = 100;
+        d.liftLock = 0;
         SystemLogic.sync(p, d);
     }
 
@@ -107,10 +261,37 @@ public final class City {
             travel(p, d);
             return;
         }
+        if (p.getY() > G + 150) {
+            SystemLogic.notify(p, Net.N_CITY, 2, 0);
+            return;
+        }
+        Arena.leave(p);
         ServerLevel city = (ServerLevel) p.level();
         p.teleportTo(city, SPAWN_X, G, SPAWN_Z, 180.0F, 0.0F);
         p.resetFallDistance();
         city.playSound((Player) null, SPAWN_X, G, SPAWN_Z, SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.0F, 0.8F);
+    }
+
+    /** Ir al momento a un sitio de la ciudad (sólo estando en ella). */
+    public static void goTo(ServerPlayer p, Data d, int i) {
+        if (i < 0 || i >= CityPlaces.count()) return;
+        if (!inCity(p) || p.getY() > G + 150 || d.inDungeon == 1) {
+            SystemLogic.notify(p, Net.N_CITY, 5, 0);
+            return;
+        }
+        if (Arena.fighting(p)) {
+            SystemLogic.notify(p, Net.N_CITY, 9, 0);
+            return;
+        }
+        CityPlaces.Place pl = CityPlaces.LIST[i];
+        ServerLevel city = (ServerLevel) p.level();
+        Fx.send(city, net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL, p.getX(), p.getY() + 1.0, p.getZ(), 30, 0.3, 0.8, 0.3, 0.05);
+        p.teleportTo(city, pl.x(), pl.y(), pl.z(), pl.yaw(), 0.0F);
+        p.resetFallDistance();
+        d.liftLock = 1;
+        city.playSound((Player) null, pl.x(), pl.y(), pl.z(), SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.8F, 1.3F);
+        Fx.send(city, net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL, pl.x(), pl.y() + 1.0, pl.z(), 30, 0.3, 0.8, 0.3, 0.05);
+        SystemLogic.notify(p, Net.N_CITY, 8, i);
     }
 
     public static void back(ServerPlayer p, Data d) {
@@ -118,6 +299,7 @@ public final class City {
             SystemLogic.notify(p, Net.N_CITY, 5, 0);
             return;
         }
+        Arena.leave(p);
         ServerLevel to = null;
         if (d.cityRet == 1 && d.cityDim != null && !d.cityDim.isEmpty()) {
             ResourceLocation id = ResourceLocation.tryParse(d.cityDim);
@@ -142,24 +324,88 @@ public final class City {
         SystemLogic.sync(p, d);
     }
 
-    /** Cada tick: el Portal de regreso de la plaza y comprobar que están todos los vecinos. */
+    // ================================================================ cada tick
+
+    /** Cada tick: la obra, la arena, el Portal de regreso, el ascensor de la Asociación y los vecinos. */
     public static void tick(MinecraftServer server) {
+        tickJob(server);
+        Arena.tick(server);
         ServerLevel city = level(server);
-        if (city == null || city.players().isEmpty()) return;
+        if (city == null || city.players().isEmpty() || job != null) return;
         boolean check = server.getTickCount() % 10 == 0;
         for (ServerPlayer p : List.copyOf(city.players())) {
             Data d = Store.get(p);
             if (d.cityCheck > 0 && --d.cityCheck == 0) checkNpcs(city);
-            if (!check || !p.isAlive() || p.isSpectator()) continue;
-            // El portal de regreso: el hueco del arco de la esquina suroeste de la plaza
-            if (p.getX() > -7.9 && p.getX() < -5.1 && p.getZ() > 7.8 && p.getZ() < 9.2 && p.getY() >= G - 0.5 && p.getY() < G + 3) {
+            if (!p.isAlive() || p.isSpectator()) continue;
+            int bx = p.getBlockX();
+            int by = p.getBlockY();
+            int bz = p.getBlockZ();
+            lift(p, d, city, bx, by, bz);
+            if (!check) continue;
+            // El portal de regreso: el hueco del arco del lado oeste de la plaza
+            if (p.getX() >= -10.0 && p.getX() < -8.0 && p.getZ() >= -2.0 && p.getZ() < 3.0 && p.getY() >= G - 0.5 && p.getY() < G + 3) {
                 back(p, d);
+                continue;
+            }
+            // La piedra imán del foso de la arena te sube
+            if (bx == CityBuilder.ARENA_PAD_X && bz == CityBuilder.ARENA_PAD_Z && by == CityBuilder.ARENA_FLOOR) {
+                Arena.leave(p);
+                p.teleportTo(city, CityBuilder.ARENA_CX + 0.5, G, CityBuilder.ARENA_CZ + 12.5, 0.0F, 0.0F);
+                p.resetFallDistance();
+                city.playSound((Player) null, p.getX(), p.getY(), p.getZ(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.6F, 1.4F);
             }
         }
-        if (server.getTickCount() % 40 == 0) {
-            Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL, -7.0, G + 1.4, 8.0, 6, 0.7, 0.9, 0.1, 0.02);
-            Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.END_ROD, 0.0, G + 13.0, 0.0, 3, 0.4, 0.6, 0.4, 0.01);
+        long t = server.getTickCount();
+        if (t % 40 == 0) {
+            Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL, -9.0, G + 1.5, 0.5, 10, 0.4, 1.0, 1.6, 0.02);
+            Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.END_ROD, 0.5, G + 16.0, 0.5, 3, 0.4, 0.6, 0.4, 0.01);
+            Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.END_ROD, CityBuilder.GATE_X + 0.5, G + 6.0, CityBuilder.GATE_Z - 0.5,
+                    4, 2.0, 2.0, 0.2, 0.01);
         }
+        if (t % 20 == 0) {
+            // la fuente de la plaza
+            for (int k = 0; k < 4; k++) {
+                double a = (t / 20 + k) * Math.PI / 2.0;
+                Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.SPLASH, 0.5 + Math.cos(a) * 4.0, G - 0.1, 0.5 + Math.sin(a) * 4.0,
+                        6, 0.4, 0.1, 0.4, 0.1);
+            }
+        }
+    }
+
+    /** El ascensor de la Torre de la Asociación: quédate un momento en la cabina y sube (o baja). */
+    private static void lift(ServerPlayer p, Data d, ServerLevel city, int bx, int by, int bz) {
+        int cab = -1;
+        if (by == G && bz >= CityBuilder.LIFT_LOBBY_Z && bz <= CityBuilder.LIFT_LOBBY_Z + 1) {
+            if (bx >= CityBuilder.LIFT_LOBBY_X1 && bx <= CityBuilder.LIFT_LOBBY_X1 + 1) cab = 0;
+            else if (bx >= CityBuilder.LIFT_LOBBY_X2 && bx <= CityBuilder.LIFT_LOBBY_X2 + 1) cab = 1;
+        } else if (by == CityBuilder.DECK_Y && bz >= CityBuilder.LIFT_DECK_Z && bz <= CityBuilder.LIFT_DECK_Z + 1
+                && bx >= CityBuilder.LIFT_DECK_X && bx <= CityBuilder.LIFT_DECK_X + 1) {
+            cab = 2;
+        }
+        if (cab < 0) {
+            d.liftTicks = 0;
+            d.liftLock = 0;
+            return;
+        }
+        if (d.liftLock != 0) return;
+        d.liftTicks++;
+        if (d.liftTicks == 1) {
+            p.displayClientMessage(Component.literal(cab == 2 ? "▼ Ascensor: bajando al vestíbulo..." : "▲ Ascensor: subiendo al mirador...")
+                    .withStyle(net.minecraft.ChatFormatting.AQUA), true);
+            city.playSound((Player) null, p.getX(), p.getY(), p.getZ(), SoundEvents.NOTE_BLOCK_CHIME.value(), SoundSource.PLAYERS, 0.8F, 1.6F);
+        }
+        if (d.liftTicks < 30) return;
+        d.liftTicks = 0;
+        d.liftLock = 1;
+        if (cab == 2) {
+            p.teleportTo(city, CityBuilder.LIFT_LOBBY_X1 + 1.0, G, CityBuilder.LIFT_LOBBY_Z + 1.0, 0.0F, 0.0F);
+        } else {
+            p.teleportTo(city, CityBuilder.LIFT_DECK_X + 1.0, CityBuilder.DECK_Y, CityBuilder.LIFT_DECK_Z + 1.0, 0.0F, 0.0F);
+        }
+        p.resetFallDistance();
+        city.playSound((Player) null, p.getX(), p.getY(), p.getZ(), SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.PLAYERS, 0.8F, 1.2F);
+        p.displayClientMessage(Component.literal(cab == 2 ? "Vestíbulo de la Asociación" : "Mirador de la Asociación · 150 m")
+                .withStyle(net.minecraft.ChatFormatting.AQUA), true);
     }
 
     // ================================================================ tenderos
@@ -176,7 +422,8 @@ public final class City {
         Data d = Store.get(p);
         int role = npc.role();
         SideQuests.onTalk(p, d, role);
-        if (role >= CityNpc.HUNTER) {
+        boolean menu = role <= CityNpc.GUILD || CityShop.offers(role).length > 0;
+        if (!menu) {
             String[] lines = CityNpc.LINES[role];
             int i = p.getRandom().nextInt(lines.length);
             SystemLogic.notify(p, Net.N_NPC_TALK, role, i);
@@ -194,15 +441,14 @@ public final class City {
     /** Pone en su sitio a los vecinos que falten (sólo si su zona está cargada). */
     public static int checkNpcs(ServerLevel city) {
         Set<Integer> present = new HashSet<>();
-        AABB all = new AABB(-HALF - 4, G - 8, -HALF - 4, HALF + 4, G + 40, HALF + 4);
-        for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, all, n -> n.isAlive())) {
+        for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, AREA, n -> n.isAlive())) {
             present.add(n.role());
         }
         int made = 0;
         for (int r = 0; r < CityNpc.ROLES; r++) {
             if (present.contains(r)) continue;
             BlockPos at = npcHome(r);
-            if (!city.isLoaded(at) || !city.areEntitiesLoaded(net.minecraft.world.level.ChunkPos.asLong(at))) continue;
+            if (!city.isLoaded(at) || !city.areEntitiesLoaded(ChunkPos.asLong(at))) continue;
             if (spawnNpc(city, r) != null) made++;
         }
         return made;
@@ -211,7 +457,7 @@ public final class City {
     private static CityNpc spawnNpc(ServerLevel city, int role) {
         CityNpc n = ModEntities.CIUDADANO.create(city);
         if (n == null) return null;
-        BlockPos h = npcHome(role);
+        BlockPos h = CityNpc.keeper(role) ? npcHome(role) : freeSpot(city, npcHome(role));
         n.moveTo(h.getX() + 0.5, h.getY(), h.getZ() + 0.5, npcYaw(role), 0.0F);
         n.setYHeadRot(npcYaw(role));
         n.setYBodyRot(npcYaw(role));
@@ -221,506 +467,59 @@ public final class City {
         return n;
     }
 
-    /** Dónde vive cada habitante. */
+    /** Un sitio libre (dos de aire encima de suelo firme) cerca del que se pide. */
+    private static BlockPos freeSpot(ServerLevel city, BlockPos want) {
+        for (int r = 0; r <= 4; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
+                    BlockPos p = want.offset(dx, 0, dz);
+                    if (city.getBlockState(p).getCollisionShape(city, p).isEmpty()
+                            && city.getBlockState(p.above()).getCollisionShape(city, p.above()).isEmpty()
+                            && !city.getBlockState(p.below()).getCollisionShape(city, p.below()).isEmpty()
+                            && city.getFluidState(p).isEmpty()) {
+                        return p;
+                    }
+                }
+            }
+        }
+        return want;
+    }
+
+    /** Dónde vive cada habitante (los tenderos, justo detrás de su mostrador). */
     public static BlockPos npcHome(int role) {
         return switch (role) {
-            case CityNpc.RECEPTION -> new BlockPos(-1, G, -31);
-            case CityNpc.SMITH -> new BlockPos(25, G, -28);
-            case CityNpc.ALCHEMIST -> new BlockPos(51, G, -28);
-            case CityNpc.MERCHANT -> new BlockPos(25, G, 27);
-            case CityNpc.GUILD -> new BlockPos(51, G, 29);
-            case CityNpc.HUNTER -> new BlockPos(5, G, 4);
-            case CityNpc.STUDENT -> new BlockPos(-6, G, -4);
-            case CityNpc.CLERK -> new BlockPos(-26, G, -26);
-            default -> new BlockPos(-52, G, -24);
+            case CityNpc.RECEPTION -> new BlockPos(0, G, -31);
+            case CityNpc.SMITH -> new BlockPos(28, G, -27);
+            case CityNpc.ALCHEMIST -> new BlockPos(56, G, -27);
+            case CityNpc.MERCHANT -> new BlockPos(28, G, 27);
+            case CityNpc.GUILD -> new BlockPos(-56, G, -62);
+            case CityNpc.HUNTER -> new BlockPos(6, G, -6);
+            case CityNpc.STUDENT -> new BlockPos(4, G, 32);
+            case CityNpc.CLERK -> new BlockPos(28, G, 4);
+            case CityNpc.NEIGHBOR -> new BlockPos(-24, G, 4);
+            case CityNpc.HEALER -> new BlockPos(-56, G, -28);
+            case CityNpc.COOK -> new BlockPos(84, G, -31);
+            case CityNpc.GATEKEEPER -> new BlockPos(4, G, -82);
+            case CityNpc.TRAINER -> new BlockPos(-3, G, -47);
+            case CityNpc.SHOPKEEPER -> new BlockPos(60, G, 27);
+            case CityNpc.NOVICE -> new BlockPos(-6, G, -15);
+            case CityNpc.REPORTER -> new BlockPos(8, G, -42);
+            case CityNpc.GRANDMA -> new BlockPos(-4, G, 58);
+            case CityNpc.COURIER -> new BlockPos(64, G, -14);
+            case CityNpc.POLICE -> new BlockPos(-14, G, 6);
+            case CityNpc.MUSICIAN -> new BlockPos(-4, G, 24);
+            case CityNpc.GARDENER -> new BlockPos(-24, G, -26);
+            default -> new BlockPos(12, G, 104);
         };
+    }
+
+    /** ¿Mira este tendero al sur (y se le habla desde el sur)? Los de la acera sur de la avenida miran al norte. */
+    public static boolean facesSouth(int role) {
+        return role != CityNpc.MERCHANT && role != CityNpc.SHOPKEEPER;
     }
 
     private static float npcYaw(int role) {
-        // Los tenderos miran a su puerta (al sur los del norte de la avenida y al norte los del sur)
-        return switch (role) {
-            case CityNpc.RECEPTION, CityNpc.SMITH, CityNpc.ALCHEMIST -> 0.0F;
-            case CityNpc.MERCHANT, CityNpc.GUILD -> 180.0F;
-            default -> 0.0F;
-        };
-    }
-
-    // ================================================================ construir la ciudad
-
-    /** Construye la ciudad si todavía no existe (o si es de una versión anterior). Devuelve true si la ha construido. */
-    public static boolean ensureBuilt(ServerLevel city) {
-        BlockPos marker = new BlockPos(VERSION, 1, 0);
-        if (city.getBlockState(marker).is(Blocks.LODESTONE)) return false;
-        long t0 = System.currentTimeMillis();
-        for (int cx = -5; cx <= 4; cx++) {
-            for (int cz = -5; cz <= 4; cz++) {
-                city.getChunk(cx, cz);
-            }
-        }
-        Builder b = new Builder(city);
-        b.build();
-        b.set(marker.getX(), marker.getY(), marker.getZ(), Blocks.LODESTONE.defaultBlockState());
-        checkNpcs(city);
-        ElSistema.LOGGER.info("Ciudad de los Cazadores construida: {} bloques en {} ms", b.count, System.currentTimeMillis() - t0);
-        return true;
-    }
-
-    /** Lote (i, j) de la cuadrícula: esquina noroeste. */
-    static int lot(int k) {
-        return k * CELL - 10;
-    }
-
-    private static final class Builder {
-        final ServerLevel l;
-        final RandomSource rnd = RandomSource.create(1717L);
-        final BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
-        int count = 0;
-
-        Builder(ServerLevel l) {
-            this.l = l;
-        }
-
-        void set(int x, int y, int z, BlockState s) {
-            m.set(x, y, z);
-            l.setBlock(m, s, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
-            count++;
-        }
-
-        void fill(int x1, int y1, int z1, int x2, int y2, int z2, BlockState s) {
-            for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
-                for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
-                    for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {
-                        set(x, y, z, s);
-                    }
-                }
-            }
-        }
-
-        /** Paredes de una caja (sin techo ni suelo). */
-        void walls(int x1, int y1, int z1, int x2, int y2, int z2, BlockState s) {
-            fill(x1, y1, z1, x2, y2, z1, s);
-            fill(x1, y1, z2, x2, y2, z2, s);
-            fill(x1, y1, z1, x1, y2, z2, s);
-            fill(x2, y1, z1, x2, y2, z2, s);
-        }
-
-        static BlockState st(Block b) {
-            return b.defaultBlockState();
-        }
-
-        void build() {
-            ground();
-            plaza();
-            association();
-            smithy();
-            alchemy();
-            essenceShop();
-            guildHall();
-            park(lot(-1), lot(-1));
-            park(lot(-2), lot(-1));
-            returnPortal();
-            for (int i = -2; i <= 2; i++) {
-                for (int j = -2; j <= 2; j++) {
-                    if (special(i, j)) continue;
-                    tower(lot(i), lot(j), i * 7 + j * 13);
-                }
-            }
-            lamps();
-        }
-
-        /** Lotes que no son torres. */
-        boolean special(int i, int j) {
-            return (i == 0 && j == 0) || (i == 0 && j == -1) || (i == 1 && j == -1) || (i == 2 && j == -1)
-                    || (i == 1 && j == 1) || (i == 2 && j == 1) || (i == -1 && j == -1) || (i == -2 && j == -1);
-        }
-
-        // ------------------------------------------------------------ suelo, calles y aceras
-
-        void ground() {
-            BlockState asphalt = st(Blocks.GRAY_CONCRETE);
-            BlockState line = st(Blocks.WHITE_CONCRETE);
-            BlockState walk = st(Blocks.SMOOTH_STONE);
-            BlockState curb = st(Blocks.STONE_BRICKS);
-            for (int x = -HALF - 2; x <= HALF + 2; x++) {
-                for (int z = -HALF - 2; z <= HALF + 2; z++) {
-                    int rx = Math.floorMod(x + 10, CELL);
-                    int rz = Math.floorMod(z + 10, CELL);
-                    boolean roadX = rx >= 20;
-                    boolean roadZ = rz >= 20;
-                    BlockState s;
-                    if (roadX || roadZ) {
-                        boolean edge = (roadX && (rx == 20 || rx == 25)) || (roadZ && (rz == 20 || rz == 25));
-                        if (edge && !(roadX && roadZ)) {
-                            s = curb;
-                        } else {
-                            s = asphalt;
-                            boolean mid = roadX && !roadZ && (rx == 22 || rx == 23) && Math.floorMod(z, 6) < 3 && rx == 22;
-                            boolean midZ = roadZ && !roadX && rz == 22 && Math.floorMod(x, 6) < 3;
-                            if (mid || midZ) s = line;
-                        }
-                    } else {
-                        boolean border = rx == 0 || rx == 19 || rz == 0 || rz == 19;
-                        s = border ? walk : st(Blocks.GRASS_BLOCK);
-                    }
-                    set(x, G - 1, z, s);
-                    // Limpia lo que hubiera encima (por si se reconstruye)
-                    for (int y = G; y < G + 4; y++) {
-                        m.set(x, y, z);
-                        if (!l.getBlockState(m).isAir()) set(x, y, z, st(Blocks.AIR));
-                    }
-                }
-            }
-        }
-
-        // ------------------------------------------------------------ plaza y Cristal del Sistema
-
-        void plaza() {
-            int x1 = lot(0);
-            int z1 = lot(0);
-            for (int x = x1; x < x1 + 20; x++) {
-                for (int z = z1; z < z1 + 20; z++) {
-                    double dx = x + 0.5;
-                    double dz = z + 0.5;
-                    double r = Math.sqrt(dx * dx + dz * dz);
-                    BlockState s;
-                    if (r < 2.5) s = st(Blocks.POLISHED_BLACKSTONE);
-                    else if (r < 5.5) s = st(Blocks.QUARTZ_BRICKS);
-                    else if (r < 6.6) s = st(Blocks.CYAN_TERRACOTTA);
-                    else if (r < 9.6) s = (Math.floorMod(x + z, 2) == 0) ? st(Blocks.POLISHED_ANDESITE) : st(Blocks.SMOOTH_STONE);
-                    else s = st(Blocks.POLISHED_ANDESITE);
-                    set(x, G - 1, z, s);
-                }
-            }
-            // Cristal del Sistema: pilar de cristal azul con faroles marinos que brilla de noche
-            fill(-2, G, -2, 1, G, 1, st(Blocks.POLISHED_BLACKSTONE_BRICKS));
-            fill(-1, G + 1, -1, 0, G + 1, 0, st(Blocks.SEA_LANTERN));
-            for (int y = G + 2; y <= G + 11; y++) {
-                boolean lamp = (y - G) % 3 == 0;
-                fill(-1, y, -1, 0, y, 0, lamp ? st(Blocks.SEA_LANTERN) : st(Blocks.LIGHT_BLUE_STAINED_GLASS));
-            }
-            set(-1, G + 12, -1, st(Blocks.SEA_LANTERN));
-            set(0, G + 12, 0, st(Blocks.SEA_LANTERN));
-            set(-1, G + 12, 0, st(Blocks.LIGHT_BLUE_STAINED_GLASS));
-            set(0, G + 12, -1, st(Blocks.LIGHT_BLUE_STAINED_GLASS));
-            // Bancos alrededor
-            BlockState benchN = Blocks.DARK_OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.NORTH);
-            BlockState benchS = Blocks.DARK_OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.SOUTH);
-            BlockState benchE = Blocks.DARK_OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.EAST);
-            BlockState benchW = Blocks.DARK_OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.WEST);
-            fill(-3, G, -8, 2, G, -8, benchN);
-            fill(-3, G, 7, 2, G, 7, benchS);
-            fill(7, G, -3, 7, G, 2, benchE);
-            fill(-8, G, -3, -8, G, 2, benchW);
-            // Jardineras en las esquinas
-            for (int[] c : new int[][]{{-9, -9}, {7, -9}, {7, 7}}) {
-                fill(c[0], G, c[1], c[0] + 1, G, c[1] + 1, st(Blocks.POLISHED_ANDESITE));
-                tree(c[0], G + 1, c[1], 4);
-            }
-            sign(-1, G, -3, Direction.NORTH, "CRISTAL DEL", "SISTEMA", "", "");
-        }
-
-        /** Árbol pequeño (tronco y copa de hojas que no se caen). */
-        void tree(int x, int y, int z, int h) {
-            BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
-            for (int dy = 0; dy < h; dy++) {
-                set(x, y + dy, z, st(Blocks.OAK_LOG));
-            }
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dz = -2; dz <= 2; dz++) {
-                    for (int dy = h - 2; dy <= h + 1; dy++) {
-                        int r = Math.abs(dx) + Math.abs(dz) + Math.max(0, dy - h);
-                        if (r > 3 || (dx == 0 && dz == 0 && dy < h)) continue;
-                        m.set(x + dx, y + dy, z + dz);
-                        if (l.getBlockState(m).isAir()) set(x + dx, y + dy, z + dz, leaves);
-                    }
-                }
-            }
-        }
-
-        void sign(int x, int y, int z, Direction facing, String l1, String l2, String l3, String l4) {
-            BlockState s = Blocks.DARK_OAK_WALL_SIGN.defaultBlockState().setValue(WallSignBlock.FACING, facing);
-            set(x, y, z, s);
-            m.set(x, y, z);
-            if (l.getBlockEntity(m) instanceof SignBlockEntity sign) {
-                SignText t = sign.getFrontText()
-                        .setMessage(0, Component.literal(l1))
-                        .setMessage(1, Component.literal(l2))
-                        .setMessage(2, Component.literal(l3))
-                        .setMessage(3, Component.literal(l4))
-                        .setColor(DyeColor.LIGHT_BLUE)
-                        .setHasGlowingText(true);
-                sign.setText(t, true);
-                sign.setWaxed(true);
-                sign.setChanged();
-                BlockPos p = m.immutable();
-                l.sendBlockUpdated(p, s, s, Block.UPDATE_CLIENTS);
-            }
-        }
-
-        // ------------------------------------------------------------ Asociación de Cazadores (norte)
-
-        void association() {
-            int x1 = lot(0);
-            int z1 = lot(-1);
-            int x2 = x1 + 19;
-            int z2 = z1 + 19;
-            int h = 38;
-            BlockState frame = st(Blocks.WHITE_CONCRETE);
-            BlockState glass = st(Blocks.LIGHT_BLUE_STAINED_GLASS);
-            BlockState floor = st(Blocks.SMOOTH_QUARTZ);
-            // Fachada: marco blanco y cristal azul; cada 5 bloques una planta
-            for (int y = G; y <= G + h; y++) {
-                boolean band = (y - G) % 5 == 0;
-                for (int x = x1; x <= x2; x++) {
-                    for (int z = z1; z <= z2; z++) {
-                        boolean wall = x == x1 || x == x2 || z == z1 || z == z2;
-                        if (!wall) continue;
-                        boolean corner = (x == x1 || x == x2) && (z == z1 || z == z2);
-                        boolean pillar = (z == z1 || z == z2) ? (x - x1) % 4 == 0 : (z - z1) % 4 == 0;
-                        set(x, y, z, band || corner || pillar || y == G + h ? frame : glass);
-                    }
-                }
-                if (band && y > G) fill(x1 + 1, y, z1 + 1, x2 - 1, y, z2 - 1, floor);
-            }
-            fill(x1, G - 1, z1, x2, G - 1, z2, st(Blocks.POLISHED_DIORITE));
-            fill(x1 + 1, G + h, z1 + 1, x2 - 1, G + h, z2 - 1, frame);
-            // Corona con el emblema del Sistema
-            walls(x1 + 6, G + h + 1, z1 + 6, x2 - 6, G + h + 3, z2 - 6, st(Blocks.CYAN_CONCRETE));
-            fill(x1 + 9, G + h + 4, z1 + 9, x1 + 10, G + h + 6, z1 + 10, st(Blocks.SEA_LANTERN));
-            // Vestíbulo: planta baja de 5 bloques, entrada al sur
-            fill(x1 + 1, G, z1 + 1, x2 - 1, G + 4, z2 - 1, st(Blocks.AIR));
-            fill(-2, G, z2, 1, G + 3, z2, st(Blocks.AIR));
-            fill(-3, G + 4, z2 + 1, 2, G + 4, z2 + 2, st(Blocks.WHITE_CONCRETE));
-            // Mostrador de recepción y tablón de misiones
-            fill(-5, G, -29, 4, G, -29, st(Blocks.QUARTZ_BLOCK));
-            fill(-5, G + 1, -29, 4, G + 1, -29, Blocks.SMOOTH_QUARTZ_SLAB.defaultBlockState());
-            fill(-4, G + 1, z1 + 1, 3, G + 3, z1 + 1, st(Blocks.SPRUCE_PLANKS));
-            sign(-2, G + 2, z1 + 2, Direction.SOUTH, "TABLÓN DE", "CONTRATOS", "Habla con", "Lucía");
-            sign(1, G + 2, z1 + 2, Direction.SOUTH, "ASOCIACIÓN", "DE CAZADORES", "", "");
-            fill(x1 + 2, G, z1 + 2, x1 + 2, G + 3, z1 + 2, st(Blocks.SEA_LANTERN));
-            fill(x2 - 2, G, z1 + 2, x2 - 2, G + 3, z1 + 2, st(Blocks.SEA_LANTERN));
-            // Alfombra azul de la entrada al mostrador
-            fill(-1, G, -28, 0, G, z2 - 1, st(Blocks.BLUE_CARPET));
-            sign(2, G + 2, z2 + 1, Direction.SOUTH, "ASOCIACIÓN", "DE CAZADORES", "Contratos y", "misiones");
-        }
-
-        // ------------------------------------------------------------ tiendas de la avenida del este
-
-        /** Tienda: caja de dos plantas con escaparate hacia la calle (al sur si front=true, al norte si no). */
-        void shop(int x1, int z1, int w, int d, boolean southFront, BlockState wall, BlockState trim, BlockState floor,
-                  BlockState glass, String name1, String name2) {
-            int x2 = x1 + w - 1;
-            int z2 = z1 + d - 1;
-            int h = 9;
-            fill(x1, G - 1, z1, x2, G - 1, z2, floor);
-            for (int y = G; y <= G + h; y++) {
-                for (int x = x1; x <= x2; x++) {
-                    for (int z = z1; z <= z2; z++) {
-                        if (!(x == x1 || x == x2 || z == z1 || z == z2)) continue;
-                        boolean corner = (x == x1 || x == x2) && (z == z1 || z == z2);
-                        boolean band = y == G + 4 || y == G + h;
-                        set(x, y, z, corner || band ? trim : wall);
-                    }
-                }
-            }
-            fill(x1 + 1, G + 4, z1 + 1, x2 - 1, G + 4, z2 - 1, floor);
-            fill(x1, G + h, z1, x2, G + h, z2, trim);
-            int fz = southFront ? z2 : z1;
-            int out = southFront ? 1 : -1;
-            // Escaparates y puerta
-            fill(x1 + 1, G + 1, fz, x2 - 1, G + 3, fz, glass);
-            int mid = x1 + w / 2;
-            fill(mid - 1, G, fz, mid, G + 2, fz, st(Blocks.AIR));
-            fill(x1 + 1, G + 5, fz, x2 - 1, G + 7, fz, glass);
-            // Toldo y letrero
-            BlockState awning = Blocks.DARK_OAK_SLAB.defaultBlockState();
-            fill(x1, G + 4, fz + out, x2, G + 4, fz + out, awning);
-            sign(mid - 1, G + 3, fz + out, southFront ? Direction.SOUTH : Direction.NORTH, name1, name2, "", "");
-            // Luces dentro
-            set(x1 + 1, G + 3, z1 + 1, st(Blocks.SEA_LANTERN));
-            set(x2 - 1, G + 3, z1 + 1, st(Blocks.SEA_LANTERN));
-            set(x1 + 1, G + 3, z2 - 1, st(Blocks.SEA_LANTERN));
-            set(x2 - 1, G + 3, z2 - 1, st(Blocks.SEA_LANTERN));
-        }
-
-        void smithy() {
-            int x1 = lot(1) + 2;
-            int z1 = lot(-1) + 4;
-            shop(x1, z1, 16, 14, true, st(Blocks.STONE_BRICKS), st(Blocks.DEEPSLATE_BRICKS), st(Blocks.POLISHED_DEEPSLATE),
-                    st(Blocks.GLASS), "HERRERÍA", "de Bruno");
-            // Yunques, forja y mesas
-            set(x1 + 4, G, z1 + 6, st(Blocks.ANVIL));
-            set(x1 + 9, G, z1 + 6, st(Blocks.SMITHING_TABLE));
-            set(x1 + 2, G, z1 + 2, st(Blocks.BLAST_FURNACE));
-            set(x1 + 3, G, z1 + 2, st(Blocks.BLAST_FURNACE));
-            set(x1 + 12, G, z1 + 2, st(Blocks.GRINDSTONE));
-            fill(x1 + 6, G, z1 + 1, x1 + 9, G, z1 + 1, st(Blocks.MAGMA_BLOCK));
-            fill(x1 + 6, G + 1, z1 + 1, x1 + 9, G + 2, z1 + 1, st(Blocks.IRON_BARS));
-            fill(x1 + 5, G, z1 + 5, x1 + 10, G, z1 + 5, st(Blocks.POLISHED_BLACKSTONE));
-        }
-
-        void alchemy() {
-            int x1 = lot(2) + 2;
-            int z1 = lot(-1) + 4;
-            shop(x1, z1, 16, 14, true, st(Blocks.DARK_OAK_PLANKS), st(Blocks.STRIPPED_DARK_OAK_LOG), st(Blocks.MOSS_BLOCK),
-                    st(Blocks.GREEN_STAINED_GLASS), "ALQUIMIA", "de Selene");
-            set(x1 + 3, G, z1 + 4, st(Blocks.BREWING_STAND));
-            set(x1 + 5, G, z1 + 4, st(Blocks.CAULDRON));
-            fill(x1 + 1, G, z1 + 1, x1 + 14, G + 2, z1 + 1, st(Blocks.BOOKSHELF));
-            set(x1 + 10, G, z1 + 4, st(Blocks.BREWING_STAND));
-            fill(x1 + 6, G, z1 + 6, x1 + 10, G, z1 + 6, st(Blocks.SPRUCE_PLANKS));
-            set(x1 + 12, G, z1 + 3, st(Blocks.FLOWERING_AZALEA));
-        }
-
-        void essenceShop() {
-            int x1 = lot(1) + 2;
-            int z1 = lot(1) + 2;
-            shop(x1, z1, 16, 14, false, st(Blocks.PURPUR_BLOCK), st(Blocks.PURPUR_PILLAR), st(Blocks.POLISHED_BLACKSTONE),
-                    st(Blocks.PURPLE_STAINED_GLASS), "ESENCIAS", "de Ezequiel");
-            set(x1 + 3, G, z1 + 10, st(Blocks.AMETHYST_BLOCK));
-            set(x1 + 3, G + 1, z1 + 10, st(Blocks.AMETHYST_CLUSTER));
-            set(x1 + 12, G, z1 + 10, st(Blocks.AMETHYST_BLOCK));
-            set(x1 + 12, G + 1, z1 + 10, st(Blocks.AMETHYST_CLUSTER));
-            fill(x1 + 5, G, z1 + 8, x1 + 10, G, z1 + 8, st(Blocks.CRYING_OBSIDIAN));
-            set(x1 + 7, G, z1 + 11, st(Blocks.ENCHANTING_TABLE));
-        }
-
-        void guildHall() {
-            int x1 = lot(2) + 1;
-            int z1 = lot(1) + 2;
-            shop(x1, z1, 18, 16, false, st(Blocks.SPRUCE_PLANKS), st(Blocks.STRIPPED_SPRUCE_LOG), st(Blocks.SPRUCE_PLANKS),
-                    st(Blocks.GLASS), "GREMIO DE", "CAZADORES");
-            // Mesas largas y estandartes de color
-            fill(x1 + 3, G, z1 + 5, x1 + 7, G, z1 + 5, Blocks.SPRUCE_SLAB.defaultBlockState()
-                    .setValue(net.minecraft.world.level.block.SlabBlock.TYPE, net.minecraft.world.level.block.state.properties.SlabType.TOP));
-            fill(x1 + 10, G, z1 + 5, x1 + 14, G, z1 + 5, Blocks.SPRUCE_SLAB.defaultBlockState()
-                    .setValue(net.minecraft.world.level.block.SlabBlock.TYPE, net.minecraft.world.level.block.state.properties.SlabType.TOP));
-            fill(x1 + 1, G + 2, z1 + 14, x1 + 16, G + 3, z1 + 14, st(Blocks.RED_WOOL));
-            fill(x1 + 6, G, z1 + 12, x1 + 11, G, z1 + 12, st(Blocks.STRIPPED_SPRUCE_LOG));
-            set(x1 + 2, G, z1 + 13, st(Blocks.BARREL));
-            set(x1 + 15, G, z1 + 13, st(Blocks.BARREL));
-        }
-
-        // ------------------------------------------------------------ parques y portal
-
-        void park(int x1, int z1) {
-            for (int x = x1 + 1; x < x1 + 19; x++) {
-                for (int z = z1 + 1; z < z1 + 19; z++) {
-                    set(x, G - 1, z, st(Blocks.GRASS_BLOCK));
-                }
-            }
-            // Caminos en cruz y estanque
-            fill(x1 + 9, G - 1, z1 + 1, x1 + 10, G - 1, z1 + 18, st(Blocks.DIRT_PATH));
-            fill(x1 + 1, G - 1, z1 + 9, x1 + 18, G - 1, z1 + 10, st(Blocks.DIRT_PATH));
-            fill(x1 + 3, G - 1, z1 + 3, x1 + 6, G - 1, z1 + 6, st(Blocks.WATER));
-            for (int[] t : new int[][]{{3, 13}, {14, 3}, {15, 14}, {6, 16}, {13, 8}}) {
-                tree(x1 + t[0], G, z1 + t[1], 4 + rnd.nextInt(2));
-            }
-            for (int i = 0; i < 18; i++) {
-                int x = x1 + 1 + rnd.nextInt(18);
-                int z = z1 + 1 + rnd.nextInt(18);
-                m.set(x, G, z);
-                if (l.getBlockState(m).isAir() && l.getBlockState(m.below()).is(Blocks.GRASS_BLOCK)) {
-                    set(x, G, z, rnd.nextBoolean() ? st(Blocks.POPPY) : st(Blocks.CORNFLOWER));
-                }
-            }
-        }
-
-        void returnPortal() {
-            // Arco de la esquina suroeste de la plaza, mirando al norte: el hueco lleva de vuelta a casa
-            BlockState frame = st(Blocks.POLISHED_BLACKSTONE_BRICKS);
-            fill(-9, G, 8, -9, G + 3, 8, frame);
-            fill(-5, G, 8, -5, G + 3, 8, frame);
-            fill(-9, G + 4, 8, -5, G + 4, 8, st(Blocks.CRYING_OBSIDIAN));
-            set(-7, G + 5, 8, st(Blocks.SEA_LANTERN));
-            fill(-8, G - 1, 8, -6, G - 1, 8, st(Blocks.AMETHYST_BLOCK));
-            sign(-9, G + 2, 7, Direction.NORTH, "PORTAL DE", "REGRESO", "Pasa por el", "arco");
-        }
-
-        // ------------------------------------------------------------ torres
-
-        void tower(int lx, int lz, int seed) {
-            RandomSource r = RandomSource.create(9000L + seed * 31L);
-            int inset = 2 + r.nextInt(2);
-            int x1 = lx + inset;
-            int z1 = lz + inset;
-            int x2 = lx + 19 - inset;
-            int z2 = lz + 19 - inset;
-            int h = 16 + r.nextInt(5) * 6 + (Math.abs(lx) + Math.abs(lz) < 40 ? 8 : 0);
-            BlockState[][] styles = {
-                    {st(Blocks.WHITE_CONCRETE), st(Blocks.LIGHT_BLUE_STAINED_GLASS)},
-                    {st(Blocks.GRAY_CONCRETE), st(Blocks.GRAY_STAINED_GLASS)},
-                    {st(Blocks.SMOOTH_SANDSTONE), st(Blocks.GLASS)},
-                    {st(Blocks.DEEPSLATE_TILES), st(Blocks.CYAN_STAINED_GLASS)},
-                    {st(Blocks.QUARTZ_BLOCK), st(Blocks.BLUE_STAINED_GLASS)},
-                    {st(Blocks.BRICKS), st(Blocks.GLASS)}};
-            BlockState[] s = styles[r.nextInt(styles.length)];
-            BlockState frame = s[0];
-            BlockState glass = s[1];
-            int step = 3 + r.nextInt(2);
-            for (int y = G; y <= G + h; y++) {
-                boolean band = (y - G) % 4 == 0;
-                for (int x = x1; x <= x2; x++) {
-                    for (int z = z1; z <= z2; z++) {
-                        if (!(x == x1 || x == x2 || z == z1 || z == z2)) continue;
-                        boolean corner = (x == x1 || x == x2) && (z == z1 || z == z2);
-                        boolean pillar = (x == x1 || x == x2) ? (z - z1) % step == 0 : (x - x1) % step == 0;
-                        set(x, y, z, band || corner || pillar || y == G + h ? frame : glass);
-                    }
-                }
-                if (band && y > G && y < G + h) {
-                    fill(x1 + 1, y, z1 + 1, x2 - 1, y, z2 - 1, st(Blocks.SMOOTH_STONE));
-                    // Algunas plantas con luz (de noche se ven las ventanas encendidas)
-                    if (r.nextInt(3) == 0) {
-                        set((x1 + x2) / 2, y, (z1 + z2) / 2, st(Blocks.SEA_LANTERN));
-                        set(x1 + 2, y, z1 + 2, st(Blocks.SEA_LANTERN));
-                        set(x2 - 2, y, z2 - 2, st(Blocks.SEA_LANTERN));
-                    }
-                }
-            }
-            fill(x1 + 1, G + h, z1 + 1, x2 - 1, G + h, z2 - 1, frame);
-            // Azotea: barandilla, aire acondicionado y antena con luz roja
-            walls(x1, G + h + 1, z1, x2, G + h + 1, z2, frame);
-            set(x1 + 3, G + h + 1, z1 + 3, st(Blocks.IRON_BLOCK));
-            set(x1 + 4, G + h + 1, z1 + 3, st(Blocks.IRON_BLOCK));
-            int ax = (x1 + x2) / 2;
-            int az = (z1 + z2) / 2;
-            fill(ax, G + h + 1, az, ax, G + h + 4, az, st(Blocks.IRON_BARS));
-            set(ax, G + h + 5, az, st(Blocks.REDSTONE_LAMP).setValue(net.minecraft.world.level.block.RedstoneLampBlock.LIT, true));
-            set(ax, G + h + 4, az + 0, st(Blocks.REDSTONE_BLOCK));
-            // Puerta en la planta baja hacia la calle más cercana
-            int dx = (x1 + x2) / 2;
-            fill(dx - 1, G, z2, dx, G + 2, z2, st(Blocks.AIR));
-            fill(dx - 1, G, z1, dx, G + 2, z1, st(Blocks.AIR));
-        }
-
-        // ------------------------------------------------------------ farolas
-
-        void lamps() {
-            BlockState post = st(Blocks.POLISHED_BLACKSTONE_WALL);
-            for (int k = -2; k <= 2; k++) {
-                for (int t = -HALF; t <= HALF; t += 9) {
-                    // A los dos lados de cada calle horizontal y vertical
-                    int roadStart = k * CELL + 10;
-                    for (int side : new int[]{roadStart - 1, roadStart + 6}) {
-                        lamp(t, side, post);
-                        lamp(side, t, post);
-                    }
-                }
-            }
-        }
-
-        void lamp(int x, int z, BlockState post) {
-            if (Math.abs(x) > HALF || Math.abs(z) > HALF) return;
-            m.set(x, G - 1, z);
-            BlockState below = l.getBlockState(m);
-            if (!below.is(Blocks.SMOOTH_STONE) && !below.is(Blocks.GRASS_BLOCK)) return;
-            for (int y = G; y <= G + 3; y++) {
-                m.set(x, y, z);
-                if (!l.getBlockState(m).isAir()) return;
-            }
-            fill(x, G, z, x, G + 2, z, post);
-            set(x, G + 3, z, st(Blocks.SEA_LANTERN));
-        }
+        return facesSouth(role) ? 0.0F : 180.0F;
     }
 }

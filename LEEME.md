@@ -1,4 +1,4 @@
-# El Sistema 1.8.2 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.9.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
@@ -15,6 +15,41 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.9.0: la Ciudad de los Cazadores, nueva y mucho más grande
+
+La ciudad se ha rehecho entera: ahora es una ciudad de **7x7 manzanas** (unos 200x200 bloques) con calles de verdad
+(asfalto, pasos de cebra, aceras, semáforos, farolas, paradas de autobús y coches aparcados), un **río con puentes**,
+paseo y parque en la orilla sur, y un bosque alrededor. Se construye **poco a poco al arrancar el mundo** (sin
+congelar el servidor): si quieres ir mientras se construye, verás el porcentaje y te llevará en cuanto esté. Si
+vienes de la 1.8, la ciudad vieja se sustituye por la nueva automáticamente.
+
+- **Plaza del Cristal**: fuente circular, cerezos, bancos y el **Cristal del Sistema** con un **haz de luz azul**
+  que se ve desde toda la ciudad. El **Portal de regreso** es el arco morado del lado oeste de la plaza.
+- **Torre de la Asociación** (la más alta, con emblema y aguja): vestíbulo con recepción (Lucía), tablón de
+  contratos, tablero de rangos y **dos ascensores**: quédate un momento en la cabina y subes al **mirador**
+  (a 73 bloques de altura) para ver toda la ciudad. El del mirador te baja.
+- **Arena del Sistema** (Vera): combates de 3 oleadas por rango (la última con un **Campeón de la Arena**).
+  Cuesta oro entrar y si ganas te llevas **oro y esencias** (además de lo normal por cada monstruo). La piedra imán
+  del foso te sube si te rindes.
+- **Estación de Puertas** (Hugo): por una tarifa de la Asociación te **abre una puerta de mazmorra de tu rango**
+  delante del gran anillo.
+- **Centro Médico** (Irene): cura completa, limpieza de efectos malos, revisión completa (vida y maná) y tótems.
+- **Comedor del Cazador** (Tomás): comida y el banquete del cazador (Fuerza y Regeneración).
+- **Tienda 24 h** (Paco): antorchas, flechas, perlas de ender, cohetes, botellas de experiencia, mapa y brújula.
+- La **Herrería**, la **Alquimia**, las **Esencias** y el **Gremio**, con interiores nuevos; el **Centro Comercial
+  Nexo** con atrio y fuente; el **Jardín** con estanque; parque infantil, **Parque Central** con lago y la
+  **Estación Central** con su tren.
+- **Tu apartamento** (al suroeste de la plaza): salón con cocina, **biblioteca con mesa de encantamientos de nivel 30**,
+  dormitorio con dos camas (para **reaparecer en la ciudad**) y taller con todas las mesas de trabajo.
+- **22 habitantes** con aspecto propio (13 nuevos): tenderos en su puesto y vecinos que pasean por su barrio.
+  El contrato «Turista del Sistema» ahora pide hablar con los 22.
+- **Viaje dentro de la ciudad**: en el Sistema, **MISIONES > CIUDAD**, cada sitio tiene un botón **IR** para ir
+  al momento (estando en la ciudad).
+- De noche se encienden las ventanas de las torres, las farolas, los semáforos y las luces rojas de las antenas.
+- En la ciudad ya se pueden abrir cofres, puertas y camas aunque lleves un bloque en la mano (lo que no se puede
+  es poner bloques, quemar ni cavar).
+- Comando de operador: `/sistema ciudad reconstruir` para volver a construirla desde cero.
 
 ## Novedades de la 1.8.2
 - Comando **/spawn** (no necesita trucos): te lleva a la plaza de la Ciudad de los Cazadores. Si ya estás en la
