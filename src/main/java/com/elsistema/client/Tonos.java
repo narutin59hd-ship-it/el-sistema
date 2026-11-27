@@ -59,9 +59,9 @@ public final class Tonos {
     private static boolean labelsInventory = false;
     private static boolean labelsChest = false;
     private static int labelColor = 0xA8E6FF;
-    private static final float[] WARM = {1.12F, 0.96F, 0.74F};
-    private static final float[] NIGHT = {0.80F, 0.90F, 1.22F};
-    private static final float[] SHADE = {0.78F, 0.84F, 1.30F};
+    private static final float[] WARM = {1.24F, 0.95F, 0.64F};
+    private static final float[] NIGHT = {0.70F, 0.92F, 1.32F};
+    private static final float[] SHADE = {0.70F, 0.84F, 1.40F};
     private static float strength = 1.0F;
 
     // ---------------------------------------------------------------- shader
@@ -89,6 +89,7 @@ public final class Tonos {
     public static int postFrames = 0;
     public static int tintUploads = 0;
     public static int labelHits = 0;
+    public static int labelHitsInventory = 0;
     public static String lastError = null;
 
     public static void register() {
@@ -237,7 +238,12 @@ public final class Tonos {
     /** Los títulos de los inventarios y cofres del pack van en azul claro (el fondo es oscuro). */
     public static int labelColor(Object screen, int color) {
         if ((color & 0xFFFFFF) != VANILLA_LABEL) return color;
-        if ((screen instanceof InventoryScreen && labelsInventory) || (screen instanceof ContainerScreen && labelsChest)) {
+        if (screen instanceof InventoryScreen && labelsInventory) {
+            labelHits++;
+            labelHitsInventory++;
+            return labelColor;
+        }
+        if (screen instanceof ContainerScreen && labelsChest) {
             labelHits++;
             return labelColor;
         }
@@ -295,7 +301,7 @@ public final class Tonos {
         float lum = 0.2126F * r + 0.7152F * g + 0.0722F * b;
         float s = strength;
         float daylight = sl * day;
-        float wWarm = bl * bl * (1.0F - daylight) * (1.0F - smooth(0.86F, 1.0F, lum)) * s;
+        float wWarm = bl * (float) Math.sqrt(bl) * (1.0F - daylight) * (1.0F - smooth(0.86F, 1.0F, lum)) * s;
         float wNight = sl * (1.0F - day) * (1.0F - bl) * s;
         float wShade = (1.0F - smooth(0.03F, 0.32F, lum)) * (1.0F - bl * 0.85F) * s;
         float mr = mul(WARM[0], wWarm) * mul(NIGHT[0], wNight) * mul(SHADE[0], wShade);
@@ -401,7 +407,7 @@ public final class Tonos {
                 + ", shader " + LEVEL_NAMES[Mth.clamp(ClientConfig.shader(), 0, 3)] + " [" + chainKey + "] "
                 + postFrames + " fotogramas (mixin " + mixinFrames + ")"
                 + ", luz " + (ClientConfig.lightTones() ? "sí" : "no") + " (" + tintUploads + " veces)"
-                + ", títulos " + labelHits + (irisActive ? ", Iris activo" : "")
+                + ", títulos " + labelHits + " (inventario " + labelHitsInventory + ")" + (irisActive ? ", Iris activo" : "")
                 + (lastError != null ? ", error: " + lastError : "");
     }
 }

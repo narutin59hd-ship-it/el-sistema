@@ -453,12 +453,12 @@ def sun():
     for y in range(32):
         for x in range(32):
             d = math.hypot(x - cx, y - cy)
-            if d <= 4.7:
-                rim = smooth(3.4, 4.7, d)
+            if d <= 5.6:
+                rim = smooth(4.2, 5.6, d)
                 c = lerp((255, 253, 236), (255, 214, 120), rim)
                 t.set(x, y, c)
             else:
-                g = math.exp(-(d - 4.7) / 3.3) * 0.85
+                g = math.exp(-(d - 5.6) / 3.3) * 0.85
                 halo = math.exp(-((d - 9.0) ** 2) / 2.2) * 0.10
                 t.add(x, y, (255, 178, 84), g)
                 t.add(x, y, (90, 200, 255), halo)
@@ -475,7 +475,7 @@ def moon_phases():
         side = 0 if p == 0 or p == 4 else (-1 if p < 4 else 1)
         cx = ox + 15.5
         cy = oy + 15.5
-        r = 4.4
+        r = 5.4
         lit_amount = (1 + math.cos(theta)) / 2
         for y in range(oy, oy + 32):
             for x in range(ox, ox + 32):
@@ -593,8 +593,8 @@ out vec4 fragColor;
 
 void main() {
     vec3 c = texture(DiffuseSampler, texCoord).rgb;
-    float m = max(c.r, max(c.g, c.b));
-    float k = smoothstep(Threshold, 1.0, m);
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float k = smoothstep(Threshold, Threshold + 0.2, l);
     fragColor = vec4(c * k, 1.0);
 }
 """
@@ -644,7 +644,7 @@ vec3 grade(vec3 c) {
     float l = dot(c, LUMA);
     float ws = 1.0 - smoothstep(0.0, 0.5, l);
     float wh = smoothstep(0.55, 1.0, l);
-    c *= mix(vec3(1.0), vec3(0.82, 0.93, 1.20), ws * Cool);
+    c *= mix(vec3(1.0), vec3(0.80, 0.95, 1.22), ws * Cool);
     c *= mix(vec3(1.0), vec3(1.05, 1.0, 0.93), wh * 0.5);
     float g = dot(c, LUMA);
     c = mix(vec3(g), c, Saturation);
@@ -703,12 +703,11 @@ void main() {
 IDENTITY = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 
-def program(fragment, samplers, extra):
-    uniforms = [
-        {"name": "ProjMat", "type": "matrix4x4", "count": 16, "values": IDENTITY},
-        {"name": "InSize", "type": "float", "count": 2, "values": [1.0, 1.0]},
-        {"name": "OutSize", "type": "float", "count": 2, "values": [1.0, 1.0]},
-    ]
+def program(fragment, samplers, extra, insize=False):
+    uniforms = [{"name": "ProjMat", "type": "matrix4x4", "count": 16, "values": IDENTITY}]
+    if insize:
+        uniforms.append({"name": "InSize", "type": "float", "count": 2, "values": [1.0, 1.0]})
+    uniforms.append({"name": "OutSize", "type": "float", "count": 2, "values": [1.0, 1.0]})
     for name, values in extra:
         uniforms.append({"name": name, "type": "float", "count": len(values), "values": values})
     return {
@@ -725,9 +724,9 @@ GRADE_UNIFORMS = [("Intensity", [1.0]), ("Vignette", [0.9]), ("Saturation", [1.1
 
 # Intensidad del shader (ajuste del mod): suave, normal, intenso
 LEVELS = {
-    "suave": {"Intensity": 0.6, "Bloom": 0.35, "Vignette": 0.55, "Saturation": 1.06, "Cool": 0.40, "Radius": 8.0},
-    "normal": {"Intensity": 0.9, "Bloom": 0.60, "Vignette": 0.90, "Saturation": 1.12, "Cool": 0.55, "Radius": 10.0},
-    "intenso": {"Intensity": 1.0, "Bloom": 0.95, "Vignette": 1.25, "Saturation": 1.20, "Cool": 0.70, "Radius": 12.0},
+    "suave": {"Intensity": 0.6, "Bloom": 0.30, "Vignette": 0.55, "Saturation": 1.06, "Cool": 0.30, "Radius": 8.0},
+    "normal": {"Intensity": 0.9, "Bloom": 0.45, "Vignette": 0.90, "Saturation": 1.12, "Cool": 0.45, "Radius": 10.0},
+    "intenso": {"Intensity": 1.0, "Bloom": 0.70, "Vignette": 1.25, "Saturation": 1.20, "Cool": 0.60, "Radius": 12.0},
 }
 
 
@@ -747,7 +746,7 @@ def chain(level, light):
         "targets": ["swap", "brillo", "brillo2"],
         "passes": [
             {"name": "elsistema_bright", "intarget": "minecraft:main", "outtarget": "brillo",
-             "uniforms": [{"name": "Threshold", "values": [0.70]}]},
+             "uniforms": [{"name": "Threshold", "values": [0.80]}]},
             {"name": "elsistema_blur", "intarget": "brillo", "outtarget": "brillo2", "use_linear_filter": True,
              "uniforms": [{"name": "BlurDir", "values": [1.0, 0.0]}, {"name": "Radius", "values": [v["Radius"]]}]},
             {"name": "elsistema_blur", "intarget": "brillo2", "outtarget": "brillo", "use_linear_filter": True,
@@ -769,9 +768,9 @@ def shaders(root):
     write_text(os.path.join(prog, "elsistema_grade_ligero.fsh"), GRADE_LIGHT_FSH)
     write_text(os.path.join(prog, "elsistema_copy.fsh"), COPY_FSH)
     write_json(os.path.join(prog, "elsistema_bright.json"),
-               program("elsistema_bright", ["DiffuseSampler"], [("Threshold", [0.7])]), 2)
+               program("elsistema_bright", ["DiffuseSampler"], [("Threshold", [0.8])]), 2)
     write_json(os.path.join(prog, "elsistema_blur.json"),
-               program("elsistema_blur", ["DiffuseSampler"], [("BlurDir", [1.0, 0.0]), ("Radius", [10.0])]), 2)
+               program("elsistema_blur", ["DiffuseSampler"], [("BlurDir", [1.0, 0.0]), ("Radius", [10.0])], True), 2)
     write_json(os.path.join(prog, "elsistema_grade.json"),
                program("elsistema_grade", ["DiffuseSampler", "BloomSampler"], GRADE_UNIFORMS + [("Bloom", [0.6])]), 2)
     write_json(os.path.join(prog, "elsistema_grade_ligero.json"),
@@ -846,9 +845,9 @@ def generate(root):
         "version": 1,
         "etiquetas": "A8E6FF",
         "luz": {
-            "calida": [1.12, 0.96, 0.74],
-            "noche": [0.80, 0.90, 1.22],
-            "sombra": [0.78, 0.84, 1.30],
+            "calida": [1.24, 0.95, 0.64],
+            "noche": [0.70, 0.92, 1.32],
+            "sombra": [0.70, 0.84, 1.40],
             "fuerza": 1.0,
         },
     }, 2)

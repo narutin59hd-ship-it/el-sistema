@@ -507,10 +507,18 @@ public final class ClientSelfTest {
                 mc.setScreen(null);
                 packCheck(true, "al empezar");
                 ElSistema.LOGGER.info("[SELFTEST-CLIENTE] tonos: {}", Tonos.status());
+                // en creativo se abriría el inventario creativo: un momento en supervivencia
+                gameMode(mc, net.minecraft.world.level.GameType.SURVIVAL);
+            }
+            case 1792 -> {
                 if (mc.player != null) mc.setScreen(new InventoryScreen(mc.player));
             }
-            case 1796 -> shot(mc, "pack del Sistema: inventario");
-            case 1798 -> openChest(mc);
+            case 1802 -> {
+                shot(mc, "pack del Sistema: inventario");
+                mc.setScreen(null);
+                gameMode(mc, savedMode);
+            }
+            case 1804 -> openChest(mc);
             case 1808 -> shot(mc, "pack del Sistema: cofre grande");
             case 1810 -> mc.setScreen(new PauseScreen(true));
             case 1820 -> shot(mc, "pack del Sistema: menú de pausa (botones y menús)");
@@ -556,10 +564,10 @@ public final class ClientSelfTest {
             }
             case 1956 -> {
                 packCheck(false, "tras quitarlo");
-                if (mc.player != null) mc.setScreen(new InventoryScreen(mc.player));
+                openChest(mc);
             }
             case 1966 -> {
-                shot(mc, "sin el pack: el inventario normal de Minecraft");
+                shot(mc, "sin el pack: el cofre normal de Minecraft");
                 mc.setScreen(null);
                 Tonos.setPack(true);
                 waitFor(() -> Tonos.packActive() && mc.getOverlay() == null, 1500, "volver a poner el pack del Sistema");
@@ -572,6 +580,20 @@ public final class ClientSelfTest {
             default -> {
             }
         }
+    }
+
+    private static net.minecraft.world.level.GameType savedMode = net.minecraft.world.level.GameType.CREATIVE;
+
+    /** Cambia el modo de juego del jugador en el servidor integrado (y guarda el que tenía). */
+    private static void gameMode(Minecraft mc, net.minecraft.world.level.GameType mode) {
+        if (!worldMode || mc.player == null || mc.getSingleplayerServer() == null || mc.gameMode == null) return;
+        if (mode == net.minecraft.world.level.GameType.SURVIVAL) savedMode = mc.gameMode.getPlayerMode();
+        java.util.UUID id = mc.player.getUUID();
+        net.minecraft.server.MinecraftServer server = mc.getSingleplayerServer();
+        server.execute(() -> {
+            net.minecraft.server.level.ServerPlayer sp = server.getPlayerList().getPlayer(id);
+            if (sp != null) sp.setGameMode(mode);
+        });
     }
 
     private static void waitFor(BooleanSupplier cond, int maxTicks, String what) {
@@ -617,9 +639,9 @@ public final class ClientSelfTest {
             failures++;
             ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: no se han teñido los tonos de luz");
         }
-        if (Tonos.labelHits <= 0) {
+        if (Tonos.labelHits <= 0 || (worldMode && Tonos.labelHitsInventory <= 0)) {
             failures++;
-            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: los títulos del inventario no cambiaron de color");
+            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: los títulos del inventario o del cofre no cambiaron de color");
         }
         if (Tonos.postFrames > 0 && Tonos.tintUploads > 0 && Tonos.labelHits > 0) {
             ElSistema.LOGGER.info("[SELFTEST-CLIENTE] OK tonos: shader, luz y títulos");
