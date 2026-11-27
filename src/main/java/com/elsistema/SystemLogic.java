@@ -422,12 +422,20 @@ public final class SystemLogic {
             if (d.joinDelay > 0) {
                 d.joinDelay--;
                 if (d.joinDelay == 0) {
+                    // 1.8.1: la primera vez que entras al mundo apareces en la Ciudad de los Cazadores
+                    if (d.cityStart == 0 && !SELFTEST) {
+                        d.cityStart = 1;
+                        if (!City.inCity(p) && d.inDungeon != 1 && !Dungeons.inDungeon(p)) City.travel(p, d);
+                    }
                     notify(p, d.awakened == 1 ? Net.N_WELCOME : Net.N_AWAKEN_PROMPT, 0, 0);
                     if (d.awakened == 1) {
                         Shadows.onJoined(p);
                         Quests.onJoin(p, d);
                     }
                 }
+            }
+            if (d.respawnCity > 0 && --d.respawnCity == 0 && p.isAlive() && !City.inCity(p) && !Dungeons.inDungeon(p)) {
+                City.travel(p, d);
             }
             if (d.anim > 0) animTick(p, d);
             // Alas (Dragón): mantener Mayús en el aire para planear
@@ -647,8 +655,13 @@ public final class SystemLogic {
         Shadows.sendList(p);
     }
 
-    public static void onRespawn(ServerPlayer p) {
+    /** En las pruebas automáticas no se lleva al jugador a la ciudad al entrar. */
+    private static final boolean SELFTEST = System.getenv("ELSISTEMA_SELFTEST") != null;
+
+    public static void onRespawn(ServerPlayer p, boolean alive) {
         Data d = Store.get(p);
+        // 1.8.1: si mueres y no tienes cama ni ancla de reaparición, reapareces en la ciudad
+        if (!alive && p.getRespawnPosition() == null && !SELFTEST) d.respawnCity = 10;
         applyAll(p, d);
         p.setHealth(p.getMaxHealth());
         d.mp = maxMp(d);

@@ -54,6 +54,8 @@ public class Data {
     /** Pergaminos de sombra comprados al mercader. */
     public int scrolls = 0;
     public int cityRet = 0;
+    /** 1.8.1: ya ha aparecido una vez en la ciudad al entrar al mundo. */
+    public int cityStart = 0;
     public String cityDim = "";
     public double cityX = 0;
     public double cityY = 0;
@@ -74,6 +76,8 @@ public class Data {
     public transient int cooldownTotal = 1;
     public transient int anim = 0;
     public transient int joinDelay = 0;
+    /** 1.8.1: ticks que faltan para llevarlo a la ciudad tras morir sin cama. */
+    public transient int respawnCity = 0;
     public transient boolean swordOn = false;
     public transient int lastStand = 0;
     public transient int gateTimer = 0;

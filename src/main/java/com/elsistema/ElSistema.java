@@ -58,7 +58,7 @@ public class ElSistema implements ModInitializer {
             Store.clear();
         });
 
-        ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> SystemLogic.onRespawn(newPlayer));
+        ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> SystemLogic.onRespawn(newPlayer, alive));
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             SystemLogic.tick(server);
