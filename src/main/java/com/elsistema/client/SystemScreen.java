@@ -816,8 +816,7 @@ public class SystemScreen extends Screen {
         }
         if (shadowTreeView) {
             List<String> ttip = shadowTree(g, f, lb, ib, sel, mx, my, a, now);
-            hint(g, "Cada nivel que sube la sombra le da " + ShadowTree.POINTS_PER_LEVEL
-                    + " punto · tus sombras ganan la misma EXP que tú", x1, x2, y2, a);
+            hint(g, "Cada nivel de la sombra le da " + ShadowTree.POINTS_PER_LEVEL + " punto · ganan tu misma EXP", x1, x2, y2, a);
             return ttip;
         }
         List<String> tip = null;
@@ -1036,16 +1035,16 @@ public class SystemScreen extends Screen {
             boolean maxed = r >= n.max();
             boolean hover = Ui.inside(mx, my, rx1, ry, lb.x2() - 4 - rx1, rh - 3);
             int accent = maxed ? Ui.GOLD : r > 0 ? Ui.SHADOW : 0xFF24364A;
-            g.fill(rx1, ry, rx2, ry + rh - 3, Ui.fade(hover ? 0x90182438 : r > 0 ? 0x80180E2A : 0x70101A28, a));
-            Ui.border(g, rx1, ry, rx2, ry + rh - 3, Ui.fade(accent, a));
+            g.fill(rx1, ry, rx2, ry + rh - 2, Ui.fade(hover ? 0x90182438 : r > 0 ? 0x80180E2A : 0x70101A28, a));
+            Ui.border(g, rx1, ry, rx2, ry + rh - 2, Ui.fade(accent, a));
             String rank = r + "/" + n.max();
-            Ui.text(g, f, fit(f, n.name(), rx2 - rx1 - 12 - f.width(rank)), rx1 + 5, ry + 3, r > 0 ? Ui.WHITE : Ui.GRAY, a);
-            Ui.text(g, f, rank, rx2 - 4 - f.width(rank), ry + 3, maxed ? Ui.GOLD : Ui.WHITE, a);
-            if (rh >= 24) {
+            Ui.text(g, f, fit(f, n.name(), rx2 - rx1 - 12 - f.width(rank)), rx1 + 5, ry + 2, r > 0 ? Ui.WHITE : Ui.GRAY, a);
+            Ui.text(g, f, rank, rx2 - 4 - f.width(rank), ry + 2, maxed ? Ui.GOLD : Ui.WHITE, a);
+            if (rh >= 22) {
                 String eff = r > 0 ? ShadowTree.effect(k, r) : n.desc();
-                Ui.text(g, f, fit(f, eff, rx2 - rx1 - 10), rx1 + 5, ry + 12, r > 0 ? 0xFFC9A7FF : Ui.MUTED, a * 0.9F);
+                Ui.text(g, f, fit(f, eff, rx2 - rx1 - 10), rx1 + 5, ry + 11, r > 0 ? 0xFFC9A7FF : Ui.MUTED, a * 0.9F);
             }
-            Ui.bar(g, rx1 + 1, ry + rh - 6, rx2 - rx1 - 2, 2, r / (float) n.max(), maxed ? Ui.GOLD : Ui.SHADOW, a);
+            Ui.bar(g, rx1 + 1, ry + rh - 4, rx2 - rx1 - 2, 1, r / (float) n.max(), maxed ? Ui.GOLD : Ui.SHADOW, a);
             Box plus = treePlus(lb, k);
             if (can) {
                 float pulse = 0.5F + 0.5F * (float) Math.sin(now / 240.0 + k);

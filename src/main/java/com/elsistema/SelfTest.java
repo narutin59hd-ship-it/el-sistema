@@ -380,7 +380,7 @@ public final class SelfTest {
         p.teleportTo(lvl, o.getX() + 0.5, o.getY(), o.getZ() + 0.5 + dist[lineup], 180.0F, k == 1 || k == 3 ? 4.0F : 8.0F);
         if (k < 3) {
             for (int x = -14; x <= 14; x++) {
-                for (int z = -12; z <= 4; z++) {
+                for (int z = -12; z <= 14; z++) {
                     lvl.setBlockAndUpdate(o.offset(x, -1, z), net.minecraft.world.level.block.Blocks.SMOOTH_STONE.defaultBlockState());
                 }
             }
