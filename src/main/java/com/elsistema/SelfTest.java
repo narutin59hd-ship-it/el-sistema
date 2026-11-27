@@ -362,9 +362,75 @@ public final class SelfTest {
                 if (fallen != null && fallen.state == Shadows.RECOVERING) throw new IllegalStateException("la sombra caída no volvió");
                 ElSistema.LOGGER.info("[SELFTEST] OK la sombra caída volvió al pasar el tiempo");
             }
+            case 11, 12, 13, 14 -> gallery(p, step - 11);
             default -> {
             }
         }
+    }
+
+    /** Galería para las capturas: los monstruos en fila, quietos y mirando a la cámara (de día y de noche). */
+    private static void gallery(ServerPlayer p, int k) {
+        ServerLevel lvl = p.serverLevel();
+        Shadows.storeAll(p, false);
+        BlockPos spawn = lvl.getSharedSpawnPos();
+        int lineup = k == 3 ? 1 : k;
+        BlockPos o = new BlockPos(spawn.getX() + 80 + lineup * 48, 140, spawn.getZ() + 80);
+        double[] dist = {5.6, 9.5, 5.2};
+        lvl.setDayTime(k == 3 ? 18000L : 6000L);
+        p.teleportTo(lvl, o.getX() + 0.5, o.getY(), o.getZ() + 0.5 + dist[lineup], 180.0F, k == 1 || k == 3 ? 4.0F : 8.0F);
+        if (k < 3) {
+            for (int x = -14; x <= 14; x++) {
+                for (int z = -12; z <= 4; z++) {
+                    lvl.setBlockAndUpdate(o.offset(x, -1, z), net.minecraft.world.level.block.Blocks.SMOOTH_STONE.defaultBlockState());
+                }
+            }
+            List<EntityType<? extends Mob>> types = new ArrayList<>();
+            double gap;
+            if (k == 0) {
+                types.add(ModEntities.GOBLIN);
+                types.add(ModEntities.ORCO);
+                types.add(ModEntities.CABALLERO);
+                types.add(ModEntities.GUARDIAN);
+                gap = 2.7;
+            } else if (k == 1) {
+                types.add(ModEntities.LOBO);
+                types.add(ModEntities.COLOSO);
+                types.add(ModEntities.PRIMORDIAL);
+                types.add(ModEntities.ECLIPSE);
+                types.add(ModEntities.OSO);
+                gap = 3.9;
+            } else {
+                types.add(ModEntities.HORMIGA);
+                types.add(ModEntities.QUEEN);
+                types.add(ModEntities.GOBLIN);
+                gap = 3.4;
+            }
+            for (int i = 0; i < types.size(); i++) {
+                double x = o.getX() + 0.5 + (i - (types.size() - 1) / 2.0) * gap;
+                Mob m = types.get(i).create(lvl);
+                if (m == null) throw new IllegalStateException("galería: no se pudo crear " + types.get(i));
+                m.moveTo(x, o.getY(), o.getZ() + 0.5, 0.0F, 0.0F);
+                m.setYHeadRot(0.0F);
+                m.setYBodyRot(0.0F);
+                m.setNoAi(true);
+                m.setInvulnerable(true);
+                m.setPersistenceRequired();
+                lvl.addFreshEntity(m);
+                if (k == 2 && i == 2) {
+                    // Una sombra (para ver que la capa oscura tapa el brillo)
+                    Mob s = Shadows.testShadow(m, lvl);
+                    if (s != null) {
+                        s.setNoAi(true);
+                        s.moveTo(x, o.getY(), o.getZ() + 0.5, 0.0F, 0.0F);
+                        s.setYHeadRot(0.0F);
+                        s.setYBodyRot(0.0F);
+                        SHADOWS.add(s);
+                        m.discard();
+                    }
+                }
+            }
+        }
+        ElSistema.LOGGER.info("[SELFTEST] galería {} preparada", k);
     }
 
     /** Despierta al Jugador del cliente, le da sombras propias y deja un cadáver para extraer. */

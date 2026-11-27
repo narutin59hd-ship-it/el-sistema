@@ -1,4 +1,4 @@
-# El Sistema 1.4.0 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.5.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
@@ -14,6 +14,35 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.5.0
+
+### Más EXP y monstruos más difíciles
+- Matar cualquier criatura da **5 veces más EXP**.
+- Los monstruos con rango tienen **+50% de vida**, **+35% de daño**, más armadura y aguante al empuje según su rango,
+  y te ven desde más lejos. Las sombras no reciben esta dificultad extra.
+
+### Las sombras suben de nivel contigo y tienen su propio árbol
+- Cada vez que ganas EXP, todas tus sombras (menos las caídas) ganan la misma cantidad. La que mata además gana
+  la EXP de su presa. Usan la misma tabla de EXP que tú: las de nivel bajo te alcanzan rápido.
+- Cada nivel que sube una sombra le da **1 punto** para su **árbol propio**. En la pestaña Sombras elige una
+  sombra y pulsa **ÁRBOL PROPIO**:
+  - Garras afiladas: +4% de daño por rango (20 rangos).
+  - Cuerpo de sombra: +5% de vida por rango (20).
+  - Coraza oscura: +1 de armadura por rango (15).
+  - Paso veloz: +3% de velocidad por rango (10).
+  - Sed de sangre: se cura el 2% del daño que hace por rango (10, cuesta 2 puntos).
+  - Golpe brutal: +3% de probabilidad de golpe doble por rango (10, cuesta 2).
+  - Regeneración: +0,5 de vida por segundo por rango (10, cuesta 2).
+- La pestaña Sombras muestra la barra de EXP de cada sombra y un `*` cuando alguna tiene puntos.
+
+### Monstruos con diseños nuevos
+- Modelos y texturas nuevos (diseños propios, a doble resolución) para el goblin, el orco, el caballero maldito,
+  el coloso, el lobo colmillo de acero, el oso de hielo, la hormiga soldado y los cuatro jefes secretos.
+- Los ojos, las runas y el magma brillan en la oscuridad.
+
+### Comando nuevo (con trucos)
+- `/sistema sombras 10`: da 10 puntos de árbol a todas tus sombras.
 
 ## Novedades de la 1.4.0
 
@@ -163,6 +192,7 @@ Fabric Loader para 1.21.1, Fabric API y el `.jar` en la carpeta `mods`
 - `/sistema exp 500`: te da 500 de EXP.
 - `/sistema oro 5000`: te da 5000 de oro.
 - `/sistema puntos 10`: te da 10 puntos de habilidad.
+- `/sistema sombras 10`: da 10 puntos de árbol propio a cada una de tus sombras.
 - `/sistema puerta C`: abre una puerta de mazmorra de rango C delante de ti (E, D, C, B, A o S).
 - `/sistema cambiar`: vuelves a elegir raza y clase sin perder el nivel.
 - `/sistema reiniciar`: empiezas de cero (también pierdes tus sombras, misiones y mutación).

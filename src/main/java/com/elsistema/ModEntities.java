@@ -72,7 +72,7 @@ public final class ModEntities {
         OSO = reg("oso_hielo", DungeonMonster.Kind.OSO, 1.3F, 1.4F, 0xD8F0FF, 0x6FB8E6);
         ORCO = reg("orco", DungeonMonster.Kind.ORCO, 0.75F, 2.35F, 0x3F6B2E, 0x2B2B2B);
         HORMIGA = reg("hormiga", DungeonMonster.Kind.HORMIGA, 1.1F, 0.85F, 0x3A2A1E, 0xA33A1E);
-        CABALLERO = reg("caballero", DungeonMonster.Kind.CABALLERO, 0.65F, 2.2F, 0x1E1E28, 0xB0202A);
+        CABALLERO = reg("caballero", DungeonMonster.Kind.CABALLERO, 0.65F, 2.2F, 0x2E353C, 0x6EF0D8);
         COLOSO = reg("coloso", DungeonMonster.Kind.COLOSO, 1.2F, 3.4F, 0x8A8A8A, 0x5FD7FF);
         GUARDIAN = regBoss("guardian_juicio", SecretBoss.Kind.GUARDIAN, DungeonMonster.Kind.CABALLERO, 0.8F, 2.5F, 0xD8DCE8, 0xDEB640);
         ECLIPSE = regBoss("bestia_eclipse", SecretBoss.Kind.ECLIPSE, DungeonMonster.Kind.LOBO, 1.5F, 1.8F, 0x28223A, 0xAAA0E6);

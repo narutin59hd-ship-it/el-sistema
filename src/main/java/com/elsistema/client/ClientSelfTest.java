@@ -341,7 +341,27 @@ public final class ClientSelfTest {
             case 1060 -> view(mc, 0, 0, 0);
             case 1072 -> shot(mc, "pestaña ESTADO tras el prestigio");
             case 1076 -> mc.setScreen(null);
-            case 1100 -> finish(mc);
+            // ---------------------------------------------------- 1.5.0: árbol propio de una sombra y galería de monstruos
+            case 1080 -> view(mc, 2, 1, 0);
+            case 1092 -> shot(mc, "pestaña SOMBRAS: árbol propio de una sombra");
+            case 1096 -> mc.setScreen(null);
+            case 1100 -> trial(11);
+            case 1130 -> {
+                if (worldMode) shot(mc, "galería: goblin, orco, caballero maldito y Guardián del Juicio");
+            }
+            case 1134 -> trial(12);
+            case 1166 -> {
+                if (worldMode) shot(mc, "galería: lobo, colosos, Bestia del Eclipse y oso de hielo");
+            }
+            case 1170 -> trial(13);
+            case 1200 -> {
+                if (worldMode) shot(mc, "galería: hormiga, Reina Carmesí y una sombra");
+            }
+            case 1204 -> trial(14);
+            case 1236 -> {
+                if (worldMode) shot(mc, "galería de noche: ojos, runas y magma que brillan");
+            }
+            case 1240 -> finish(mc);
             default -> {
             }
         }
