@@ -120,6 +120,15 @@ public class ElSistema implements ModInitializer {
         // Flechas más fuertes y monstruos con rango
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> SystemLogic.onEntityLoad(entity));
 
+        // 1.8.2: /spawn lleva a cualquiera a la plaza de la Ciudad de los Cazadores (no necesita trucos)
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                dispatcher.register(Commands.literal("spawn")
+                        .executes(ctx -> {
+                            ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                            City.toSpawn(sp, Store.get(sp));
+                            return 1;
+                        })));
+
         // Comandos de prueba (necesitan trucos u operador)
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("sistema")

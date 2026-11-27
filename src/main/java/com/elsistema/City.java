@@ -101,6 +101,18 @@ public final class City {
         SystemLogic.sync(p, d);
     }
 
+    /** /spawn: lleva a la plaza de la ciudad (si ya estás en la ciudad, vuelves a la plaza sin perder el sitio de vuelta). */
+    public static void toSpawn(ServerPlayer p, Data d) {
+        if (!inCity(p)) {
+            travel(p, d);
+            return;
+        }
+        ServerLevel city = (ServerLevel) p.level();
+        p.teleportTo(city, SPAWN_X, G, SPAWN_Z, 180.0F, 0.0F);
+        p.resetFallDistance();
+        city.playSound((Player) null, SPAWN_X, G, SPAWN_Z, SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.0F, 0.8F);
+    }
+
     public static void back(ServerPlayer p, Data d) {
         if (!inCity(p) || p.getServer() == null) {
             SystemLogic.notify(p, Net.N_CITY, 5, 0);

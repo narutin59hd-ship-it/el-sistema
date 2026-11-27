@@ -1,4 +1,4 @@
-# El Sistema 1.8.1 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.8.2 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
@@ -15,6 +15,10 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.8.2
+- Comando **/spawn** (no necesita trucos): te lleva a la plaza de la Ciudad de los Cazadores. Si ya estás en la
+  ciudad, te devuelve a la plaza. Para volver al mundo normal, el arco de la plaza.
 
 ## Novedades de la 1.8.1
 - La primera vez que entras a un mundo **apareces en la Ciudad de los Cazadores** (para salir, el arco de la plaza).
