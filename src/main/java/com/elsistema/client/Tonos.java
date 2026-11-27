@@ -105,7 +105,7 @@ public final class Tonos {
 
             @Override
             public void onResourceManagerReload(ResourceManager manager) {
-                reload(manager);
+                onReload(manager);
             }
         });
         WorldRenderEvents.START.register(context -> tintLightmap());
@@ -118,7 +118,7 @@ public final class Tonos {
 
     // ================================================================ recursos
 
-    private static void reload(ResourceManager rm) {
+    private static void onReload(ResourceManager rm) {
         reloads++;
         closeChain();
         chainFailed = false;
