@@ -25,6 +25,18 @@ public final class Combat {
 
     private static boolean busy = false;
 
+    /** Golpe extra que no pasa por los efectos de combate (ecos, espinas de la armadura, bonus de la herrería). */
+    public static void extraHit(LivingEntity victim, DamageSource src, float dmg) {
+        if (dmg <= 0F || !victim.isAlive()) return;
+        busy = true;
+        try {
+            victim.invulnerableTime = 0;
+            victim.hurt(src, dmg);
+        } finally {
+            busy = false;
+        }
+    }
+
     /** Devuelve false si el golpe se anula (esquivado). */
     public static boolean allowDamage(LivingEntity victim, DamageSource src, float amount) {
         if (busy) return true;
@@ -61,6 +73,8 @@ public final class Combat {
 
         if (victim instanceof ServerPlayer p) {
             Data d = Store.get(p);
+            // Habilidades ocultas de la armadura (herrería de la ciudad)
+            if (!Forge.onPlayerHurt(p, src, amount)) return false;
             if (d.awakened == 1) {
                 if (attacker != null && attacker != p) {
                     double dodge = d.fx(Trees.FX_DODGE);
@@ -92,6 +106,7 @@ public final class Combat {
         if (attacker instanceof ServerPlayer ap && attacker != victim) {
             Data d = Store.get(ap);
             if (src.getDirectEntity() == ap) {
+                Forge.onPlayerHit(ap, victim, amount);
                 ItemStack held = ap.getMainHandItem();
                 if (held.is(ModItems.GUADANA)) {
                     Shadows.focus(ap, victim);

@@ -1,4 +1,4 @@
-# El Sistema 1.6.0 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.7.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
@@ -15,6 +15,46 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.7.0
+
+### La Ciudad de los Cazadores (un mapa aparte)
+- En la ventana del Sistema: **MISIONES > CIUDAD > VIAJAR A LA CIUDAD** (o `/sistema ciudad`). Llegas a la plaza,
+  junto al **Cristal del Sistema**. Para volver: el mismo botón (VOLVER A CASA) o cruzar el **Portal de regreso**
+  de la esquina suroeste de la plaza. Vuelves exactamente a donde estabas.
+- La ciudad se construye sola la primera vez (calles, torres con las ventanas encendidas de noche, parques,
+  farolas...) y no se puede romper ni llenar de bloques (salvo en creativo). No salen monstruos.
+- Sus habitantes (diseños propios):
+  - **Lucía**, recepcionista de la **Asociación de Cazadores** (el edificio grande del norte): contratos.
+  - **Bruno**, en la **Herrería**: mejora armas y despierta habilidades ocultas con esencias.
+  - **Selene**, en la **Alquimia**: pociones y elixires por oro.
+  - **Ezequiel**, el **mercader de esencias**: rarezas por esencias (y cambia oro por esencias).
+  - **Darío**, maestro del **Gremio de cazadores**: contratos difíciles.
+  - Y cuatro vecinos que pasean y te cuentan cosas.
+- Las tiendas de la ciudad **sólo se usan en persona**: haz clic derecho sobre el tendero.
+
+### Esencias (la nueva moneda)
+- Se ganan matando monstruos con rango (E 1 · D 1 · C 2 · B 3 · A 5 · S 8; los jefes, x5; un jefe secreto, +40)
+  y completando mazmorras (E 4 · D 8 · C 14 · B 25 · A 40 · S 70). Se ven junto al oro (◆).
+
+### Herrería: mejoras y habilidades ocultas
+- **Mejorar un arma** (+1 ... +10): cada nivel da un **6 % más de daño** (+60 % en +10). Cuesta 8, 14, 22, 32, 45,
+  60, 80, 105, 135 y 170 esencias. Sirve para espadas, hachas, arcos, ballestas, tridentes y las armas del mod.
+- **Habilidad oculta** (armas y piezas de armadura, 30 esencias; cambiarla, 20): al despertarla sale una al azar.
+  - Armas: Vampirismo, Llama negra, Eco, Verdugo, Cazador de jefes, Tormenta, Sed de maná y Escarcha.
+  - Armadura (se suman por pieza): Espinas, Evasión, Regeneración, Ligereza, Fortaleza, Pozo de maná, Ignífugo
+    y Último aliento (te salva de morir una vez cada 5 minutos).
+- La mejora y la habilidad se ven en la descripción del objeto.
+
+### Misiones secundarias (contratos) con recompensas ocultas
+- Lucía: Primer contrato, Plaga de goblins, El ejército crece y Turista del Sistema.
+- Darío: Cazador de élite, Rompepuertas, Matajefes y Leyenda oculta.
+- Se aceptan y se cobran hablando con quien las da; la recompensa es «???» hasta que la cobras.
+- En MISIONES > CIUDAD ves cómo vas con cada contrato.
+
+### Comandos nuevos (con trucos)
+- `/sistema ciudad`: ir a la ciudad (o volver si ya estás).
+- `/sistema esencias 100`: da 100 esencias.
 
 ## Novedades de la 1.6.0
 

@@ -173,6 +173,15 @@ public final class SystemLogic {
         l.add(d.rank());
         l.add(d.prestige);
         l.add(d.examTries);
+        // 1.7.0: esencias, misiones secundarias y si está en la ciudad
+        l.add(d.essences);
+        for (int i = 0; i < SideQuests.COUNT; i++) {
+            l.add(d.side[i]);
+        }
+        for (int i = 0; i < SideQuests.COUNT; i++) {
+            l.add(d.sideProg[i]);
+        }
+        l.add(City.inCity(p) ? 1 : 0);
         ServerPlayNetworking.send(p, new Net.SyncPayload(l));
     }
 
@@ -187,7 +196,7 @@ public final class SystemLogic {
         if (d.awakened == 1 && d.cls == Defs.MAGO) m += 50;
         if (d.awakened == 1 && d.race == Defs.DEMONIO) m += 30;
         if (d.setBonus == ModArmor.SET_ARCHIMAGO) m += 40;
-        return m + (int) Math.round(d.fx(Trees.FX_MP_MAX));
+        return m + (int) Math.round(d.fx(Trees.FX_MP_MAX)) + d.forgeMp;
     }
 
     public static double mpRegen(Data d) {
@@ -356,6 +365,16 @@ public final class SystemLogic {
         sync(p, d);
     }
 
+    /** Suma esencias (la moneda de la herrería y del mercader de la ciudad). */
+    public static int addEssences(ServerPlayer p, int amount) {
+        Data d = Store.get(p);
+        if (d.awakened != 1 || amount <= 0) return 0;
+        d.essences += amount;
+        notify(p, Net.N_ESSENCES, amount, 0);
+        sync(p, d);
+        return amount;
+    }
+
     /** Suma oro (con los bonus de los árboles). Devuelve la cantidad final. */
     public static int addCoins(ServerPlayer p, int amount) {
         Data d = Store.get(p);
@@ -424,6 +443,7 @@ public final class SystemLogic {
                 }
                 Dungeons.playerTick(p, d);
                 SecretBoss.playerTick(p, d);
+                if (d.awakened == 1 && p.isAlive()) Forge.armorTick(p, d);
             }
             if (t % 100 == 0 && d.awakened == 1 && p.isAlive()) {
                 double regen = d.fx(Trees.FX_REGEN);
@@ -476,6 +496,10 @@ public final class SystemLogic {
             case Net.ACT_RANK -> Ranking.action(p, a, b);
             case Net.ACT_SHADOW_TREE -> Shadows.treeUp(p, a, b);
             case Net.ACT_SETTINGS -> Fx.set(p, a);
+            case Net.ACT_CITY -> City.action(p, a);
+            case Net.ACT_FORGE -> Forge.action(p, a, b);
+            case Net.ACT_CITY_BUY -> CityShop.buy(p, a, b);
+            case Net.ACT_SIDE -> SideQuests.action(p, a, b);
             case Net.ACT_SHADOWS_ALL -> {
                 if (a == 1) {
                     if (Shadows.summonAll(p) == 0) notify(p, Net.N_NO_SHADOWS, Store.get(p).shadows.size(), 0);
@@ -639,7 +663,7 @@ public final class SystemLogic {
             if (owner instanceof ServerPlayer sp) {
                 arrow.addTag(ARROW_TAG);
                 Data d = Store.get(sp);
-                double b = arrowBonus(d);
+                double b = arrowBonus(d) * Forge.bowMult(sp);
                 ItemStack bow = ModItems.SOBERANO[Defs.ARQUERO] == null ? ItemStack.EMPTY
                         : sp.getMainHandItem().is(ModItems.SOBERANO[Defs.ARQUERO]) ? sp.getMainHandItem()
                         : sp.getOffhandItem().is(ModItems.SOBERANO[Defs.ARQUERO]) ? sp.getOffhandItem() : ItemStack.EMPTY;

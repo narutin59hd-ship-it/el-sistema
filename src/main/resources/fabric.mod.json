@@ -8,6 +8,7 @@
   "license": "MIT",
   "environment": "*",
   "accessWidener": "elsistema.accesswidener",
+  "mixins": ["elsistema.mixins.json"],
   "entrypoints": {
     "main": ["com.elsistema.ElSistema"],
     "client": ["com.elsistema.client.ElSistemaClient"]

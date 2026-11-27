@@ -59,8 +59,13 @@ public final class ClientSelfTest {
             if (mc.level == null || mc.player == null) {
                 titleTicks++;
                 if (titleTicks == 100) openWorld(mc);
+                if (titleTicks == 700 && mc.screen != null) {
+                    ElSistema.LOGGER.warn("[SELFTEST-CLIENTE] pantalla al abrir el mundo: {}", mc.screen.getClass().getName());
+                    shot(mc, "pantalla al abrir el mundo");
+                }
                 if (titleTicks >= 1400) {
-                    ElSistema.LOGGER.warn("[SELFTEST-CLIENTE] no se pudo entrar al mundo: pruebo solo la ventana");
+                    failures++;
+                    ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: no se pudo entrar al mundo: pruebo solo la ventana");
                     fakeData();
                     begin(false);
                 }
@@ -126,6 +131,10 @@ public final class ClientSelfTest {
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "textures/" + t + ".png");
             if (rm.getResource(rl).isEmpty()) missing.add(rl.toString());
         }
+        for (String n : com.elsistema.CityNpc.SKIN) {
+            ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "textures/entity/ciudadano/" + n + ".png");
+            if (rm.getResource(rl).isEmpty()) missing.add(rl.toString());
+        }
         for (String set : new String[]{"cazador", "archimago", "caballero_negro", "monarca"}) {
             for (int layer = 1; layer <= 2; layer++) {
                 ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID,
@@ -168,7 +177,9 @@ public final class ClientSelfTest {
         int[] base = {1, 5, 2, 45, 1200, 5000, 3, 40, 22, 30, 55, 18, 140, 260, 0, 1, 123456, 4,
                 6, 3, 0, 0, 0, 10, 2, 4, 0, 0, 4, 2, 3, 0, 0, 5, 9, 3,
                 0, 7, 1, 1, 1, 0, 2, 0, 1, 0, 0, 0, 37, 4, 10, 0, 0, 0, 0,
-                3, 0, 1};
+                3, 0, 1,
+                // 1.7.0: esencias, 8 contratos (estado y progreso) y si está en la ciudad
+                135, 3, 1, 2, 0, 0, 1, 0, 0, 3, 17, 7, 9, 0, 2, 0, 0, 0};
         for (int v : base) {
             d.add(v);
         }
@@ -406,7 +417,63 @@ public final class ClientSelfTest {
             case 1478 -> {
                 if (worldMode) shot(mc, "¡Levántate!: ya ha salido");
             }
-            case 1484 -> finish(mc);
+            // ---------------------------------------------------- 1.7.0: la Ciudad de los Cazadores
+            case 1490 -> {
+                mc.options.hideGui = false;
+                trial(17);
+            }
+            case 1540 -> {
+                if (worldMode) shot(mc, "la Ciudad de los Cazadores: plaza, Cristal del Sistema y la Asociación");
+            }
+            case 1544 -> trial(18);
+            case 1566 -> trial(19);
+            case 1580 -> {
+                if (mc.screen instanceof NpcScreen ns) ns.selfTestSelect(0);
+            }
+            case 1586 -> {
+                if (worldMode) shot(mc, "herrería de Bruno: espada +3 y habilidad oculta");
+            }
+            case 1590 -> {
+                mc.setScreen(null);
+                trial(20);
+            }
+            case 1612 -> {
+                if (worldMode) shot(mc, "Asociación: contratos de Lucía");
+            }
+            case 1616 -> {
+                mc.setScreen(null);
+                trial(21);
+            }
+            case 1626 -> trial(22);
+            case 1642 -> {
+                if (worldMode) shot(mc, "alquimia de Selene");
+            }
+            case 1646 -> {
+                mc.setScreen(null);
+                trial(23);
+            }
+            case 1666 -> {
+                if (worldMode) shot(mc, "mercader de esencias de Ezequiel");
+            }
+            case 1670 -> {
+                mc.setScreen(null);
+                mc.options.hideGui = true;
+                trial(24);
+            }
+            case 1700 -> {
+                if (worldMode) shot(mc, "la ciudad desde el aire");
+            }
+            case 1704 -> trial(25);
+            case 1740 -> {
+                if (worldMode) shot(mc, "la ciudad de noche");
+            }
+            case 1744 -> {
+                mc.options.hideGui = false;
+                trial(26);
+            }
+            case 1770 -> view(mc, 4, 2, 0);
+            case 1782 -> shot(mc, "MISIONES > CIUDAD: contratos y viaje");
+            case 1786 -> finish(mc);
             default -> {
             }
         }

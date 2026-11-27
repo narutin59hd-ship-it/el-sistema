@@ -8,8 +8,10 @@ public final class CData {
 
     /** 36 números del Jugador + mutación, hitos, intentos de la prueba, 8 misiones (estado y progreso),
      *  rango de cazador, prestigio e intentos del examen de ascenso. */
-    public static final int SIZE = 39 + 2 * com.elsistema.Quests.COUNT + 3;
+    public static final int SIZE = 39 + 2 * com.elsistema.Quests.COUNT + 3 + 1 + 2 * com.elsistema.SideQuests.COUNT + 1;
     private static final int R0 = 39 + 2 * com.elsistema.Quests.COUNT;
+    /** 1.7.0: esencias, misiones secundarias (estado y progreso) y si estás en la ciudad. */
+    private static final int E0 = R0 + 3;
     private static int[] d = fresh();
 
     private static int[] fresh() {
@@ -80,6 +82,13 @@ public final class CData {
     public static int hunterRank() { return Math.max(0, Math.min(5, d[R0])); }
     public static int prestige() { return Math.max(0, d[R0 + 1]); }
     public static int examTries() { return d[R0 + 2]; }
+    public static int essences() { return Math.max(0, d[E0]); }
+    /** 0 sin aceptar, 1 en curso, 2 hecha, 3 cobrada. */
+    public static int side(int q) { return q >= 0 && q < com.elsistema.SideQuests.COUNT ? d[E0 + 1 + q] : 0; }
+    public static int sideProg(int q) {
+        return q >= 0 && q < com.elsistema.SideQuests.COUNT ? d[E0 + 1 + com.elsistema.SideQuests.COUNT + q] : 0;
+    }
+    public static boolean inCity() { return d[E0 + 1 + 2 * com.elsistema.SideQuests.COUNT] == 1; }
     /** ¿Puede hacer el examen al rango siguiente? */
     public static boolean examReady() {
         return awakened() && hunterRank() < 5 && level() >= com.elsistema.Defs.RANK_MIN[hunterRank() + 1];

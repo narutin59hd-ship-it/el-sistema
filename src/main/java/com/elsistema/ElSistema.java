@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -63,6 +64,8 @@ public class ElSistema implements ModInitializer {
             SystemLogic.tick(server);
             Dungeons.tick(server);
             Shadows.tick(server);
+            City.tick(server);
+            Forge.tick();
         });
 
         // EXP, oro y botín al matar criaturas (cuerpo a cuerpo, flechas, habilidades o tus sombras)
@@ -70,11 +73,13 @@ public class ElSistema implements ModInitializer {
             if (source.getEntity() instanceof ServerPlayer sp && entity != sp) {
                 Ranks.onKill(sp, entity, 1.0);
                 Quests.onKill(sp, entity);
+                SideQuests.onKill(sp, entity);
             } else if (Shadows.isShadow(source.getEntity())) {
                 ServerPlayer owner = Shadows.ownerPlayer(source.getEntity());
                 if (owner != null) {
                     Ranks.onKill(owner, entity, 0.6);
                     Quests.onKill(owner, entity);
+                    SideQuests.onKill(owner, entity);
                 }
             }
             Shadows.onDeath(entity, source);
@@ -82,6 +87,9 @@ public class ElSistema implements ModInitializer {
 
         // Las sombras no mueren: vuelven a la sombra de su dueño para recuperarse
         ServerLivingEntityEvents.ALLOW_DEATH.register(Shadows::allowDeath);
+        // Armadura con «Último aliento» (herrería de la ciudad): te salva una vez cada 5 minutos
+        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) ->
+                !(entity instanceof ServerPlayer sp) || !Forge.saveFromDeath(sp));
 
         // El cliente necesita saber qué criaturas son sombras para pintarlas oscuras
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
@@ -95,7 +103,19 @@ public class ElSistema implements ModInitializer {
 
         // Dentro de una mazmorra no se pueden romper bloques (la sala no se puede escapar ni saquear)
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) ->
-                !(player instanceof ServerPlayer sp) || Store.get(sp).inDungeon != 1);
+                !(player instanceof ServerPlayer sp) || Store.get(sp).inDungeon != 1 && (!City.inCity(sp) || sp.isCreative()));
+
+        // La ciudad no se puede romper ni llenar de bloques (salvo en creativo)
+        UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
+            if (player instanceof ServerPlayer sp && City.inCity(sp) && !sp.isCreative()) {
+                net.minecraft.world.item.ItemStack held = sp.getItemInHand(hand);
+                if (held.getItem() instanceof net.minecraft.world.item.BlockItem
+                        || held.getItem() instanceof net.minecraft.world.item.BucketItem) {
+                    return net.minecraft.world.InteractionResult.FAIL;
+                }
+            }
+            return net.minecraft.world.InteractionResult.PASS;
+        });
 
         // Flechas más fuertes y monstruos con rango
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> SystemLogic.onEntityLoad(entity));
@@ -133,6 +153,23 @@ public class ElSistema implements ModInitializer {
                                             SystemLogic.sync(sp, d);
                                             return 1;
                                         })))
+                        .then(Commands.literal("esencias")
+                                .then(Commands.argument("cantidad", IntegerArgumentType.integer(1, 1000000))
+                                        .executes(ctx -> {
+                                            ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                            Data d = Store.get(sp);
+                                            d.essences += IntegerArgumentType.getInteger(ctx, "cantidad");
+                                            SystemLogic.sync(sp, d);
+                                            return 1;
+                                        })))
+                        .then(Commands.literal("ciudad")
+                                .executes(ctx -> {
+                                    ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                    Data d = Store.get(sp);
+                                    if (City.inCity(sp)) City.back(sp, d);
+                                    else City.travel(sp, d);
+                                    return 1;
+                                }))
                         .then(Commands.literal("sombras")
                                 .then(Commands.argument("cantidad", IntegerArgumentType.integer(1, 1000))
                                         .executes(ctx -> {

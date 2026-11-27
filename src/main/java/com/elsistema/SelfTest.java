@@ -90,6 +90,10 @@ public final class SelfTest {
                 Shadows.arise(player);
                 ElSistema.LOGGER.info("[SELFTEST] ¡Levántate! intento {}", arises);
             }
+            // 1.7.0: la Ciudad de los Cazadores se construye y aparecen sus vecinos
+            if (player == null && ticks == startAt + 5) cityBuild(server);
+            if (player == null && ticks == startAt + 150) City.checkNpcs(City.level(server));
+            if (player == null && ticks == startAt + 210) cityCheck(server);
             if (ticks == startAt + 220) {
                 finish(server, player);
             }
@@ -365,6 +369,143 @@ public final class SelfTest {
             case 11, 12, 13, 14 -> gallery(p, step - 11);
             case 15 -> animRise(p);
             case 16 -> animArise(p);
+            case 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 -> cityStep(p, step);
+            default -> {
+            }
+        }
+    }
+
+    // ================================================================ 1.7.0: la ciudad
+
+    private static void cityBuild(MinecraftServer server) {
+        ServerLevel city = City.level(server);
+        if (city == null) throw new IllegalStateException("no existe la dimensión de la ciudad");
+        if (!City.ensureBuilt(city)) throw new IllegalStateException("la ciudad ya estaba construida en un mundo nuevo");
+        for (int cx = -4; cx <= 3; cx++) {
+            for (int cz = -4; cz <= 3; cz++) {
+                city.setChunkForced(cx, cz, true);
+            }
+        }
+        if (!city.getBlockState(new BlockPos(-1, City.G + 2, -1)).is(net.minecraft.world.level.block.Blocks.LIGHT_BLUE_STAINED_GLASS)) {
+            throw new IllegalStateException("falta el Cristal del Sistema en la plaza");
+        }
+        ElSistema.LOGGER.info("[SELFTEST] ciudad construida");
+    }
+
+    private static void cityCheck(MinecraftServer server) {
+        ServerLevel city = City.level(server);
+        java.util.Set<Integer> roles = new java.util.HashSet<>();
+        for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, new net.minecraft.world.phys.AABB(-70, 50, -70, 70, 120, 70))) {
+            roles.add(n.role());
+        }
+        if (roles.size() != CityNpc.ROLES) throw new IllegalStateException("faltan vecinos en la ciudad: " + roles);
+        for (int cx = -4; cx <= 3; cx++) {
+            for (int cz = -4; cz <= 3; cz++) {
+                city.setChunkForced(cx, cz, false);
+            }
+        }
+        ElSistema.LOGGER.info("[SELFTEST] OK ciudad: {} vecinos en su sitio", roles.size());
+    }
+
+    private static CityNpc npc(ServerPlayer p, int role) {
+        BlockPos h = City.npcHome(role);
+        List<CityNpc> l = p.serverLevel().getEntitiesOfClass(CityNpc.class, new net.minecraft.world.phys.AABB(h.getX() - 16,
+                h.getY() - 4, h.getZ() - 16, h.getX() + 16, h.getY() + 8, h.getZ() + 16), n -> n.role() == role);
+        if (l.isEmpty()) throw new IllegalStateException("no está " + CityNpc.NAME[role] + " en la ciudad");
+        return l.get(0);
+    }
+
+    /** Pone al Jugador a 3 bloques delante de un tendero, mirándole. */
+    private static void faceNpc(ServerPlayer p, int role) {
+        BlockPos h = City.npcHome(role);
+        boolean south = role == CityNpc.RECEPTION || role == CityNpc.SMITH || role == CityNpc.ALCHEMIST;
+        double z = h.getZ() + 0.5 + (south ? 3.5 : -3.5);
+        p.teleportTo(p.serverLevel(), h.getX() + 0.5, City.G, z, south ? 180.0F : 0.0F, 8.0F);
+    }
+
+    private static void cityStep(ServerPlayer p, int step) {
+        Data d = Store.get(p);
+        switch (step) {
+            case 17 -> {
+                d.essences += 500;
+                p.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(net.minecraft.world.item.Items.DIAMOND_SWORD));
+                p.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new ItemStack(net.minecraft.world.item.Items.IRON_CHESTPLATE));
+                City.travel(p, d);
+                if (!City.inCity(p)) throw new IllegalStateException("no se viajó a la ciudad");
+                ElSistema.LOGGER.info("[SELFTEST] en la Ciudad de los Cazadores");
+            }
+            case 18 -> {
+                int made = City.checkNpcs(p.serverLevel());
+                ElSistema.LOGGER.info("[SELFTEST] {} vecinos puestos en la ciudad", made);
+                npc(p, CityNpc.SMITH);
+                faceNpc(p, CityNpc.SMITH);
+            }
+            case 19 -> {
+                City.interact(p, npc(p, CityNpc.SMITH));
+                Forge.action(p, 0, 0);
+                Forge.action(p, 0, 0);
+                Forge.action(p, 0, 0);
+                Forge.action(p, 0, 1);
+                Forge.action(p, 3, 1);
+                ItemStack sword = p.getMainHandItem();
+                if (Forge.level(sword) != 3 || Forge.hidden(sword) < 0) {
+                    throw new IllegalStateException("la herrería no mejoró la espada: +" + Forge.level(sword) + " oculta " + Forge.hidden(sword));
+                }
+                if (Forge.hidden(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST)) < 0) {
+                    throw new IllegalStateException("la herrería no despertó la habilidad de la armadura");
+                }
+                float before = (float) p.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+                ElSistema.LOGGER.info("[SELFTEST] OK herrería: espada +3 ({} de daño) con {}", before,
+                        Forge.abilityName(sword, Forge.hidden(sword)));
+            }
+            case 20 -> {
+                faceNpc(p, CityNpc.RECEPTION);
+                City.interact(p, npc(p, CityNpc.RECEPTION));
+                SideQuests.action(p, SideQuests.Q_FIRST, 0);
+                SideQuests.action(p, SideQuests.Q_GOBLINS, 0);
+                if (d.side[SideQuests.Q_FIRST] != SideQuests.ACTIVE) throw new IllegalStateException("no se aceptó el contrato");
+                SideQuests.onDungeonClear(p, d, 0);
+                SideQuests.onDungeonClear(p, d, 0);
+                SideQuests.onDungeonClear(p, d, 3);
+                if (d.side[SideQuests.Q_FIRST] != SideQuests.READY) throw new IllegalStateException("el contrato no se completó");
+                SystemLogic.sync(p, d);
+            }
+            case 21 -> {
+                long coins = d.coins;
+                SideQuests.action(p, SideQuests.Q_FIRST, 1);
+                if (d.side[SideQuests.Q_FIRST] != SideQuests.CLAIMED || d.coins <= coins) {
+                    throw new IllegalStateException("no se cobró la recompensa oculta");
+                }
+                ElSistema.LOGGER.info("[SELFTEST] OK contrato cobrado: {}", SideQuests.REWARD[SideQuests.Q_FIRST]);
+                faceNpc(p, CityNpc.ALCHEMIST);
+            }
+            case 22 -> {
+                City.interact(p, npc(p, CityNpc.ALCHEMIST));
+                CityShop.buy(p, CityNpc.ALCHEMIST, 0);
+            }
+            case 23 -> {
+                faceNpc(p, CityNpc.MERCHANT);
+                int pts = d.points;
+                City.interact(p, npc(p, CityNpc.MERCHANT));
+                CityShop.buy(p, CityNpc.MERCHANT, 0);
+                if (d.points != pts + 1) throw new IllegalStateException("el elixir de estadística no dio el punto");
+            }
+            case 24 -> {
+                p.getAbilities().flying = true;
+                p.onUpdateAbilities();
+                p.teleportTo(p.serverLevel(), 14.5, City.G + 46, 62.5, 160.0F, 24.0F);
+            }
+            case 25 -> {
+                p.getAbilities().flying = false;
+                p.onUpdateAbilities();
+                p.serverLevel().setDayTime(18000L);
+                p.teleportTo(p.serverLevel(), 0.5, City.G, 9.5, 180.0F, -8.0F);
+            }
+            case 26 -> {
+                City.back(p, d);
+                if (City.inCity(p)) throw new IllegalStateException("no se volvió de la ciudad");
+                ElSistema.LOGGER.info("[SELFTEST] OK vuelta de la ciudad");
+            }
             default -> {
             }
         }

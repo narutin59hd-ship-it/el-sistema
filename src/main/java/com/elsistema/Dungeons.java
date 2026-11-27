@@ -53,6 +53,8 @@ public final class Dungeons {
     private static final int H = 12;
     private static final int[] WAVES = {3, 3, 4, 4, 5, 5};
     private static final int GATE_LIFE = 6000;
+    /** Esencias por completar una mazmorra de rango E, D, C, B, A o S. */
+    public static final int[] CLEAR_ESSENCE = {4, 8, 14, 25, 40, 70};
     private static final int RUN_LIMIT = 20 * 60 * 15;
     private static final float[][] RGB = {
             {0.75F, 0.75F, 0.75F}, {0.45F, 0.95F, 0.5F}, {0.35F, 0.75F, 1.0F},
@@ -831,6 +833,8 @@ public final class Dungeons {
             SystemLogic.notify(p, Net.N_DUNGEON_CLEAR, rank, gold);
             p.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
             Quests.onDungeonClear(p, Store.get(p), rank);
+            SystemLogic.addEssences(p, CLEAR_ESSENCE[rank]);
+            SideQuests.onDungeonClear(p, Store.get(p), rank);
         }
         Fx.send(g.level, ParticleTypes.TOTEM_OF_UNDYING, r.cx(), r.y0 + 2.0, r.cz(), 120, 3.0, 1.5, 3.0, 0.4);
     }

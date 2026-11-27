@@ -1,11 +1,13 @@
 package com.elsistema.client;
 
+import com.elsistema.CityNpc;
 import com.elsistema.Defs;
 import com.elsistema.ModArmor;
 import com.elsistema.ModItems;
 import com.elsistema.Net;
 import com.elsistema.Quests;
 import com.elsistema.ShadowTree;
+import com.elsistema.SideQuests;
 import com.elsistema.Shop;
 import com.elsistema.Trees;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -70,7 +72,7 @@ public class SystemScreen extends Screen {
     private static final int SHADOW_ROW = 24;
     private static final int SHOP_ROW = 22;
     private static final int QUEST_ROW = 24;
-    private static final String[] QUEST_SUBS = {"MISIONES OCULTAS", "HITOS DE NIVEL"};
+    private static final String[] QUEST_SUBS = {"MISIONES OCULTAS", "HITOS DE NIVEL", "CIUDAD"};
     private static final int HINT = 0xFF5F7387;
     private static final int LOCKED = 0xFF3C4A58;
 
@@ -307,6 +309,12 @@ public class SystemScreen extends Screen {
         label(g, f, "CLASE", CData.className(), mid, y1 + Y_RANK, CData.mutated() ? Ui.GOLD : Ui.WHITE, a);
         label(g, f, "RAZA", Hud.name(Defs.RACE_NAME, CData.race()), lx, y1 + Y_RACE, Ui.WHITE, a);
         label(g, f, "ORO", String.valueOf(CData.coins()), mid, y1 + Y_RACE, Ui.GOLD, a);
+        String ess = "◆ " + CData.essences();
+        Ui.glow(g, f, ess, rx - f.width(ess), y1 + Y_RACE, Hud.ESSENCE, 0x407FE8D8, a);
+        if (Ui.inside(mx, my, rx - f.width(ess) - 2, y1 + Y_RACE - 1, f.width(ess) + 4, 10)) {
+            tip = List.of("Esencias: " + CData.essences(), "Se ganan matando monstruos con rango y completando mazmorras",
+                    "Se gastan en la herrería y en el mercader de la ciudad");
+        }
         if (Ui.inside(mx, my, mid, y1 + Y_RANK - 1, rx - mid, 10) && CData.cls() >= 0) {
             tip = classTip(CData.cls(), CData.mutated());
         }
@@ -1263,7 +1271,7 @@ public class SystemScreen extends Screen {
     // ------------------------------------------------------------------ pestaña MISIONES
 
     private static int qsub() {
-        return lastQSub == 1 ? 1 : 0;
+        return lastQSub >= 0 && lastQSub < QUEST_SUBS.length ? lastQSub : 0;
     }
 
     private int qchipW() {
@@ -1353,10 +1361,12 @@ public class SystemScreen extends Screen {
             if (CData.quest(q) == Quests.DONE) done++;
         }
         String sum = sub == 0 ? "Descubiertas " + found + "/" + Quests.COUNT + "  ·  hechas " + done
-                : "Cobrados " + Integer.bitCount(CData.milestones()) + "/" + Quests.MS_LEVEL.length;
-        sum = fit(f, sum, x2 - 10 - (qchipX(1) + cw + 8));
-        Ui.text(g, f, sum, x2 - 10 - f.width(sum), y1 + 30, Ui.GRAY, a);
+                : sub == 1 ? "Cobrados " + Integer.bitCount(CData.milestones()) + "/" + Quests.MS_LEVEL.length
+                : "◆ " + CData.essences();
+        sum = fit(f, sum, x2 - 10 - (qchipX(QUEST_SUBS.length - 1) + cw + 8));
+        Ui.text(g, f, sum, x2 - 10 - f.width(sum), y1 + 30, sub == 2 ? Hud.ESSENCE : Ui.GRAY, a);
         if (sub == 1) return milestones(g, x1, y1, x2, y2, mx, my, a, now);
+        if (sub == 2) return cityTab(g, x1, y1, x2, y2, mx, my, a, now);
 
         Box lb = questList();
         Box ib = questInfo();
@@ -1586,6 +1596,15 @@ public class SystemScreen extends Screen {
                 return true;
             }
         }
+        if (qsub() == 2) {
+            if (cityButton().in(mx, my)) {
+                send(Net.ACT_CITY, CData.inCity() ? 1 : 0, 0);
+                Hud.sound(SoundEvents.AMETHYST_BLOCK_RESONATE, 1.0F, 0.8F);
+                this.onClose();
+                return true;
+            }
+            return false;
+        }
         if (qsub() != 0) return false;
         Box lb = questList();
         int rows = questRows();
@@ -1604,6 +1623,85 @@ public class SystemScreen extends Screen {
             return true;
         }
         return false;
+    }
+
+    // ------------------------------------------------------------------ MISIONES > CIUDAD
+
+    private Box cityInfo() {
+        int x1 = px();
+        int y1 = py();
+        return new Box(x1 + 8, y1 + 45, x1 + pw() * 45 / 100, y1 + ph() - 17);
+    }
+
+    private Box cityQuests() {
+        Box l = cityInfo();
+        return new Box(l.x2() + 6, l.y1(), px() + pw() - 8, l.y2());
+    }
+
+    private Box cityButton() {
+        Box b = cityInfo();
+        return new Box(b.x1() + 8, b.y2() - 24, b.x2() - 8, b.y2() - 7);
+    }
+
+    private static final String[][] CITY_PLACES = {
+            {"Asociación de Cazadores", "Lucía: contratos"},
+            {"Herrería", "Bruno: mejoras y habilidades ocultas"},
+            {"Alquimia", "Selene: pociones y elixires"},
+            {"Esencias", "Ezequiel: rarezas por esencias"},
+            {"Gremio de cazadores", "Darío: contratos difíciles"}};
+
+    private List<String> cityTab(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
+        Font f = this.font;
+        List<String> tip = null;
+        Box ib = cityInfo();
+        card(g, ib, Ui.CYAN, a);
+        int lx = ib.x1() + 8;
+        int y = ib.y1() + 7;
+        Ui.glow(g, f, fit(f, "CIUDAD DE LOS CAZADORES", ib.w() - 16), lx, y, Ui.WHITE, Ui.GLOW, a);
+        y += 13;
+        Ui.text(g, f, fit(f, CData.inCity() ? "Estás en la ciudad" : "Un mapa aparte con tiendas en persona", ib.w() - 16), lx, y,
+                CData.inCity() ? Ui.GREEN : Ui.GRAY, a);
+        y += 14;
+        for (String[] p : CITY_PLACES) {
+            if (y > ib.y2() - 40) break;
+            Ui.text(g, f, fit(f, "◆ " + p[0], ib.w() - 16), lx, y, Ui.CYAN, a);
+            y += 10;
+            Ui.text(g, f, fit(f, p[1], ib.w() - 24), lx + 8, y, Ui.MUTED, a);
+            y += 12;
+        }
+        Box b = cityButton();
+        float pulse = 0.75F + 0.25F * (float) Math.sin(now / 300.0);
+        boolean hover = Ui.button(g, f, CData.inCity() ? "VOLVER A CASA" : "VIAJAR A LA CIUDAD", b.x1(), b.y1(), b.w(), b.h(), mx, my,
+                Ui.CYAN, true, a * pulse);
+        if (hover) tip = CData.inCity() ? List.of("Vuelves al sitio desde el que viajaste", "También puedes cruzar el Portal de regreso de la plaza")
+                : List.of("Te lleva a la plaza de la ciudad", "No se puede viajar desde una mazmorra");
+        // Contratos
+        Box qb = cityQuests();
+        card(g, qb, Ui.GOLD, a);
+        Ui.glow(g, f, "CONTRATOS", qb.x1() + 8, qb.y1() + 7, Ui.WHITE, 0x60FFC857, a);
+        int row = Math.max(18, (qb.h() - 24) / SideQuests.COUNT);
+        for (int q = 0; q < SideQuests.COUNT; q++) {
+            int ry = qb.y1() + 21 + q * row;
+            if (ry + row > qb.y2() + 2) break;
+            int st = CData.side(q);
+            int col = st == SideQuests.CLAIMED ? Ui.GREEN : st == SideQuests.READY ? Ui.GOLD : st == SideQuests.ACTIVE ? Ui.CYAN : 0xFF56626E;
+            String state = switch (st) {
+                case SideQuests.OPEN -> "habla con " + CityNpc.NAME[SideQuests.GIVER[q]];
+                case SideQuests.ACTIVE -> CData.sideProg(q) + "/" + SideQuests.GOAL[q];
+                case SideQuests.READY -> "¡cóbrala!";
+                default -> "cobrada";
+            };
+            int sw = f.width(state);
+            Ui.text(g, f, fit(f, SideQuests.NAME[q], qb.w() - 24 - sw), qb.x1() + 8, ry, st == SideQuests.OPEN ? Ui.GRAY : Ui.WHITE, a);
+            Ui.text(g, f, state, qb.x2() - 8 - sw, ry, col, a);
+            if (Ui.inside(mx, my, qb.x1() + 4, ry - 2, qb.w() - 8, row - 2)) {
+                tip = List.of(SideQuests.NAME[q], SideQuests.GOAL_TEXT[q], "Lo da: " + CityNpc.NAME[SideQuests.GIVER[q]] + " ("
+                        + CityNpc.TITLE[SideQuests.GIVER[q]] + ")", st == SideQuests.CLAIMED ? "Recompensa: " + SideQuests.REWARD[q]
+                        : "Recompensa: ? ? ?");
+            }
+        }
+        hint(g, "Los contratos se aceptan y se cobran en persona, en la ciudad", x1, x2, y2, a);
+        return tip;
     }
 
     // ------------------------------------------------------------------ pestaña RANGO
@@ -2287,6 +2385,7 @@ public class SystemScreen extends Screen {
         for (int i = 0; i < 5; i++) {
             statTip(i);
         }
+        n += NpcScreen.selfCheck();
         for (int i = 0; i < SETTING_TITLE.length; i++) {
             settingDesc(i, true);
             settingDesc(i, false);

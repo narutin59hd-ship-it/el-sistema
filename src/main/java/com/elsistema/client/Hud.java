@@ -1,7 +1,11 @@
 package com.elsistema.client;
 
+import com.elsistema.CityNpc;
+import com.elsistema.CityShop;
 import com.elsistema.Defs;
+import com.elsistema.Forge;
 import com.elsistema.Net;
+import com.elsistema.SideQuests;
 import com.elsistema.Quests;
 import com.elsistema.SecretBoss;
 import com.elsistema.ShadowTree;
@@ -41,6 +45,10 @@ public final class Hud {
     private static int xpAmount = 0;
     private static long goldTime = -1;
     private static int goldAmount = 0;
+    private static long essTime = -1;
+    private static int essAmount = 0;
+    /** Color de las esencias en el HUD y en las ventanas. */
+    public static final int ESSENCE = 0xFF7FE8D8;
     private static long warnTime = -1;
     private static String warnText = "";
     private static long corpseStart = -1;
@@ -190,6 +198,71 @@ public final class Hud {
                 goldAmount = (goldTime > 0 && now - goldTime < 1500 ? goldAmount : 0) + a;
                 goldTime = now;
             }
+            case Net.N_ESSENCES -> {
+                essAmount = (essTime > 0 && now - essTime < 1500 ? essAmount : 0) + a;
+                essTime = now;
+            }
+            case Net.N_NPC_OPEN -> {
+                if (mc.player != null && a >= 0 && a < CityNpc.ROLES) mc.setScreen(new NpcScreen(a, b));
+            }
+            case Net.N_NPC_TALK -> {
+                if (a >= 0 && a < CityNpc.ROLES) {
+                    String[] l = CityNpc.LINES[a];
+                    toast(CityNpc.NAME[a].toUpperCase(Locale.ROOT) + " · " + CityNpc.TITLE[a], Ui.CYAN,
+                            "«" + l[Math.max(0, Math.min(l.length - 1, b))] + "»");
+                }
+            }
+            case Net.N_FORGE -> {
+                if (a == 0) {
+                    big("¡MEJORA +" + b + "!", "Tu arma hace un " + Math.round(Forge.DMG_PER_LEVEL * b * 100) + " % más de daño",
+                            0x905FD7FF, 0x553A8DFF);
+                    sound(SoundEvents.ANVIL_USE, 0.6F, 1.2F);
+                } else {
+                    boolean armor = b >= 100;
+                    int id = b % 100;
+                    String name = armor ? Forge.ARMOR_NAME[Math.max(0, Math.min(7, id))] : Forge.WEAPON_NAME[Math.max(0, Math.min(7, id))];
+                    String desc = armor ? Forge.ARMOR_DESC[Math.max(0, Math.min(7, id))] : Forge.WEAPON_DESC[Math.max(0, Math.min(7, id))];
+                    big(a == 1 ? "HABILIDAD OCULTA" : "NUEVA HABILIDAD", name + ": " + desc, 0x90B57BFF, 0x55200040);
+                }
+            }
+            case Net.N_FORGE_FAIL -> {
+                switch (a) {
+                    case 0 -> warn("No tienes esencias suficientes (" + CData.essences() + "/" + b + ")");
+                    case 1 -> warn("Eso no es un arma ni una pieza de armadura.");
+                    case 2 -> warn("Esta arma ya está en +" + Forge.MAX_LEVEL + ".");
+                    default -> warn("Tienes que estar junto a " + (b > 0 && b < CityNpc.ROLES ? CityNpc.NAME[b] : "su tendero")
+                            + " en la ciudad.");
+                }
+            }
+            case Net.N_CITY -> {
+                switch (a) {
+                    case 0 -> big("CIUDAD DE LOS CAZADORES", "Habla con los vecinos: tiendas, herrería y contratos", 0x905FD7FF, 0x443A8DFF);
+                    case 1 -> note("Has vuelto de la Ciudad de los Cazadores.", Ui.CYAN);
+                    case 2 -> warn("No puedes viajar a la ciudad desde una mazmorra.");
+                    case 3 -> warn("Ya estás en la ciudad.");
+                    case 4 -> warn("La ciudad no existe en este mundo.");
+                    default -> warn("No estás en la ciudad.");
+                }
+            }
+            case Net.N_SIDE -> {
+                int q = Math.max(0, Math.min(SideQuests.COUNT - 1, a));
+                if (b == 0) {
+                    note("Contrato aceptado: " + SideQuests.NAME[q], Ui.GOLD);
+                } else if (b == 1) {
+                    toast("MISIÓN SECUNDARIA COMPLETADA", Ui.GOLD, SideQuests.NAME[q],
+                            "Vuelve con " + CityNpc.NAME[SideQuests.GIVER[q]] + " para cobrar la recompensa oculta");
+                } else {
+                    big("RECOMPENSA OCULTA", SideQuests.REWARD[q], 0x90FFC857, 0x55402800);
+                }
+            }
+            case Net.N_CITY_BUY -> {
+                CityShop.Offer[] o = CityShop.offers(a);
+                if (b >= 0 && b < o.length) note("Comprado: " + o[b].name(), Ui.GREEN);
+            }
+            case Net.N_CITY_BUY_FAIL -> warn(a == 2 ? "Ya has comprado los 5 pergaminos de sombra."
+                    : a == 1 ? "No tienes esencias suficientes (" + CData.essences() + "/" + b + ")"
+                    : "No tienes oro suficiente (" + CData.coins() + "/" + b + ")");
+            case Net.N_LAST_BREATH -> big("ÚLTIMO ALIENTO", "Tu armadura te ha salvado de la muerte", 0x90FF5A5A, 0x66400000);
             case Net.N_SKILL -> callout(Defs.skillName(a, b == 1).toUpperCase(Locale.ROOT), b == 1 ? Ui.GOLD : Ui.WHITE);
             case Net.N_COOLDOWN -> warn("Habilidad en enfriamiento: " + a + " s");
             case Net.N_NO_MP -> warn("Maná insuficiente (" + b + "/" + a + " MP)");
@@ -455,7 +528,12 @@ public final class Hud {
         Ui.text(g, f, max ? "MÁX" : CData.xp() + "/" + CData.need(), tx, y1 + 36, Ui.WHITE, 1F);
 
         Ui.text(g, f, "ORO", x1 + 5, y1 + 46, Ui.GOLD, 1F);
-        Ui.text(g, f, String.valueOf(CData.coins()), bx, y1 + 46, Ui.WHITE, 1F);
+        String coins = String.valueOf(CData.coins());
+        Ui.text(g, f, coins, bx, y1 + 46, Ui.WHITE, 1F);
+        if (CData.essences() > 0 || CData.inCity()) {
+            String es = "◆" + CData.essences();
+            Ui.text(g, f, es, bx + f.width(coins) + 6, y1 + 46, ESSENCE, 1F);
+        }
         if (CData.skillPoints() > 0) {
             float pulse = 0.6F + 0.4F * (float) Math.sin(now / 300.0);
             String sp = CData.skillPoints() + " PH";
@@ -573,6 +651,17 @@ public final class Hud {
                 float a = 1F - Ui.clamp01((age - 1000) / 600F);
                 int rise = Math.round(Ui.easeOut(age / 1600F) * 10F);
                 Ui.glow(g, f, "+" + goldAmount + " oro", PX + PW + 8, PY + 48 - rise, Ui.GOLD, 0x50FFC857, a);
+            }
+        }
+        if (essTime >= 0) {
+            long age = now - essTime;
+            if (age > 1600) {
+                essTime = -1;
+                essAmount = 0;
+            } else {
+                float a = 1F - Ui.clamp01((age - 1000) / 600F);
+                int rise = Math.round(Ui.easeOut(age / 1600F) * 10F);
+                Ui.glow(g, f, "+" + essAmount + " esencias", PX + PW + 8, PY + 60 - rise, ESSENCE, 0x507FE8D8, a);
             }
         }
     }

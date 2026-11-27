@@ -72,5 +72,6 @@
   "item.elsistema.arco_monarca": "Monarch's Bow",
   "item.elsistema.baculo_monarca": "Monarch's Staff",
   "item.elsistema.colmillos_monarca": "Monarch's Fangs",
-  "item.elsistema.martillo_monarca": "Monarch's Hammer"
+  "item.elsistema.martillo_monarca": "Monarch's Hammer",
+  "entity.elsistema.ciudadano": "City Resident"
 }

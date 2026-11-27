@@ -44,6 +44,22 @@ public class Data {
     public int examTries = 0;
     public int prestige = 0;
 
+    // Ciudad de los Cazadores (1.7.0): esencias, misiones secundarias y a dónde volver
+    public int essences = 0;
+    /** Estado de cada misión secundaria: 0 sin aceptar, 1 en curso, 2 hecha, 3 cobrada. */
+    public int[] side = new int[SideQuests.COUNT];
+    public int[] sideProg = new int[SideQuests.COUNT];
+    /** Habitantes de la ciudad con los que ya has hablado (un bit por oficio). */
+    public int talked = 0;
+    /** Pergaminos de sombra comprados al mercader. */
+    public int scrolls = 0;
+    public int cityRet = 0;
+    public String cityDim = "";
+    public double cityX = 0;
+    public double cityY = 0;
+    public double cityZ = 0;
+    public float cityYaw = 0F;
+
     // Para volver de una mazmorra si el juego se cierra dentro
     public int inDungeon = 0;
     public double retX = 0;
@@ -63,6 +79,12 @@ public class Data {
     public transient int gateTimer = 0;
     public transient int setBonus = -1;
     public transient int bossTimer = 0;
+    /** Ticks para comprobar que están todos los vecinos de la ciudad. */
+    public transient int cityCheck = 0;
+    /** Enfriamiento de «Último aliento» (armadura de la herrería). */
+    public transient int lastBreath = 0;
+    /** Maná máximo extra de la armadura (Pozo de maná). */
+    public transient int forgeMp = 0;
 
     /** Una sombra del ejército (guardada, fuera o recuperándose). */
     public static class ShadowRec {
@@ -202,6 +224,12 @@ public class Data {
         if (examTries < 0) examTries = 0;
         if (prestige < 0) prestige = 0;
         if (prestige > 99) prestige = 99;
+        if (essences < 0) essences = 0;
+        side = fixSide(side, 0, 3);
+        sideProg = fixSide(sideProg, 0, Integer.MAX_VALUE);
+        if (scrolls < 0) scrolls = 0;
+        if (cityDim == null) cityDim = "";
+        if (cityRet != 1) cityRet = 0;
         for (ShadowRec r : shadows) {
             // Sombras que se estaban recuperando con el sistema antiguo: vuelven enseguida
             if (r.state == 2 && r.recoverTick == 0 && r.recoverDay == 0) r.recoverTick = -1;
@@ -212,6 +240,15 @@ public class Data {
             skillPoints += target - spGranted;
             spGranted = target;
         }
+    }
+
+    private static int[] fixSide(int[] a, int min, int max) {
+        int[] out = new int[SideQuests.COUNT];
+        for (int i = 0; i < out.length; i++) {
+            int v = a != null && i < a.length ? a[i] : 0;
+            out[i] = Math.max(min, Math.min(max, v));
+        }
+        return out;
     }
 
     private static int[] fixArr(int[] a, int min, int max) {

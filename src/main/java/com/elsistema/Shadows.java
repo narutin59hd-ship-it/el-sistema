@@ -540,6 +540,7 @@ public final class Shadows {
         if (ok > 0) {
             sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.SCULK_SHRIEKER_SHRIEK, 0.5F, 0.6F);
             Quests.onArmy(p, d);
+            SideQuests.onArise(p, d, ok);
         }
         sendCorpseInfo(p, d);
         SystemLogic.sync(p, d);
@@ -756,7 +757,9 @@ public final class Shadows {
         double a = an.age * 1.7;
         double sx = Math.cos(a) * 2.2;
         double sz = Math.sin(a) * 2.2;
-        Fx.send(l, ParticleTypes.SOUL, an.x + sx, an.y + 1.2, an.z + sz, 0, -sx, -0.4, -sz, 0.06);
+        // Partículas de portal: aparecen fuera y vuelan hacia el cadáver
+        Fx.send(l, ParticleTypes.PORTAL, an.x, an.y + 0.6, an.z, 0, sx, 0.8, sz, 1.0);
+        Fx.send(l, ParticleTypes.PORTAL, an.x, an.y + 0.6, an.z, 0, -sz, 0.5, sx, 1.0);
         Fx.send(l, ParticleTypes.LARGE_SMOKE, an.x, an.y + 0.1, an.z, 0, 0.0, 1.0, 0.0, 0.09);
         if (t % 4 == 0) Fx.send(l, ParticleTypes.SQUID_INK, an.x, an.y + 0.05, an.z, 4, 0.5, 0.02, 0.5, 0.01);
         if (t == 0) sound(l, an.x, an.y, an.z, SoundEvents.SCULK_CATALYST_BLOOM, 1.2F, 0.6F);

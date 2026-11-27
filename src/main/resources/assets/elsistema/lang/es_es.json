@@ -72,5 +72,6 @@
   "item.elsistema.arco_monarca": "Arco del Monarca",
   "item.elsistema.baculo_monarca": "Báculo del Monarca",
   "item.elsistema.colmillos_monarca": "Colmillos del Monarca",
-  "item.elsistema.martillo_monarca": "Martillo del Monarca"
+  "item.elsistema.martillo_monarca": "Martillo del Monarca",
+  "entity.elsistema.ciudadano": "Habitante de la ciudad"
 }

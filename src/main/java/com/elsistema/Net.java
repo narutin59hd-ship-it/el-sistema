@@ -74,6 +74,17 @@ public final class Net {
     public static final int N_SHADOW_READY = 59;  // a = id de la sombra
     public static final int N_SHADOWS_LEVEL = 60; // a = cuántas sombras han subido de nivel, b = puntos sin gastar
     public static final int N_SHADOW_TREE = 61;   // a = id de la sombra, b = nudo * 100 + rango
+    // 1.7.0: ciudad, esencias, herrería y misiones secundarias
+    public static final int N_ESSENCES = 62;      // a = esencias ganadas
+    public static final int N_NPC_OPEN = 63;      // a = oficio del tendero, b = id de entidad
+    public static final int N_FORGE = 64;         // a = 0 mejora, 1 despertar, 2 cambiar; b = nivel o habilidad (+100 armadura)
+    public static final int N_FORGE_FAIL = 65;    // a = motivo (0 esencias, 1 no es equipo, 2 máximo, 3 lejos), b = coste u oficio
+    public static final int N_CITY = 66;          // a = 0 llegas, 1 vuelves, 2 en mazmorra, 3 ya estás, 4 no existe, 5 no estás
+    public static final int N_SIDE = 67;          // a = misión, b = 0 aceptada, 1 hecha, 2 cobrada
+    public static final int N_CITY_BUY = 68;      // a = tendero, b = oferta
+    public static final int N_CITY_BUY_FAIL = 69; // a = motivo (0 oro, 1 esencias, 2 límite), b = precio
+    public static final int N_NPC_TALK = 70;      // a = oficio, b = frase
+    public static final int N_LAST_BREATH = 71;
 
     // Acciones (cliente -> servidor)
     public static final int ACT_SKILL = 1;
@@ -90,6 +101,10 @@ public final class Net {
     public static final int ACT_RANK = 12;         // a = 0 examen de ascenso, 1 prestigio
     public static final int ACT_SHADOW_TREE = 13;  // a = id de la sombra, b = nudo de su árbol propio
     public static final int ACT_SETTINGS = 14;     // a = ajustes del cliente (bits de Fx: sin partículas, modo rendimiento)
+    public static final int ACT_CITY = 15;         // a = 0 ir a la ciudad, 1 volver
+    public static final int ACT_FORGE = 16;        // a = hueco del equipo, b = 0 mejorar, 1 despertar o cambiar la habilidad oculta
+    public static final int ACT_CITY_BUY = 17;     // a = tendero, b = oferta
+    public static final int ACT_SIDE = 18;         // a = misión secundaria, b = 0 aceptar, 1 cobrar
 
     /** Números por sombra en la lista de la pestaña Sombras (8 + EXP + puntos + los rangos de su árbol). */
     public static final int SHADOW_STRIDE = 10 + ShadowTree.SIZE;

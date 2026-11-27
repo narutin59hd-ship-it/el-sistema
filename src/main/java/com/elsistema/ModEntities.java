@@ -39,6 +39,9 @@ public final class ModEntities {
     public static EntityType<SecretBoss> QUEEN;
     public static EntityType<SecretBoss> PRIMORDIAL;
 
+    /** Habitantes de la Ciudad de los Cazadores (1.7.0). */
+    public static EntityType<CityNpc> CIUDADANO;
+
     private static EntityType<DungeonMonster> reg(String name, DungeonMonster.Kind kind, float w, float h, int bg, int fg) {
         EntityType<DungeonMonster> type = Registry.register(BuiltInRegistries.ENTITY_TYPE,
                 ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, name),
@@ -78,6 +81,10 @@ public final class ModEntities {
         ECLIPSE = regBoss("bestia_eclipse", SecretBoss.Kind.ECLIPSE, DungeonMonster.Kind.LOBO, 1.5F, 1.8F, 0x28223A, 0xAAA0E6);
         QUEEN = regBoss("reina_carmesi", SecretBoss.Kind.QUEEN, DungeonMonster.Kind.HORMIGA, 2.0F, 1.55F, 0x781024, 0xE6B43C);
         PRIMORDIAL = regBoss("coloso_primordial", SecretBoss.Kind.PRIMORDIAL, DungeonMonster.Kind.COLOSO, 1.4F, 4.3F, 0x362E3C, 0xFF8C28);
+        CIUDADANO = Registry.register(BuiltInRegistries.ENTITY_TYPE,
+                ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "ciudadano"),
+                EntityType.Builder.of(CityNpc::new, MobCategory.CREATURE).sized(0.6F, 1.8F).clientTrackingRange(10).build("ciudadano"));
+        FabricDefaultAttributeRegistry.register(CIUDADANO, CityNpc.attributes());
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.SPAWN_EGGS).register(entries -> {
             for (Item egg : EGGS) {
                 entries.accept(egg);

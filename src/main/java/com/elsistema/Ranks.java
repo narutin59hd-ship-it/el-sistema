@@ -168,6 +168,9 @@ public final class Ranks {
     }
 
     /** Recompensas al matar una criatura: EXP, oro y botín según rango y nivel. xpMult < 1 si la mató una sombra. */
+    /** Esencias por matar un monstruo de rango E, D, C, B, A o S. */
+    public static final int[] ESSENCE = {1, 1, 2, 3, 5, 8};
+
     public static void onKill(ServerPlayer p, LivingEntity dead, double xpMult) {
         if (dead instanceof Player || Shadows.isShadow(dead)) return;
         String id = BuiltInRegistries.ENTITY_TYPE.getKey(dead.getType()).getPath();
@@ -182,6 +185,10 @@ public final class Ranks {
         }
         if (rank >= 0 && hostile) {
             Data d = Store.get(p);
+            // Esencias (1.7.0): la moneda de la herrería y del mercader de la ciudad
+            int ess = ESSENCE[Math.max(0, Math.min(5, rank))] * (isBoss(dead) ? 5 : 1) + (dead instanceof SecretBoss ? 40 : 0);
+            if (xpMult < 1.0) ess = Math.max(1, (int) Math.round(ess * 0.6));
+            SystemLogic.addEssences(p, ess);
             double bonus = 1.0 + d.fx(Trees.FX_DROP) / 100.0;
             RandomSource r = dead.getRandom();
             if (r.nextInt(100) < CORE_CHANCE[rank] * bonus) dead.spawnAtLocation(new ItemStack(ModItems.CORES[rank]));

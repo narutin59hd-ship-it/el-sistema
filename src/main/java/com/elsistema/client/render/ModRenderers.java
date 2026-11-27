@@ -1,5 +1,6 @@
 package com.elsistema.client.render;
 
+import com.elsistema.CityNpc;
 import com.elsistema.DungeonMonster;
 import com.elsistema.ElSistema;
 import com.elsistema.ModEntities;
@@ -12,6 +13,8 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.PlayerModel;
+import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -81,8 +84,31 @@ public final class ModRenderers {
         EntityRendererRegistry.register(ModEntities.QUEEN,
                 ctx -> new Beast(ctx, new InsectModel<>(ctx.bakeLayer(REINA_LAYER)), "reina_carmesi", 1.4F, 1.7F, true));
 
+        // Habitantes de la Ciudad de los Cazadores
+        EntityRendererRegistry.register(ModEntities.CIUDADANO, Citizen::new);
+
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((entityType, entityRenderer, helper, context) ->
                 helper.register(new ShadowLayer((RenderLayerParent) entityRenderer)));
+    }
+
+    /** Habitantes de la ciudad: modelo de jugador con su propio aspecto (textures/entity/ciudadano/...). */
+    public static class Citizen extends HumanoidMobRenderer<CityNpc, PlayerModel<CityNpc>> {
+        private static final ResourceLocation[] SKINS = new ResourceLocation[CityNpc.ROLES];
+
+        static {
+            for (int i = 0; i < CityNpc.ROLES; i++) {
+                SKINS[i] = tex("ciudadano/" + CityNpc.SKIN[i]);
+            }
+        }
+
+        public Citizen(EntityRendererProvider.Context ctx) {
+            super(ctx, new PlayerModel<>(ctx.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+        }
+
+        @Override
+        public ResourceLocation getTextureLocation(CityNpc entity) {
+            return SKINS[entity.role()];
+        }
     }
 
     /** Monstruos con forma humana (goblin, orco, caballero y guardián) con su modelo, textura y tamaño. */
