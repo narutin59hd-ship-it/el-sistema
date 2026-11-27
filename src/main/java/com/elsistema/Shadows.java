@@ -228,20 +228,32 @@ public final class Shadows {
         return 2.0;
     }
 
-    /** Multiplicador de daño de una sombra por su rango y el poder de las sombras de su dueño. */
+    /** Multiplicador de daño de una sombra por su rango, el poder de las sombras de su dueño y su árbol propio. */
     public static double damageMult(Mob m) {
         double mult = Defs.SHADOW_RANK_DMG[clampRank(Ranks.rankOf(m))];
         ServerPlayer p = ownerPlayer(m);
-        if (p != null) mult *= 1.0 + power(Store.get(p));
+        if (p != null) {
+            Data d = Store.get(p);
+            mult *= 1.0 + power(d);
+            ShadowRec rec = d.shadow(sidOf(m));
+            if (rec != null) mult *= 1.0 + ShadowTree.value(rec.tree, ShadowTree.DMG) / 100.0;
+        }
         return mult;
     }
 
-    /** Daño por golpe de una sombra (el que se ve en la pestaña Sombras): criatura, nivel, rango y poder. */
+    /** Daño por golpe de una sombra (el que se ve en la pestaña Sombras): criatura, nivel, rango, poder y árbol. */
     public static double attackOf(ShadowRec rec, Data d) {
         EntityType<?> type = EntityType.byString(rec.type).orElse(null);
         double mult = (1.0 + 0.03 * rec.level + (rec.boss ? 0.5 : 0.0)) * Defs.SHADOW_RANK_DMG[clampRank(rec.rank)];
         if (d != null) mult *= 1.0 + power(d);
+        mult *= 1.0 + ShadowTree.value(rec.tree, ShadowTree.DMG) / 100.0;
         return baseDamage(type) * mult;
+    }
+
+    /** Registro de la sombra de una entidad (o null si no es una sombra con dueño conectado). */
+    public static ShadowRec recOf(Entity e) {
+        ServerPlayer p = ownerPlayer(e);
+        return p == null ? null : Store.get(p).shadow(sidOf(e));
     }
 
     /** Daño del golpe de sombra (para las criaturas que no tienen ataque propio). */
@@ -306,7 +318,7 @@ public final class Shadows {
         Entity killer = src.getEntity();
         ServerPlayer owner = killer instanceof ServerPlayer sp ? sp : ownerPlayer(killer);
         if (owner == null) return;
-        if (killer != null && isShadow(killer)) shadowKill(owner, killer);
+        if (killer != null && isShadow(killer)) shadowKill(owner, killer, dead);
         if (!canExtract(dead)) return;
         Data d = Store.get(owner);
         if (d.awakened != 1) return;
@@ -347,20 +359,117 @@ public final class Shadows {
         tag.putBoolean("CanPickUpLoot", false);
     }
 
-    private static void shadowKill(ServerPlayer owner, Entity killer) {
+    /** Una sombra ha matado a una criatura: cuenta la baja y gana la EXP de esa criatura (además de la compartida). */
+    private static void shadowKill(ServerPlayer owner, Entity killer, LivingEntity dead) {
         Data d = Store.get(owner);
         ShadowRec rec = d.shadow(sidOf(killer));
         if (rec == null) return;
         rec.kills++;
-        int need = 10 + rec.level / 5;
-        if (rec.kills % need == 0 && rec.level < Defs.MAX_LEVEL && killer instanceof Mob m) {
-            rec.level++;
-            prepare(m, rec, owner.getUUID(), d);
-            ((ServerLevel) m.level()).sendParticles(ParticleTypes.TOTEM_OF_UNDYING, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
-                    25, 0.3, 0.5, 0.3, 0.2);
-            SystemLogic.notify(owner, Net.N_SHADOW_LEVEL, rec.id, rec.level);
-            sendList(owner);
+        if (d.awakened == 1 && rec.state != RECOVERING) {
+            int gained = giveXp(owner, d, rec, Ranks.killXp(dead));
+            if (gained > 0) {
+                SystemLogic.notify(owner, Net.N_SHADOW_LEVEL, rec.id, rec.level);
+                sendList(owner);
+            }
         }
+        DIRTY.add(owner.getUUID());
+    }
+
+    // ================================================================ EXP y árbol propio de cada sombra
+
+    /** Jugadores cuya lista de sombras ha cambiado (EXP) y hay que reenviar al cliente. */
+    private static final Set<UUID> DIRTY = new java.util.HashSet<>();
+
+    /**
+     * Las sombras suben de nivel contigo: cada vez que ganas EXP, todas tus sombras (menos las caídas) ganan
+     * la misma cantidad. Usan la misma tabla de EXP que el Jugador, así que las de nivel bajo te alcanzan rápido.
+     */
+    public static void gainXp(ServerPlayer p, Data d, int amount) {
+        if (amount <= 0 || d.shadows.isEmpty()) return;
+        int leveled = 0;
+        ShadowRec last = null;
+        for (ShadowRec rec : d.shadows) {
+            if (rec.state == RECOVERING) continue;
+            if (giveXp(p, d, rec, amount) > 0) {
+                leveled++;
+                last = rec;
+            }
+        }
+        if (leveled == 1) {
+            SystemLogic.notify(p, Net.N_SHADOW_LEVEL, last.id, last.level);
+        } else if (leveled > 1) {
+            int pts = 0;
+            for (ShadowRec rec : d.shadows) {
+                pts += rec.pts;
+            }
+            SystemLogic.notify(p, Net.N_SHADOWS_LEVEL, leveled, pts);
+        }
+        if (leveled > 0) {
+            sendList(p);
+        } else {
+            DIRTY.add(p.getUUID());
+        }
+    }
+
+    /** Da EXP a una sombra. Devuelve los niveles que ha subido (cada uno le da puntos para su árbol). */
+    public static int giveXp(ServerPlayer p, Data d, ShadowRec rec, int amount) {
+        if (amount <= 0 || rec.level >= Defs.MAX_LEVEL) return 0;
+        rec.xp += amount;
+        int gained = 0;
+        while (rec.level < Defs.MAX_LEVEL && rec.xp >= Defs.xpNeeded(rec.level)) {
+            rec.xp -= Defs.xpNeeded(rec.level);
+            rec.level++;
+            rec.pts += ShadowTree.POINTS_PER_LEVEL;
+            gained++;
+        }
+        if (rec.level >= Defs.MAX_LEVEL) rec.xp = 0;
+        if (gained > 0 && rec.state == OUT) {
+            Mob m = entityOf(p, rec);
+            if (m != null) {
+                float frac = m.getHealth() / Math.max(1.0F, m.getMaxHealth());
+                prepare(m, rec, p.getUUID(), d);
+                m.setHealth(Math.max(1.0F, frac * m.getMaxHealth()));
+                ((ServerLevel) m.level()).sendParticles(ParticleTypes.TOTEM_OF_UNDYING, m.getX(), m.getY() + m.getBbHeight() / 2.0,
+                        m.getZ(), 20, 0.3, 0.5, 0.3, 0.2);
+            }
+        }
+        return gained;
+    }
+
+    /** Pestaña Sombras: gasta los puntos de una sombra en un nudo de su árbol propio. */
+    public static void treeUp(ServerPlayer p, int id, int node) {
+        Data d = Store.get(p);
+        ShadowRec rec = d.shadow(id);
+        if (rec == null || d.awakened != 1) return;
+        rec.tree = ShadowTree.fix(rec.tree);
+        if (!ShadowTree.canUp(rec.tree, rec.pts, node)) {
+            sendList(p);
+            return;
+        }
+        rec.pts -= ShadowTree.NODES[node].cost();
+        rec.tree[node]++;
+        if (rec.state == OUT) {
+            Mob m = entityOf(p, rec);
+            if (m != null) {
+                float frac = m.getHealth() / Math.max(1.0F, m.getMaxHealth());
+                prepare(m, rec, p.getUUID(), d);
+                m.setHealth(Math.max(1.0F, frac * m.getMaxHealth()));
+                ((ServerLevel) m.level()).sendParticles(ParticleTypes.WITCH, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
+                        12, 0.3, 0.4, 0.3, 0.05);
+            }
+        }
+        SystemLogic.notify(p, Net.N_SHADOW_TREE, rec.id, node * 100 + rec.tree[node]);
+        sendList(p);
+    }
+
+    /** Comando /sistema sombras: puntos de árbol para todas las sombras. */
+    public static int addPointsAll(ServerPlayer p, int n) {
+        Data d = Store.get(p);
+        for (ShadowRec rec : d.shadows) {
+            rec.pts = Math.max(0, rec.pts + n);
+        }
+        sendList(p);
+        return d.shadows.size();
     }
 
     // ================================================================ ¡Levántate!
@@ -666,6 +775,7 @@ public final class Shadows {
             m.setItemSlot(EquipmentSlot.HEAD, new ItemStack(ModItems.VEIL));
         }
         Ranks.applyStats(m, rec.rank, rec.level, rec.boss);
+        Ranks.clearDifficulty(m);
         if (m instanceof SecretBoss sb) sb.asShadow();
         double pw = d == null ? 0.0 : power(d);
         Ranks.mod(m, Attributes.MAX_HEALTH, "sombra_poder", pw, Operation.ADD_MULTIPLIED_TOTAL);
@@ -673,6 +783,15 @@ public final class Shadows {
         // Cuanto mejor es el rango de la sombra, más daño hace
         Ranks.mod(m, Attributes.ATTACK_DAMAGE, "sombra_rango", Defs.SHADOW_RANK_DMG[clampRank(rec.rank)] - 1.0,
                 Operation.ADD_MULTIPLIED_TOTAL);
+        // Árbol propio de la sombra
+        rec.tree = ShadowTree.fix(rec.tree);
+        Ranks.mod(m, Attributes.ATTACK_DAMAGE, "sombra_garras", ShadowTree.value(rec.tree, ShadowTree.DMG) / 100.0,
+                Operation.ADD_MULTIPLIED_TOTAL);
+        Ranks.mod(m, Attributes.MAX_HEALTH, "sombra_cuerpo", ShadowTree.value(rec.tree, ShadowTree.HP) / 100.0,
+                Operation.ADD_MULTIPLIED_TOTAL);
+        Ranks.mod(m, Attributes.ARMOR, "sombra_coraza", ShadowTree.value(rec.tree, ShadowTree.ARMOR), Operation.ADD_VALUE);
+        Ranks.mod(m, Attributes.MOVEMENT_SPEED, "sombra_paso", ShadowTree.value(rec.tree, ShadowTree.SPEED) / 100.0,
+                Operation.ADD_MULTIPLIED_BASE);
         for (String t : new ArrayList<>(m.getTags())) {
             if (t.startsWith(ATK)) m.removeTag(t);
         }
@@ -871,13 +990,13 @@ public final class Shadows {
                                 m.getX(), m.getY() + 0.15, m.getZ(), 2, m.getBbWidth() * 0.4, 0.05, m.getBbWidth() * 0.4, 0.0);
                     }
                     if (t % 20 == 0) {
-                        double regen = d.fx(Trees.FX_SHADOW_REGEN);
+                        double regen = d.fx(Trees.FX_SHADOW_REGEN) + ShadowTree.value(rec.tree, ShadowTree.REGEN);
                         if (regen > 0 && m.getHealth() < m.getMaxHealth()) m.heal((float) regen);
                         rec.hp = Math.max(0.05F, Math.min(1.0F, m.getHealth() / Math.max(1.0F, m.getMaxHealth())));
                     }
                 }
             }
-            if (changed || t % 40 == 0 && (map != null && !map.isEmpty() || hasRecovering(d))) {
+            if (changed || t % 40 == 0 && (map != null && !map.isEmpty() || hasRecovering(d) || DIRTY.contains(p.getUUID()))) {
                 sendList(p);
             }
         }
@@ -937,6 +1056,7 @@ public final class Shadows {
         CORPSES.clear();
         MISSING.clear();
         PENDING_DISCARD.clear();
+        DIRTY.clear();
     }
 
     public static void forget(ServerPlayer p) {
@@ -974,10 +1094,18 @@ public final class Shadows {
             nums.add((int) Math.min(Integer.MAX_VALUE, downLeft(r, ow)));
             nums.add(r.kills | (r.boss ? 1 << 24 : 0));
             nums.add((int) Math.min(Integer.MAX_VALUE, Math.round(attackOf(r, d) * 10.0)));
+            int need = Defs.xpNeeded(r.level);
+            nums.add(r.level >= Defs.MAX_LEVEL ? 1000 : (int) Math.max(0L, Math.min(999L, r.xp * 1000L / Math.max(1, need))));
+            nums.add(r.pts);
+            r.tree = ShadowTree.fix(r.tree);
+            for (int k = 0; k < ShadowTree.SIZE; k++) {
+                nums.add(r.tree[k]);
+            }
             strs.add(r.type);
             strs.add(r.key);
         }
         SystemLogic.sendShadows(p, nums, strs);
+        DIRTY.remove(p.getUUID());
     }
 
     private static void sound(ServerLevel lvl, double x, double y, double z, SoundEvent s, float volume, float pitch) {

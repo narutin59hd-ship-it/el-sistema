@@ -66,6 +66,7 @@ public final class Ranks {
     /** Da rango y nivel a un monstruo (también lo usan las mazmorras). */
     public static void apply(Mob mob, int rank, int level, boolean boss) {
         applyStats(mob, rank, level, boss);
+        applyDifficulty(mob, rank);
         mob.setHealth(mob.getMaxHealth());
         MutableComponent name = Component.literal((boss ? "★ " : "") + "[" + Defs.RANK[rank] + "] ").withStyle(COLOR[rank]);
         name.append(mob.getType().getDescription());
@@ -91,6 +92,25 @@ public final class Ranks {
         mod(mob, Attributes.MOVEMENT_SPEED, "rango_velocidad", 0.02 * rank, Operation.ADD_MULTIPLIED_BASE);
         mod(mob, Attributes.ARMOR, "rango_armadura", 1.5 * rank + (boss ? 4.0 : 0.0), Operation.ADD_VALUE);
         mod(mob, Attributes.SCALE, "rango_tamano", SIZE[rank] + (boss ? 0.5 : 0.0), Operation.ADD_VALUE);
+    }
+
+    /** Dificultad extra de los monstruos (no de las sombras): más vida, daño, armadura, aguante y alcance. */
+    public static void applyDifficulty(Mob mob, int rank) {
+        rank = Math.max(0, Math.min(5, rank));
+        mod(mob, Attributes.MAX_HEALTH, "dificultad_vida", Defs.MOB_HP_MULT - 1.0, Operation.ADD_MULTIPLIED_TOTAL);
+        mod(mob, Attributes.ATTACK_DAMAGE, "dificultad_dano", Defs.MOB_DMG_MULT - 1.0, Operation.ADD_MULTIPLIED_TOTAL);
+        mod(mob, Attributes.ARMOR, "dificultad_armadura", Defs.MOB_ARMOR_PER_RANK * rank, Operation.ADD_VALUE);
+        mod(mob, Attributes.KNOCKBACK_RESISTANCE, "dificultad_empuje", Defs.MOB_KB_PER_RANK * rank, Operation.ADD_VALUE);
+        mod(mob, Attributes.FOLLOW_RANGE, "dificultad_alcance", Defs.MOB_FOLLOW_BONUS, Operation.ADD_MULTIPLIED_BASE);
+    }
+
+    /** Quita la dificultad extra (al convertir un monstruo en sombra). */
+    public static void clearDifficulty(Mob mob) {
+        mod(mob, Attributes.MAX_HEALTH, "dificultad_vida", 0.0, Operation.ADD_MULTIPLIED_TOTAL);
+        mod(mob, Attributes.ATTACK_DAMAGE, "dificultad_dano", 0.0, Operation.ADD_MULTIPLIED_TOTAL);
+        mod(mob, Attributes.ARMOR, "dificultad_armadura", 0.0, Operation.ADD_VALUE);
+        mod(mob, Attributes.KNOCKBACK_RESISTANCE, "dificultad_empuje", 0.0, Operation.ADD_VALUE);
+        mod(mob, Attributes.FOLLOW_RANGE, "dificultad_alcance", 0.0, Operation.ADD_MULTIPLIED_BASE);
     }
 
     static void mod(Mob mob, Holder<Attribute> attr, String path, double v, Operation op) {
@@ -132,7 +152,19 @@ public final class Ranks {
     /** Multiplicador de las flechas de un monstruo con rango (igual que su daño cuerpo a cuerpo). */
     public static double arrowMult(Entity e) {
         if (rankOf(e) < 0) return 1.0;
-        return (1.0 + 0.03 * levelOf(e)) * (isBoss(e) ? 1.5 : 1.0);
+        double m = (1.0 + 0.03 * levelOf(e)) * (isBoss(e) ? 1.5 : 1.0);
+        if (!Shadows.isShadow(e)) m *= Defs.MOB_DMG_MULT;
+        return m;
+    }
+
+    /** EXP que da una criatura al morir (antes de los bonus del Jugador): especie, rango, nivel y jefe. */
+    public static int killXp(LivingEntity dead) {
+        String id = BuiltInRegistries.ENTITY_TYPE.getKey(dead.getType()).getPath();
+        int base = Xp.forMob(id, dead instanceof Enemy);
+        int rank = rankOf(dead);
+        double mult = rank >= 0 ? REWARD[rank] * (1.0 + 0.04 * levelOf(dead)) : 1.0;
+        if (isBoss(dead)) mult *= 3.0;
+        return (int) Math.round(base * mult * Defs.KILL_XP_MULT);
     }
 
     /** Recompensas al matar una criatura: EXP, oro y botín según rango y nivel. xpMult < 1 si la mató una sombra. */
@@ -144,7 +176,7 @@ public final class Ranks {
         int rank = rankOf(dead);
         double mult = rank >= 0 ? REWARD[rank] * (1.0 + 0.04 * levelOf(dead)) : 1.0;
         if (isBoss(dead)) mult *= 3.0;
-        SystemLogic.addXp(p, (int) Math.round(base * mult * xpMult));
+        SystemLogic.addXp(p, (int) Math.round(killXp(dead) * xpMult));
         if (hostile) {
             SystemLogic.addCoins(p, (int) Math.round(Math.max(1.0, base / 2.0) * mult));
         }

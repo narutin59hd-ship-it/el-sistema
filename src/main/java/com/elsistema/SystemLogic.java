@@ -314,8 +314,11 @@ public final class SystemLogic {
 
     public static void addXp(ServerPlayer p, int amount) {
         Data d = Store.get(p);
-        if (d.awakened != 1 || amount <= 0 || d.level >= Defs.MAX_LEVEL) return;
+        if (d.awakened != 1 || amount <= 0) return;
         amount = Math.max(1, (int) Math.round(amount * xpMult(d)));
+        // Las sombras suben de nivel contigo (también cuando tú ya estás en el nivel máximo)
+        Shadows.gainXp(p, d, amount);
+        if (d.level >= Defs.MAX_LEVEL) return;
         d.xp += amount;
         notify(p, Net.N_XP, amount, 0);
 
@@ -471,6 +474,7 @@ public final class SystemLogic {
             case Net.ACT_QUEST -> Quests.action(p, a, b);
             case Net.ACT_SHADOW -> Shadows.action(p, a, b);
             case Net.ACT_RANK -> Ranking.action(p, a, b);
+            case Net.ACT_SHADOW_TREE -> Shadows.treeUp(p, a, b);
             case Net.ACT_SHADOWS_ALL -> {
                 if (a == 1) {
                     if (Shadows.summonAll(p) == 0) notify(p, Net.N_NO_SHADOWS, Store.get(p).shadows.size(), 0);

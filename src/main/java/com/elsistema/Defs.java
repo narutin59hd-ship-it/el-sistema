@@ -119,6 +119,18 @@ public final class Defs {
     public static final int SHADOW_DOWN_DAYS = 3;
     public static final long SHADOW_DOWN_TICKS = SHADOW_DOWN_DAYS * 24000L;
 
+    // ------------------------------------------------------------ Dificultad y EXP (1.5.0)
+    /** Multiplicador de la EXP que da matar a cualquier criatura. */
+    public static final int KILL_XP_MULT = 5;
+    /** Los monstruos con rango (no las sombras) tienen más vida y hacen más daño. */
+    public static final double MOB_HP_MULT = 1.5;
+    public static final double MOB_DMG_MULT = 1.35;
+    /** Armadura extra por rango y resistencia al empuje por rango de los monstruos. */
+    public static final double MOB_ARMOR_PER_RANK = 1.0;
+    public static final double MOB_KB_PER_RANK = 0.08;
+    /** Los monstruos con rango te ven desde más lejos (+50%). */
+    public static final double MOB_FOLLOW_BONUS = 0.5;
+
     public static int rankIndex(String s) {
         for (int i = 0; i < RANK.length; i++) {
             if (RANK[i].equalsIgnoreCase(s)) return i;

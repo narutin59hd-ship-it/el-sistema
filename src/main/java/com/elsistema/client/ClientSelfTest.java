@@ -174,18 +174,20 @@ public final class ClientSelfTest {
         CData.set(d);
         List<Integer> nums = new ArrayList<>();
         List<String> strs = new ArrayList<>();
+        // id, rango, nivel, estado, vida, caída, bajas|jefe, ataque, EXP, puntos, árbol (7)
         Object[][] army = {
-                {1, 2, 24, 1, 80, 0, 14, 95, "elsistema:goblin", "entity.elsistema.goblin"},
-                {2, 3, 31, 0, 100, 0, 40, 160, "elsistema:lobo_acero", "entity.elsistema.lobo_acero"},
-                {3, 4, 52, 2, 0, 53000, 77, 412, "elsistema:caballero", "entity.elsistema.caballero"},
-                {4, 1, 12, 0, 100, 0, 3, 51, "minecraft:zombie", "entity.minecraft.zombie"},
-                {5, 5, 60, 1, 55, 0, (1 << 24) | 120, 980, "elsistema:coloso", "entity.elsistema.coloso"}};
+                {1, 2, 24, 1, 80, 0, 14, 95, 450, 3, 2, 1, 0, 0, 1, 0, 0, "elsistema:goblin", "entity.elsistema.goblin"},
+                {2, 3, 31, 0, 100, 0, 40, 160, 120, 0, 5, 4, 2, 1, 0, 1, 0, "elsistema:lobo_acero", "entity.elsistema.lobo_acero"},
+                {3, 4, 52, 2, 0, 53000, 77, 412, 900, 1, 0, 0, 0, 0, 0, 0, 0, "elsistema:caballero", "entity.elsistema.caballero"},
+                {4, 1, 12, 0, 100, 0, 3, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, "minecraft:zombie", "entity.minecraft.zombie"},
+                {5, 5, 60, 1, 55, 0, (1 << 24) | 120, 980, 1000, 7, 20, 20, 15, 10, 10, 10, 10, "elsistema:coloso",
+                        "entity.elsistema.coloso"}};
         for (Object[] r : army) {
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < Net.SHADOW_STRIDE; i++) {
                 nums.add((Integer) r[i]);
             }
-            strs.add((String) r[8]);
-            strs.add((String) r[9]);
+            strs.add((String) r[Net.SHADOW_STRIDE]);
+            strs.add((String) r[Net.SHADOW_STRIDE + 1]);
         }
         ClientShadows.set(nums, strs);
     }
@@ -244,7 +246,7 @@ public final class ClientSelfTest {
                         {Net.N_HIDDEN_REWARD, 8, 0}, {Net.N_SKILL, 2, 1}, {Net.N_CORPSE_INFO, 42, 3 + 220},
                         {Net.N_EXAM_READY, 2, 25}, {Net.N_EXAM_FAIL, 2, 1}, {Net.N_EXAM_DENIED, 0, 25},
                         {Net.N_EXAM_DENIED, 3, 0}, {Net.N_PRESTIGE_DENIED, 0, 0}, {Net.N_SHADOW_READY, 1, 0},
-                        {Net.N_BOSS, 3, 1}, {Net.N_EXAM_START, 2, 27}};
+                        {Net.N_BOSS, 3, 1}, {Net.N_EXAM_START, 2, 27}, {Net.N_SHADOWS_LEVEL, 3, 5}, {Net.N_SHADOW_TREE, 1, 503}};
                 for (int[] n : all) {
                     note(n[0], n[1], n[2]);
                 }

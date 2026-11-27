@@ -32,6 +32,33 @@ public final class Combat {
         // El Jugador y sus sombras nunca se hacen daño entre ellos
         if (attacker != null && attacker != victim && Shadows.allied(attacker, victim)) return false;
 
+        // Árbol propio de las sombras: golpe brutal (daño doble) y sed de sangre (se curan con el daño que hacen)
+        if (attacker instanceof Mob sm && attacker != victim && Shadows.isShadow(sm)) {
+            Data.ShadowRec rec = Shadows.recOf(sm);
+            if (rec != null) {
+                double steal = ShadowTree.value(rec.tree, ShadowTree.STEAL);
+                double crit = ShadowTree.value(rec.tree, ShadowTree.CRIT);
+                if (crit > 0 && !(victim instanceof Player) && sm.getRandom().nextDouble() * 100.0 < crit) {
+                    busy = true;
+                    try {
+                        victim.hurt(src, amount * 2.0F);
+                    } finally {
+                        busy = false;
+                    }
+                    if (victim.level() instanceof ServerLevel lvl) {
+                        lvl.sendParticles(ParticleTypes.CRIT, victim.getX(), victim.getY() + victim.getBbHeight() * 0.6, victim.getZ(),
+                                14, 0.3, 0.3, 0.3, 0.25);
+                        lvl.playSound((Player) null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.PLAYER_ATTACK_CRIT,
+                                SoundSource.HOSTILE, 0.8F, 0.7F);
+                    }
+                    if (steal > 0) sm.heal((float) (amount * 2.0F * steal / 100.0));
+                    // El golpe original se cambia por el doble
+                    return false;
+                }
+                if (steal > 0) sm.heal((float) (amount * steal / 100.0));
+            }
+        }
+
         if (victim instanceof ServerPlayer p) {
             Data d = Store.get(p);
             if (d.awakened == 1) {

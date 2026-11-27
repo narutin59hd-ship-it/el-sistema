@@ -132,6 +132,14 @@ public class ElSistema implements ModInitializer {
                                             SystemLogic.sync(sp, d);
                                             return 1;
                                         })))
+                        .then(Commands.literal("sombras")
+                                .then(Commands.argument("cantidad", IntegerArgumentType.integer(1, 1000))
+                                        .executes(ctx -> {
+                                            ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                            int n = Shadows.addPointsAll(sp, IntegerArgumentType.getInteger(ctx, "cantidad"));
+                                            sp.sendSystemMessage(Component.literal("[Sistema] Puntos de árbol dados a " + n + " sombras."));
+                                            return 1;
+                                        })))
                         .then(Commands.literal("puerta")
                                 .then(Commands.argument("rango", StringArgumentType.word())
                                         .executes(ctx -> {

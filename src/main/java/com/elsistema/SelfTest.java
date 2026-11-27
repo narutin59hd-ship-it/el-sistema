@@ -186,10 +186,57 @@ public final class SelfTest {
         }
         ElSistema.LOGGER.info("[SELFTEST] rango, prestigio y sombras: E {}% · S {}% · S con Perspicacia {}% · ataque S {} / E {}",
                 e, s, s2, Math.round(Shadows.attackOf(strong, null)), Math.round(Shadows.attackOf(weak, null)));
+        balance15(lvl);
         Dungeons.selfTest(lvl, base);
         ElSistema.LOGGER.info("[SELFTEST] mazmorras construidas y limpiadas (también la prueba y los jefes secretos)");
         secretBosses(lvl, base);
         if (player != null) army(player, lvl);
+    }
+
+    /** 1.5.0: monstruos más difíciles (las sombras no), EXP x5 y árbol propio de las sombras. */
+    private static void balance15(ServerLevel lvl) {
+        Mob tough = EntityType.ZOMBIE.create(lvl);
+        if (tough == null) throw new IllegalStateException("no se pudo crear el zombi de prueba");
+        Ranks.apply(tough, 3, 50, false);
+        double hardHp = tough.getMaxHealth();
+        Ranks.clearDifficulty(tough);
+        double softHp = tough.getMaxHealth();
+        if (Math.abs(hardHp / softHp - Defs.MOB_HP_MULT) > 0.02) {
+            throw new IllegalStateException("dificultad: vida " + hardHp + " con / " + softHp + " sin");
+        }
+        Mob plain = EntityType.ZOMBIE.create(lvl);
+        if (plain == null) throw new IllegalStateException("no se pudo crear el zombi normal");
+        int zxp = Ranks.killXp(plain);
+        if (zxp != Xp.forMob("zombie", true) * Defs.KILL_XP_MULT) throw new IllegalStateException("EXP del zombi: " + zxp);
+        // Las sombras suben de nivel con la EXP y ganan puntos para su árbol
+        Data.ShadowRec lv = new Data.ShadowRec();
+        lv.type = "minecraft:zombie";
+        lv.level = 10;
+        int gained = Shadows.giveXp(null, new Data(), lv, Defs.xpNeeded(10) + Defs.xpNeeded(11) + 5);
+        if (gained != 2 || lv.level != 12 || lv.pts != 2 * ShadowTree.POINTS_PER_LEVEL || lv.xp != 5) {
+            throw new IllegalStateException("EXP de las sombras: +" + gained + " nivel " + lv.level + " puntos " + lv.pts + " exp " + lv.xp);
+        }
+        double before = Shadows.attackOf(lv, null);
+        lv.tree[ShadowTree.DMG] = 5;
+        if (!(Shadows.attackOf(lv, null) > before * 1.19)) throw new IllegalStateException("el árbol propio no sube el daño");
+        if (!ShadowTree.canUp(lv.tree, 2, ShadowTree.CRIT) || ShadowTree.canUp(lv.tree, 1, ShadowTree.CRIT)) {
+            throw new IllegalStateException("coste de los nudos del árbol propio");
+        }
+        // Partidas de antes de la 1.5.0: las sombras no tenían árbol
+        Data old = new Gson().fromJson("{\"shadows\":[{\"id\":3,\"type\":\"minecraft:zombie\",\"nbt\":\"{}\",\"level\":7}]}",
+                Data.class);
+        old.fix();
+        Data.ShadowRec o = old.shadows.get(0);
+        if (o.tree == null || o.tree.length != ShadowTree.SIZE || o.pts != 0 || o.level != 7) {
+            throw new IllegalStateException("migración de las sombras sin árbol");
+        }
+        for (int k = 0; k < ShadowTree.SIZE; k++) {
+            for (int r = 0; r <= ShadowTree.NODES[k].max(); r++) {
+                ShadowTree.effect(k, r);
+            }
+        }
+        ElSistema.LOGGER.info("[SELFTEST] 1.5.0: vida de monstruo x{} · EXP de un zombi {} · sombra 10 -> {} con {} puntos · árbol de {} puntos",
+                Math.round(hardHp / softHp * 100.0) / 100.0, zxp, lv.level, lv.pts, ShadowTree.totalCost());
     }
 
     /** Crea los 4 jefes secretos (en fila, detrás de los demás monstruos) y les hace usar todas sus habilidades. */
@@ -346,6 +393,24 @@ public final class SelfTest {
             d.shadows.add(r);
         }
         d.nextShadow = id;
+        // Las sombras suben de nivel contigo y gastan puntos en su árbol propio
+        int lvBefore = d.shadows.get(0).level;
+        Shadows.gainXp(p, d, 3000);
+        Data.ShadowRec first = d.shadows.get(0);
+        if (first.level <= lvBefore || first.pts <= 0) throw new IllegalStateException("las sombras no subieron de nivel contigo");
+        first.pts += 12;
+        int ptsBefore = first.pts;
+        Shadows.treeUp(p, first.id, ShadowTree.DMG);
+        Shadows.treeUp(p, first.id, ShadowTree.CRIT);
+        if (first.tree[ShadowTree.DMG] != 1 || first.tree[ShadowTree.CRIT] != 1
+                || first.pts != ptsBefore - 1 - ShadowTree.NODES[ShadowTree.CRIT].cost()) {
+            throw new IllegalStateException("árbol propio de la sombra: " + java.util.Arrays.toString(first.tree) + " puntos " + first.pts);
+        }
+        first.tree[ShadowTree.HP] = 6;
+        first.tree[ShadowTree.STEAL] = 3;
+        first.tree[ShadowTree.REGEN] = 2;
+        ElSistema.LOGGER.info("[SELFTEST] sombras propias: {} subió del nivel {} al {} y tiene {} puntos", first.id, lvBefore, first.level,
+                first.pts);
         Item[] hotbar = {ModItems.GUADANA, ModItems.ESPADA, ModItems.HACHA, ModItems.DAGA, ModItems.BACULO,
                 ModItems.POCION_MANA, ModItems.ELIXIR, ModItems.PIEDRA_RETORNO, ModItems.RUNE};
         p.getInventory().clearContent();

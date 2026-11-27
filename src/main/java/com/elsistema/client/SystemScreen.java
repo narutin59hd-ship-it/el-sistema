@@ -5,6 +5,7 @@ import com.elsistema.ModArmor;
 import com.elsistema.ModItems;
 import com.elsistema.Net;
 import com.elsistema.Quests;
+import com.elsistema.ShadowTree;
 import com.elsistema.Shop;
 import com.elsistema.Trees;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -93,6 +94,8 @@ public class SystemScreen extends Screen {
     private String previewType = "";
     private boolean prestigeArmed = false;
     private long prestigeTime = 0L;
+    /** Pestaña Sombras: true = se ve el árbol propio de la sombra elegida. */
+    private boolean shadowTreeView = false;
 
     /** Rectángulo de la ventana. */
     private record Box(int x1, int y1, int x2, int y2) {
@@ -214,7 +217,8 @@ public class SystemScreen extends Screen {
             g.fill(tx, ty, tx + tw, ty + TAB_H, Ui.fade(bg, a));
             Ui.border(g, tx, ty, tx + tw, ty + TAB_H, Ui.fade(on ? acc : 0xFF3C5A74, a));
             String label = TABS[i];
-            if ((i == 0 && CData.points() > 0) || (i == 1 && CData.skillPoints() > 0)) label += " *";
+            if ((i == 0 && CData.points() > 0) || (i == 1 && CData.skillPoints() > 0)
+                    || (i == 2 && ClientShadows.anyPoints())) label += " *";
             boolean alert = i == 4 && CData.quest(Quests.Q_CLASS) == Quests.ACTIVE
                     || i == TAB_RANK && (CData.examReady() || CData.prestigeReady());
             if (alert) label += " !";
@@ -808,6 +812,13 @@ public class SystemScreen extends Screen {
         if (sel == null) {
             sel = list.get(0);
             selShadow = sel.id();
+            shadowTreeView = false;
+        }
+        if (shadowTreeView) {
+            List<String> ttip = shadowTree(g, f, lb, ib, sel, mx, my, a, now);
+            hint(g, "Cada nivel que sube la sombra le da " + ShadowTree.POINTS_PER_LEVEL
+                    + " punto · tus sombras ganan la misma EXP que tú", x1, x2, y2, a);
+            return ttip;
         }
         List<String> tip = null;
         g.enableScissor(lb.x1() + 1, lb.y1() + 1, lb.x2() - 1, lb.y2() - 1);
@@ -827,7 +838,12 @@ public class SystemScreen extends Screen {
             int right = rx2 - 4;
             Ui.text(g, f, lv, right - f.width(lv), ry + 3, Ui.WHITE, a);
             Ui.glow(g, f, rt, right - f.width(lv) - 6 - f.width(rt), ry + 3, Defs.RANK_COLOR[rank], 0x40000000, a);
-            int nameW = right - f.width(lv) - f.width(rt) - 12 - (rx1 + 6) - (e.boss() ? f.width("JEFE") + 4 : 0);
+            String ptsTag = e.pts() > 0 ? "+" + e.pts() : "";
+            if (!ptsTag.isEmpty()) {
+                Ui.text(g, f, ptsTag, right - f.width(lv) - 6 - f.width(rt) - 6 - f.width(ptsTag), ry + 3, Ui.GOLD, a);
+            }
+            int nameW = right - f.width(lv) - f.width(rt) - 12 - (rx1 + 6) - (e.boss() ? f.width("JEFE") + 4 : 0)
+                    - (ptsTag.isEmpty() ? 0 : f.width(ptsTag) + 6);
             String nm = fit(f, e.name(), nameW);
             Ui.text(g, f, nm, rx1 + 6, ry + 3, Ui.WHITE, a);
             if (e.boss()) Ui.text(g, f, "JEFE", rx1 + 10 + f.width(nm), ry + 3, Ui.GOLD, a);
@@ -836,8 +852,13 @@ public class SystemScreen extends Screen {
                 Ui.bar(g, right - 40, ry + 14, 40, 3, e.hp() / 100F, Ui.HP_RED, a);
             }
             if (hover) {
-                tip = List.of(e.name(), "Rango " + rt + " · nivel " + e.level() + " · " + e.kills() + " bajas",
-                        "Ataque: " + e.attackText() + " por golpe", "Clic: seleccionar");
+                List<String> l = new ArrayList<>();
+                l.add(e.name());
+                l.add("Rango " + rt + " · nivel " + e.level() + " · " + e.kills() + " bajas");
+                l.add("Ataque: " + e.attackText() + " por golpe");
+                if (e.pts() > 0) l.add("¡" + e.pts() + (e.pts() == 1 ? " punto" : " puntos") + " para su árbol!");
+                l.add("Clic: seleccionar");
+                tip = l;
             }
         }
         g.disableScissor();
@@ -886,8 +907,23 @@ public class SystemScreen extends Screen {
     }
 
     private Box previewBox(Box ib) {
-        int h = Math.max(40, Math.min(110, ib.h() - 78));
+        int h = Math.max(40, Math.min(110, ib.h() - 100));
         return new Box(ib.x1() + 4, ib.y1() + 4, ib.x2() - 4, ib.y1() + 4 + h);
+    }
+
+    private Box treeButton(Box ib) {
+        return new Box(ib.x1() + 6, ib.y2() - 37, ib.x2() - 6, ib.y2() - 23);
+    }
+
+    /** Barra de EXP de una sombra con el texto "EXP 45%". */
+    private static void shadowXpBar(GuiGraphics g, Font f, ClientShadows.Entry e, int x, int y, int w, float a) {
+        boolean max = e.level() >= Defs.MAX_LEVEL;
+        String t = max ? "MÁX" : (e.xp() / 10) + "%";
+        Ui.text(g, f, "EXP", x, y, Ui.GRAY, a);
+        int bx = x + f.width("EXP") + 4;
+        int bw = Math.max(10, w - (bx - x) - f.width(t) - 4);
+        Ui.bar(g, bx, y + 2, bw, 4, max ? 1F : e.xp() / 1000F, Ui.SHADOW, a);
+        Ui.text(g, f, t, x + w - f.width(t), y, Ui.WHITE, a);
     }
 
     private void info(GuiGraphics g, Font f, Box ib, ClientShadows.Entry e, int mx, int my, float a, long now) {
@@ -925,13 +961,22 @@ public class SystemScreen extends Screen {
         String lv = "Nivel " + e.level();
         Ui.text(g, f, lv, ib.x2() - 7 - f.width(lv), y, Ui.WHITE, a);
         y += 10;
+        shadowXpBar(g, f, e, lx, y, w, a);
+        y += 10;
         Ui.text(g, f, fit(f, e.kills() + " bajas" + (e.boss() ? "   ·   JEFE" : ""), w), lx, y, e.boss() ? Ui.GOLD : Ui.GRAY, a);
         String atk = "Ataque " + e.attackText();
         Ui.text(g, f, atk, ib.x2() - 7 - f.width(atk), y, Ui.HP_RED, a);
         y += 10;
-        if (y < ib.y2() - 30) {
+        if (y < ib.y2() - 47) {
             Ui.text(g, f, fit(f, stateText(e), w), lx, y, stateColor(e.state()), a);
         }
+        Box tb = treeButton(ib);
+        if (e.pts() > 0) {
+            float pulse = 0.5F + 0.5F * (float) Math.sin(now / 240.0);
+            Ui.border(g, tb.x1() - 2, tb.y1() - 2, tb.x2() + 2, tb.y2() + 2, Ui.fade(Ui.GOLD, a * 0.6F * pulse));
+        }
+        Ui.button(g, f, e.pts() > 0 ? "ÁRBOL PROPIO  (+" + e.pts() + ")" : "ÁRBOL PROPIO", tb.x1(), tb.y1(), tb.w(), tb.h(),
+                mx, my, e.pts() > 0 ? Ui.GOLD : Ui.SHADOW, true, a);
         Box act = actionButton(ib);
         Box rel = releaseButton(ib);
         boolean out = e.state() == ClientShadows.OUT;
@@ -939,6 +984,114 @@ public class SystemScreen extends Screen {
         Ui.button(g, f, out ? "GUARDAR" : "INVOCAR", act.x1(), act.y1(), act.w(), act.h(), mx, my, Ui.SHADOW, !recovering, a);
         boolean armed = releaseId == e.id() && System.currentTimeMillis() - releaseTime < 3000L;
         Ui.button(g, f, armed ? "¿SEGURO?" : "LIBERAR", rel.x1(), rel.y1(), rel.w(), rel.h(), mx, my, Ui.RED, true, a);
+    }
+
+    // ------------------------------------------------------------------ árbol propio de una sombra
+
+    private int treeRowH(Box lb) {
+        return Math.max(18, (lb.h() - 24) / ShadowTree.SIZE);
+    }
+
+    private Box treePlus(Box lb, int k) {
+        int rh = treeRowH(lb);
+        int ry = lb.y1() + 20 + k * rh;
+        return new Box(lb.x2() - 20, ry + (rh - 3) / 2 - 7, lb.x2() - 6, ry + (rh - 3) / 2 + 7);
+    }
+
+    private Box backButton(Box ib) {
+        return new Box(ib.x1() + 6, ib.y2() - 20, ib.x2() - 6, ib.y2() - 6);
+    }
+
+    private static List<String> shadowNodeTip(ClientShadows.Entry e, int k) {
+        ShadowTree.Node n = ShadowTree.NODES[k];
+        int r = e.treeRank(k);
+        List<String> l = new ArrayList<>();
+        l.add(n.name());
+        l.add(n.desc());
+        l.add("Rango " + r + "/" + n.max() + (r > 0 ? " · ahora " + ShadowTree.effect(k, r) : ""));
+        if (r < n.max()) {
+            l.add("Siguiente: " + ShadowTree.effect(k, r + 1) + " · cuesta " + n.cost() + (n.cost() == 1 ? " punto" : " puntos"));
+        } else {
+            l.add("¡Rango máximo!");
+        }
+        return l;
+    }
+
+    /** Árbol propio de la sombra elegida: los 7 nudos a la izquierda y la sombra a la derecha. */
+    private List<String> shadowTree(GuiGraphics g, Font f, Box lb, Box ib, ClientShadows.Entry e, int mx, int my, float a, long now) {
+        List<String> tip = null;
+        int pts = e.pts();
+        String title = "ÁRBOL DE " + e.name().toUpperCase(Locale.ROOT);
+        String ptsText = pts + (pts == 1 ? " punto" : " puntos");
+        Ui.glow(g, f, fit(f, title, lb.w() - 16 - f.width(ptsText)), lb.x1() + 6, lb.y1() + 6, Ui.WHITE, Ui.SHADOW_GLOW, a);
+        Ui.text(g, f, ptsText, lb.x2() - 6 - f.width(ptsText), lb.y1() + 6, pts > 0 ? Ui.GOLD : Ui.MUTED, a);
+        int rh = treeRowH(lb);
+        for (int k = 0; k < ShadowTree.SIZE; k++) {
+            ShadowTree.Node n = ShadowTree.NODES[k];
+            int r = e.treeRank(k);
+            int ry = lb.y1() + 20 + k * rh;
+            int rx1 = lb.x1() + 4;
+            int rx2 = lb.x2() - 24;
+            boolean can = ShadowTree.canUp(e.tree(), pts, k);
+            boolean maxed = r >= n.max();
+            boolean hover = Ui.inside(mx, my, rx1, ry, lb.x2() - 4 - rx1, rh - 3);
+            int accent = maxed ? Ui.GOLD : r > 0 ? Ui.SHADOW : 0xFF24364A;
+            g.fill(rx1, ry, rx2, ry + rh - 3, Ui.fade(hover ? 0x90182438 : r > 0 ? 0x80180E2A : 0x70101A28, a));
+            Ui.border(g, rx1, ry, rx2, ry + rh - 3, Ui.fade(accent, a));
+            String rank = r + "/" + n.max();
+            Ui.text(g, f, fit(f, n.name(), rx2 - rx1 - 12 - f.width(rank)), rx1 + 5, ry + 3, r > 0 ? Ui.WHITE : Ui.GRAY, a);
+            Ui.text(g, f, rank, rx2 - 4 - f.width(rank), ry + 3, maxed ? Ui.GOLD : Ui.WHITE, a);
+            if (rh >= 24) {
+                String eff = r > 0 ? ShadowTree.effect(k, r) : n.desc();
+                Ui.text(g, f, fit(f, eff, rx2 - rx1 - 10), rx1 + 5, ry + 12, r > 0 ? 0xFFC9A7FF : Ui.MUTED, a * 0.9F);
+            }
+            Ui.bar(g, rx1 + 1, ry + rh - 6, rx2 - rx1 - 2, 2, r / (float) n.max(), maxed ? Ui.GOLD : Ui.SHADOW, a);
+            Box plus = treePlus(lb, k);
+            if (can) {
+                float pulse = 0.5F + 0.5F * (float) Math.sin(now / 240.0 + k);
+                Ui.border(g, plus.x1() - 1, plus.y1() - 1, plus.x2() + 1, plus.y2() + 1, Ui.fade(Ui.GOLD, a * 0.5F * pulse));
+            }
+            Ui.button(g, f, n.cost() > 1 ? "+" + n.cost() : "+", plus.x1(), plus.y1(), plus.w(), plus.h(), mx, my,
+                    maxed ? Ui.GOLD : Ui.GREEN, can, a);
+            if (hover) tip = shadowNodeTip(e, k);
+        }
+
+        // Panel derecho: la sombra
+        Box pb = previewBox(ib);
+        g.fillGradient(pb.x1(), pb.y1(), pb.x2(), pb.y2(), Ui.fade(0x30100020, a), Ui.fade(0x902A0F4A, a));
+        LivingEntity le = previewOf(e.type());
+        if (le != null && a > 0.9F) {
+            float hgt = Math.max(0.5F, le.getBbHeight());
+            float wid = Math.max(0.5F, le.getBbWidth());
+            int scale = (int) Math.max(6, Math.min(Math.min(60, pb.h() * 0.72F / hgt), pb.w() * 0.55F / wid));
+            InventoryScreen.renderEntityInInventoryFollowsMouse(g, pb.x1(), pb.y1(), pb.x2(), pb.y2(), scale, 0.0625F, mx, my, le);
+        }
+        Ui.border(g, pb.x1(), pb.y1(), pb.x2(), pb.y2(), Ui.fade(0xFF3A2A5A, a));
+        int lx = ib.x1() + 7;
+        int w = ib.w() - 14;
+        int y = pb.y2() + 5;
+        Ui.glow(g, f, fit(f, e.name(), w), lx, y, Ui.WHITE, Ui.SHADOW_GLOW, a);
+        y += 11;
+        int rank = Math.max(0, Math.min(5, e.rank()));
+        Ui.text(g, f, "Rango ", lx, y, Ui.GRAY, a);
+        Ui.text(g, f, Defs.RANK[rank], lx + f.width("Rango "), y, Defs.RANK_COLOR[rank], a);
+        String lv = "Nivel " + e.level();
+        Ui.text(g, f, lv, ib.x2() - 7 - f.width(lv), y, Ui.WHITE, a);
+        y += 10;
+        shadowXpBar(g, f, e, lx, y, w, a);
+        y += 10;
+        String atk = "Ataque " + e.attackText();
+        Ui.text(g, f, atk, lx, y, Ui.HP_RED, a);
+        String spent = e.spent() + "/" + ShadowTree.totalCost();
+        Ui.text(g, f, spent, ib.x2() - 7 - f.width(spent), y, Ui.MUTED, a);
+        y += 10;
+        if (y < ib.y2() - 30) {
+            Ui.text(g, f, fit(f, pts > 0 ? "Elige dónde gastar sus puntos" : "Gana puntos al subir de nivel", w), lx, y,
+                    pts > 0 ? Ui.GOLD : Ui.MUTED, a);
+        }
+        Box back = backButton(ib);
+        Ui.button(g, f, "VOLVER AL EJÉRCITO", back.x1(), back.y1(), back.w(), back.h(), mx, my, Ui.SHADOW, true, a);
+        return tip;
     }
 
     // ------------------------------------------------------------------ pestaña TIENDA
@@ -1681,6 +1834,7 @@ public class SystemScreen extends Screen {
             tab = i;
             lastTab = i;
             tabTime = System.currentTimeMillis();
+            shadowTreeView = false;
             Hud.click();
         }
     }
@@ -1782,6 +1936,30 @@ public class SystemScreen extends Screen {
         }
         List<ClientShadows.Entry> list = ClientShadows.list();
         Box lb = listBox();
+        if (shadowTreeView) {
+            ClientShadows.Entry sel = ClientShadows.byId(selShadow);
+            if (sel == null) {
+                shadowTreeView = false;
+                return false;
+            }
+            for (int k = 0; k < ShadowTree.SIZE; k++) {
+                if (treePlus(lb, k).in(mx, my)) {
+                    if (ShadowTree.canUp(sel.tree(), sel.pts(), k)) {
+                        send(Net.ACT_SHADOW_TREE, sel.id(), k);
+                        Hud.sound(SoundEvents.AMETHYST_BLOCK_CHIME, 0.9F, 1.4F);
+                    } else {
+                        Hud.error();
+                    }
+                    return true;
+                }
+            }
+            if (backButton(infoBox()).in(mx, my)) {
+                shadowTreeView = false;
+                Hud.click();
+                return true;
+            }
+            return false;
+        }
         int rows = visibleRows();
         for (int i = 0; i < rows && scroll + i < list.size(); i++) {
             int ry = lb.y1() + 3 + i * SHADOW_ROW;
@@ -1795,6 +1973,11 @@ public class SystemScreen extends Screen {
         ClientShadows.Entry sel = ClientShadows.byId(selShadow);
         if (sel == null) return false;
         Box ib = infoBox();
+        if (treeButton(ib).in(mx, my)) {
+            shadowTreeView = true;
+            Hud.click();
+            return true;
+        }
         if (actionButton(ib).in(mx, my)) {
             if (sel.state() == ClientShadows.RECOVERING) {
                 Hud.error();
@@ -1903,6 +2086,15 @@ public class SystemScreen extends Screen {
         lastCat = newCat;
         this.selNode = -1;
         this.tabTime = 0L;
+        this.shadowTreeView = newTab == 2 && newSub == 1;
+        if (this.shadowTreeView) {
+            for (ClientShadows.Entry e : ClientShadows.list()) {
+                if (e.pts() > 0 || e.spent() > 0) {
+                    this.selShadow = e.id();
+                    break;
+                }
+            }
+        }
     }
 
     /** Recorre todos los textos de la ventana con todas las razas y clases (para detectar errores). */
@@ -1955,6 +2147,16 @@ public class SystemScreen extends Screen {
         }
         for (int i = 0; i < 5; i++) {
             statTip(i);
+        }
+        int[] ranks = new int[ShadowTree.SIZE];
+        for (int k = 0; k < ShadowTree.SIZE; k++) {
+            for (int r = 0; r <= ShadowTree.NODES[k].max(); r++) {
+                ranks[k] = r;
+                ShadowTree.effect(k, r);
+                shadowNodeTip(new ClientShadows.Entry(1, 0, 1, 0, 100, 0, 0, false, 10, 500, 3, ranks.clone(), "minecraft:zombie",
+                        "entity.minecraft.zombie"), k);
+                n++;
+            }
         }
         return n;
     }

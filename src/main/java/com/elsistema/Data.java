@@ -82,6 +82,12 @@ public class Data {
         public long recoverTick;
         public float hp = 1F;
         public boolean wasOut;
+        /** EXP hacia el siguiente nivel (las sombras suben de nivel contigo). */
+        public int xp;
+        /** Puntos sin gastar de su árbol propio. */
+        public int pts;
+        /** Rangos de su árbol propio (ShadowTree). */
+        public int[] tree = new int[ShadowTree.SIZE];
     }
 
     public ShadowRec shadow(int id) {
@@ -179,6 +185,10 @@ public class Data {
             }
             if (r.key == null) r.key = "";
             if (Float.isNaN(r.hp) || r.hp <= 0F || r.hp > 1F) r.hp = 1F;
+            r.level = Math.max(1, Math.min(Defs.MAX_LEVEL, r.level));
+            if (r.xp < 0 || r.level >= Defs.MAX_LEVEL) r.xp = 0;
+            if (r.pts < 0) r.pts = 0;
+            r.tree = ShadowTree.fix(r.tree);
         }
         if (nextShadow <= maxId) nextShadow = maxId + 1;
         quest = fixArr(quest, 0, 2);

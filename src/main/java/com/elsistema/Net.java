@@ -72,6 +72,8 @@ public final class Net {
     public static final int N_PRESTIGE = 57;      // a = prestigio, b = clase
     public static final int N_PRESTIGE_DENIED = 58; // a = motivo
     public static final int N_SHADOW_READY = 59;  // a = id de la sombra
+    public static final int N_SHADOWS_LEVEL = 60; // a = cuántas sombras han subido de nivel, b = puntos sin gastar
+    public static final int N_SHADOW_TREE = 61;   // a = id de la sombra, b = nudo * 100 + rango
 
     // Acciones (cliente -> servidor)
     public static final int ACT_SKILL = 1;
@@ -86,6 +88,10 @@ public final class Net {
     public static final int ACT_SHADOWS_ALL = 10;  // a = 1 invocar todas, 0 guardar todas
     public static final int ACT_QUEST = 11;        // a = misión, b = 0 empezar la prueba
     public static final int ACT_RANK = 12;         // a = 0 examen de ascenso, 1 prestigio
+    public static final int ACT_SHADOW_TREE = 13;  // a = id de la sombra, b = nudo de su árbol propio
+
+    /** Números por sombra en la lista de la pestaña Sombras (8 + EXP + puntos + los rangos de su árbol). */
+    public static final int SHADOW_STRIDE = 10 + ShadowTree.SIZE;
 
     /** Servidor -> cliente: todos los datos del Jugador. */
     public record SyncPayload(List<Integer> data) implements CustomPacketPayload {

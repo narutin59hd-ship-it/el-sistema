@@ -4,6 +4,7 @@ import com.elsistema.Defs;
 import com.elsistema.Net;
 import com.elsistema.Quests;
 import com.elsistema.SecretBoss;
+import com.elsistema.ShadowTree;
 import com.elsistema.Shop;
 import com.elsistema.Trees;
 import net.minecraft.client.KeyMapping;
@@ -280,7 +281,19 @@ public final class Hud {
                 note("Quedará inhabilitada " + a + " días de Minecraft.", 0xFFD08AFF);
             }
             case Net.N_SHADOW_READY -> note(shadowName(a) + " ha vuelto: ya puedes invocarla.", Ui.SHADOW);
-            case Net.N_SHADOW_LEVEL -> note(shadowName(a) + " ha subido al nivel " + b + ".", Ui.SHADOW);
+            case Net.N_SHADOW_LEVEL -> {
+                note(shadowName(a) + " ha subido al nivel " + b + ".", Ui.SHADOW);
+                note("Tiene puntos para su árbol propio (pestaña Sombras).", Ui.GOLD);
+            }
+            case Net.N_SHADOWS_LEVEL -> {
+                note(a + " sombras han subido de nivel contigo.", Ui.SHADOW);
+                if (b > 0) note("Tienen " + b + (b == 1 ? " punto" : " puntos") + " para sus árboles (pestaña Sombras).", Ui.GOLD);
+            }
+            case Net.N_SHADOW_TREE -> {
+                int node = a >= 0 ? b / 100 : 0;
+                String nn = node >= 0 && node < ShadowTree.SIZE ? ShadowTree.NODES[node].name() : "Mejora";
+                note(shadowName(a) + ": " + nn + " rango " + (b % 100) + ".", Ui.SHADOW);
+            }
             case Net.N_NO_SHADOWS -> warn(a == 0 ? "Aún no tienes sombras. Mata una criatura y pulsa " + key(ElSistemaClient.ARISE) + "."
                     : "No hay sombras disponibles: están fuera o recuperándose.");
             case Net.N_RANK_REQ -> warn("Necesitas rango " + name(Defs.RANK, a) + " para comprar esto.");
