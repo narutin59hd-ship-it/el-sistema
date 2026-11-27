@@ -53,6 +53,11 @@ final class CityBuilder {
     /** Hasta dónde llega lo construido (el bosque de alrededor). */
     static final int OUT = 132;
     static final int SOUTH = RIVER_Z2 + 32;
+    /** Las colinas que rodean la ciudad (un valle): hasta 56 bloques más allá del bosque. */
+    static final int HILLS = 56;
+    static final int HX = OUT + HILLS;
+    static final int HZ1 = -OUT - HILLS;
+    static final int HZ2 = SOUTH + HILLS;
 
     /** Qué hay en cada manzana (filas de norte a sur, columnas de oeste a este). */
     private static final String[] PLAN = {
@@ -330,11 +335,11 @@ final class CityBuilder {
         int c1 = (-OUT) >> 4;
         int c2 = OUT >> 4;
         int cz2 = SOUTH >> 4;
-        // 1) cargar los chunks de la ciudad (City les pone un ticket para que no se descarguen durante la obra)
-        for (int cx = c1; cx <= c2; cx++) {
+        // 1) cargar los chunks de la ciudad y de las colinas (City les pone un ticket para que no se descarguen)
+        for (int cx = (-HX) >> 4; cx <= HX >> 4; cx++) {
             final int fx = cx;
             steps.add(() -> {
-                for (int cz = c1; cz <= cz2; cz++) {
+                for (int cz = HZ1 >> 4; cz <= HZ2 >> 4; cz++) {
                     l.getChunk(fx, cz);
                 }
             });
@@ -368,10 +373,18 @@ final class CityBuilder {
         }
         steps.add(this::riverPromenade);
         steps.add(this::southPark);
-        // 6) el bosque de alrededor
+        // 6) el bosque de alrededor y las colinas del valle (con la garganta por la que sale el río)
         for (int a = 0; a < 8; a++) {
             final int fa = a;
             steps.add(() -> forest(fa));
+        }
+        for (int x = -HX; x <= HX; x++) {
+            final int fx = x;
+            steps.add(() -> hillLine(fx));
+        }
+        for (int a = 0; a < 6; a++) {
+            final int fa = a;
+            steps.add(() -> hillTrees(fa));
         }
         // 7) mobiliario urbano: paradas, farolas, semáforos y coches
         steps.add(this::busStops);
@@ -448,9 +461,11 @@ final class CityBuilder {
             int across = roadNS ? rx - LOT : rz - LOT;
             int along = roadNS ? rz : rx;
             int coord = roadNS ? z : x;
-            if (along <= 2 || along >= LOT - 3) return across % 2 == 0 ? b("white_concrete") : asphalt(x, z);
+            // paso de cebra junto a cada cruce (rayas a lo largo de la calle) y línea discontinua en el centro
+            if (along >= 1 && along <= 3 || along >= LOT - 4 && along <= LOT - 2) {
+                return across % 2 == 0 ? b("white_concrete") : asphalt(x, z);
+            }
             if (across == 3 && Math.floorMod(coord, 6) < 3) return b("white_concrete");
-            if ((across == 0 || across == 6) && Math.floorMod(coord, 2) == 0) return b("light_gray_concrete");
             return asphalt(x, z);
         }
         boolean curb = rx == 0 || rx == LOT - 1 || rz == 0 || rz == LOT - 1;
@@ -659,16 +674,64 @@ final class CityBuilder {
             }
         }
         fill(x1, top, z1, x2, top, z2, band);
-        roof(x1, z1, x2, z2, top + 1, band, r, h > 48 && r.nextInt(3) == 0);
+        roof(x1, z1, x2, z2, top + 1, band, r, h > 48 && r.nextInt(3) == 0 ? 1 : r.nextInt(4) == 0 ? 2 : 0);
         lobbyFront(x0, z0, i, j, frame, r, name != null ? name : TOWER_NAMES[(int) Math.floorMod(hash(i, j), TOWER_NAMES.length)]);
     }
 
-    /** Azotea: pretil, máquinas, depósito, antena con luz roja o helipuerto. */
-    private void roof(int x1, int z1, int x2, int z2, int y, BlockState band, RandomSource r, boolean heli) {
+    /**
+     * Azotea con pretil. kind: 0 máquinas, depósito y antena con luz roja; 1 helipuerto; 2 piscina con hamacas;
+     * 3 jardín con árboles, flores y bancos.
+     */
+    private void roof(int x1, int z1, int x2, int z2, int y, BlockState band, RandomSource r, int kind) {
         walls(x1, y, z1, x2, y, z2, band);
         int cx = (x1 + x2) / 2;
         int cz = (z1 + z2) / 2;
-        if (heli && x2 - x1 >= 10) {
+        if (kind == 2 && x2 - x1 >= 10) {
+            // piscina de 7x5 con borde de cuarzo, luces bajo el agua, hamacas y sombrilla
+            fill(x1 + 1, y, z1 + 1, x2 - 1, y, z2 - 1, slab("smooth_quartz_slab", false));
+            for (int x = cx - 4; x <= cx + 4; x++) {
+                for (int z = cz - 3; z <= cz + 3; z++) {
+                    boolean edge = Math.abs(x - cx) == 4 || Math.abs(z - cz) == 3;
+                    set(x, y, z, edge ? b("smooth_quartz") : b("water"));
+                    if (!edge) set(x, y - 1, z, (Math.floorMod(x + z, 3) == 0) ? b("sea_lantern") : b("light_blue_concrete"));
+                }
+            }
+            for (int x = cx - 3; x <= cx + 3; x += 2) {
+                if (z2 - 1 > cz + 4) set(x, y + 1, cz + 5, stairs("quartz_stairs", Direction.SOUTH, false));
+            }
+            if (x2 - 2 > cx + 5) {
+                set(x2 - 2, y + 1, z1 + 2, b("spruce_fence"));
+                set(x2 - 2, y + 2, z1 + 2, b("spruce_fence"));
+                fill(x2 - 3, y + 3, z1 + 1, x2 - 1, y + 3, z1 + 3, b("orange_wool"));
+            }
+            rail(x1, y + 1, z1, x2, z2, "glass_pane");
+            return;
+        }
+        if (kind == 3) {
+            // jardín: césped, caminos de tablas, arbolitos, flores y bancos
+            fill(x1 + 1, y, z1 + 1, x2 - 1, y, z2 - 1, b("grass_block"));
+            for (int x = x1 + 1; x < x2; x++) set(x, y, cz, b("spruce_planks"));
+            for (int z = z1 + 1; z < z2; z++) set(cx, y, z, b("spruce_planks"));
+            rail(x1, y + 1, z1, x2, z2, "spruce_fence");
+            for (int[] c : new int[][]{{x1 + 3, z1 + 3}, {x2 - 3, z2 - 3}, {x1 + 3, z2 - 3}, {x2 - 3, z1 + 3}}) {
+                if (r.nextBoolean()) {
+                    tree(c[0], y + 1, c[1], 3, "oak_log", "azalea_leaves");
+                } else {
+                    set(c[0], y + 1, c[1], b("flowering_azalea"));
+                }
+            }
+            String[] fl = {"poppy", "dandelion", "cornflower", "allium", "oxeye_daisy", "pink_tulip"};
+            for (int k = 0; k < 14; k++) {
+                int x = x1 + 1 + r.nextInt(Math.max(1, x2 - x1 - 1));
+                int z = z1 + 1 + r.nextInt(Math.max(1, z2 - z1 - 1));
+                if (x != cx && z != cz && air(x, y + 1, z)) set(x, y + 1, z, b(fl[r.nextInt(fl.length)]));
+            }
+            set(cx + 1, y + 1, cz + 2, stairs("spruce_stairs", Direction.EAST, false));
+            set(cx - 1, y + 1, cz - 2, stairs("spruce_stairs", Direction.WEST, false));
+            set(cx, y + 1, cz, b("lantern"));
+            return;
+        }
+        if (kind == 1 && x2 - x1 >= 10) {
             fill(cx - 4, y, cz - 4, cx + 4, y, cz + 4, b("gray_concrete"));
             for (int d = -2; d <= 2; d++) {
                 set(cx - 2, y, cz + d, b("white_concrete"));
@@ -739,6 +802,29 @@ final class CityBuilder {
         sign(wx + side.getStepX() * 2 + out.getStepX(), G + 2, wz + side.getStepZ() * 2 + out.getStepZ(), out, DyeColor.WHITE, "", name, "", "");
         // luz del vestíbulo
         set(wx + dx * 2, G + 2, wz + dz * 2, light(15));
+        set(wx + dx * 6, G + 2, wz + dz * 6, light(14));
+        // vestíbulo amueblado: mostrador con plantas y dos sofás a los lados
+        for (int s = -1; s <= 1; s++) {
+            int px = wx + dx * 5 + side.getStepX() * s;
+            int pz = wz + dz * 5 + side.getStepZ() * s;
+            if (air(px, G, pz)) {
+                set(px, G, pz, b("quartz_bricks"));
+                set(px, G + 1, pz, slab("smooth_quartz_slab", false));
+            }
+        }
+        for (int s : new int[]{-2, 2}) {
+            int px = wx + dx * 5 + side.getStepX() * s;
+            int pz = wz + dz * 5 + side.getStepZ() * s;
+            if (air(px, G, pz)) set(px, G, pz, b(s < 0 ? "potted_bamboo" : "potted_fern"));
+        }
+        for (int s : new int[]{-5, 5}) {
+            Direction back = s > 0 ? side : side.getOpposite();
+            for (int k = 1; k <= 3; k++) {
+                int px = wx + dx * k + side.getStepX() * s;
+                int pz = wz + dz * k + side.getStepZ() * s;
+                if (air(px, G, pz) && air(px, G + 1, pz)) set(px, G, pz, stairs("dark_oak_stairs", back, false));
+            }
+        }
         // jardineras a los lados
         for (int s : new int[]{-5, 5}) {
             int px = wx + side.getStepX() * s + out.getStepX() * 2;
@@ -784,7 +870,7 @@ final class CityBuilder {
                 }
             }
         }
-        roof(x1, z1, x2, z2, top + 1, band, r, false);
+        roof(x1, z1, x2, z2, top + 1, band, r, r.nextInt(3) == 0 ? 3 : 0);
         if (!home) {
             lobbyFront(x0, z0, i, j, wall, r, "RESIDENCIAL " + (char) ('A' + Math.floorMod(i + 3 + (j + 3) * 7, 26)));
         }
@@ -816,37 +902,56 @@ final class CityBuilder {
         }
     }
 
-    /** El Cristal del Sistema: obelisco de cristal con un faro dentro (el haz azul se ve desde toda la ciudad). */
+    /**
+     * El Cristal del Sistema: un pedestal de cuarzo con el faro dentro y, flotando encima, un gran cristal en forma de
+     * octaedro (cian y azul claro, iluminado por dentro). El haz azul del faro lo atraviesa y se ve desde toda la ciudad.
+     */
     private void crystal() {
         fill(-1, G - 1, -1, 1, G - 1, 1, b("iron_block"));
-        set(0, G, 0, b("beacon"));
-        for (int y = G + 1; y <= G + 17; y++) set(0, y, 0, b("light_blue_stained_glass"));
-        for (int y = G; y <= G + 14; y++) {
-            for (int[] c : new int[][]{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}}) {
-                String id = y <= G + 2 ? "polished_blackstone_bricks" : y <= G + 12 ? "cyan_stained_glass" : "light_blue_stained_glass";
-                if (y > G + 13) continue;
-                set(c[0], y, c[1], b(id));
-            }
-            for (int[] e : new int[][]{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}) {
-                set(e[0], y, e[1], y <= G + 1 ? b("polished_blackstone") : b("light_blue_stained_glass"));
+        // pedestal de 3x3 y 2 de alto con el faro en el centro
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                boolean corner = dx != 0 && dz != 0;
+                set(dx, G, dz, b(corner ? "chiseled_quartz_block" : "quartz_bricks"));
+                set(dx, G + 1, dz, corner ? axis("quartz_pillar", Direction.Axis.Y) : b("cyan_stained_glass"));
+                set(dx, G + 2, dz, slab("smooth_quartz_slab", false));
             }
         }
-        for (int[] e : new int[][]{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}) set(e[0], G + 15, e[1], b("light_blue_stained_glass"));
-        // anillos de luz que flotan alrededor
-        for (int y : new int[]{G + 6, G + 11}) {
-            set(2, y, 0, face("end_rod", Direction.EAST));
-            set(-2, y, 0, face("end_rod", Direction.WEST));
-            set(0, y, 2, face("end_rod", Direction.SOUTH));
-            set(0, y, -2, face("end_rod", Direction.NORTH));
-            set(2, y + 1, 2, b("end_rod"));
-            set(-2, y + 1, 2, b("end_rod"));
-            set(2, y + 1, -2, b("end_rod"));
-            set(-2, y + 1, -2, b("end_rod"));
+        set(0, G, 0, b("beacon"));
+        set(0, G + 1, 0, b("light_blue_stained_glass"));
+        set(0, G + 2, 0, b("light_blue_stained_glass"));
+        // escalones de cuarzo alrededor del pedestal
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) == 2 && dx * dx + dz * dz <= 5) set(dx, G, dz, slab("smooth_quartz_slab", false));
+            }
+        }
+        // el cristal flotante: octaedro de G+4 a G+16 (radio 3 en el centro)
+        int cy = G + 10;
+        for (int y = G + 4; y <= G + 16; y++) {
+            int r = 3 - Math.abs(y - cy) / 2;
+            if (r < 0) continue;
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    int d = Math.abs(dx) + Math.abs(dz);
+                    if (d > r) continue;
+                    String id = dx == 0 && dz == 0 ? "light_blue_stained_glass" : d == r ? "cyan_stained_glass" : "light_blue_stained_glass";
+                    set(dx, y, dz, b(id));
+                }
+            }
+        }
+        // luz dentro del cristal (de noche brilla) y la columna del haz hasta arriba
+        for (int[] c : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) set(c[0], cy, c[1], light(15));
+        set(0, G + 3, 0, b("light_blue_stained_glass"));
+        // chispas alrededor
+        for (int[] c : new int[][]{{3, 3}, {-3, 3}, {3, -3}, {-3, -3}}) {
+            set(c[0], G + 6, c[1], face("end_rod", Direction.UP));
         }
         // luz para la plaza de noche
         for (int[] c : new int[][]{{-4, -4}, {4, -4}, {-4, 4}, {4, 4}}) set(c[0], G + 3, c[1], light(14));
-        sign(0, G + 2, -2, Direction.NORTH, "CRISTAL DEL", "SISTEMA", "", "");
-        sign(0, G + 2, 2, Direction.SOUTH, "CRISTAL DEL", "SISTEMA", "", "");
+        sign(0, G + 1, -2, Direction.NORTH, DyeColor.CYAN, "CRISTAL DEL", "SISTEMA", "", "");
+        sign(0, G + 1, 2, Direction.SOUTH, DyeColor.CYAN, "CRISTAL DEL", "SISTEMA", "", "");
     }
 
     private void plazaDecor(int x0, int z0) {
@@ -967,17 +1072,18 @@ final class CityBuilder {
 
     // ================================================================ calles: farolas, semáforos, paradas y coches
 
-    /** Farolas en los bordillos de las manzanas de la fila j (cerca de las esquinas, nunca delante de una puerta). */
+    /**
+     * Farolas en los bordillos de las manzanas de la fila j: una por lado y al tresbolillo (así cada calle tiene una a
+     * cada lado cada 14 bloques), nunca en las esquinas ni delante de una puerta (están en el centro).
+     */
     private void streetLamps(int j) {
         for (int i = -N; i <= N; i++) {
             int x0 = lot(i);
             int z0 = lot(j);
-            for (int o : new int[]{3, 17}) {
-                lampAt(x0 + o, z0);
-                lampAt(x0 + o, z0 + 20);
-                lampAt(x0, z0 + o);
-                lampAt(x0 + 20, z0 + o);
-            }
+            lampAt(x0 + 6, z0);
+            lampAt(x0 + 14, z0 + 20);
+            lampAt(x0, z0 + 14);
+            lampAt(x0 + 20, z0 + 6);
         }
     }
 
@@ -1183,24 +1289,60 @@ final class CityBuilder {
         }
     }
 
-    /** Parque de la orilla sur: césped, cerezos, caminos y un mirador sobre el agua. */
+    /** Parque de la orilla sur: paseo con bancos y farolas, caminos desde los puentes, quiosco, cerezos y flores. */
     private void southPark() {
         int z1 = RIVER_Z2 + 7;
-        for (int x = -OUT + 4; x <= OUT - 4; x += 1) {
-            if (Math.floorMod(x, 6) == 0) {
-                for (int z = z1; z <= SOUTH; z++) set(x, G - 1, z, b("dirt_path"));
+        // paseo de la orilla (de este a oeste) y caminos que siguen a los puentes
+        for (int x = -OUT + 4; x <= OUT - 4; x++) {
+            for (int z = z1; z <= z1 + 2; z++) set(x, G - 1, z, (Math.floorMod(x + z, 7) == 0) ? b("mossy_cobblestone") : b("dirt_path"));
+        }
+        for (int k = -N - 1; k <= N; k++) {
+            int c = CELL * k + 14;
+            for (int z = z1 + 3; z <= SOUTH - 2; z++) {
+                for (int x = c - 1; x <= c + 1; x++) set(x, G - 1, z, b("dirt_path"));
             }
         }
-        for (int k = 0; k < 90; k++) {
+        for (int x = -OUT + 8; x <= OUT - 8; x += 12) {
+            int rx = Math.floorMod(x + 10, CELL);
+            if (rx >= LOT - 1) continue;
+            lampPost(x, z1 + 3, false);
+            set(x + 2, G, z1 + 3, stairs("spruce_stairs", Direction.SOUTH, false));
+            set(x + 3, G, z1 + 3, stairs("spruce_stairs", Direction.SOUTH, false));
+        }
+        // quiosco de la música en el centro
+        int qz = z1 + 14;
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dz = -4; dz <= 4; dz++) {
+                if (dx * dx + dz * dz <= 18) set(dx, G - 1, qz + dz, b("smooth_stone"));
+            }
+        }
+        fill(-3, G, qz - 3, 3, G, qz + 3, slab("smooth_quartz_slab", false));
+        for (int[] c : new int[][]{{-3, -3}, {3, -3}, {-3, 3}, {3, 3}}) {
+            fill(c[0], G + 1, qz + c[1], c[0], G + 3, qz + c[1], b("white_concrete"));
+        }
+        for (int k = 0; k <= 4; k++) {
+            for (int dx = -4 + k; dx <= 4 - k; dx++) {
+                for (int dz = -4 + k; dz <= 4 - k; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) == 4 - k) set(dx, G + 4 + k, qz + dz, b(k % 2 == 0 ? "cyan_terracotta" : "white_terracotta"));
+                }
+            }
+        }
+        set(0, G + 3, qz, hanging("lantern"));
+        fill(0, G + 4, qz, 0, G + 7, qz, b("chain"));
+        post(0, G, qz + 5, Direction.SOUTH, DyeColor.WHITE, "QUIOSCO DEL", "PARQUE DEL RÍO", "Conciertos los", "domingos");
+        // árboles y macizos de flores
+        for (int k = 0; k < 140; k++) {
             long h = hash(k * 37, 5011);
             int x = -OUT + 6 + (int) Math.floorMod(h, 2 * OUT - 12);
-            int z = z1 + 3 + (int) Math.floorMod(h >> 12, SOUTH - z1 - 6);
+            int z = z1 + 4 + (int) Math.floorMod(h >> 12, SOUTH - z1 - 6);
             if (!get(x, G - 1, z).is(Blocks.GRASS_BLOCK) || !air(x, G, z)) continue;
-            if ((h >> 20 & 3) == 0) cherry(x, G, z, 4 + (int) ((h >> 24) & 1));
-            else if ((h >> 20 & 3) == 1) tree(x, G, z, 5, "oak_log", "oak_leaves");
+            if (Math.abs(x) <= 6 && Math.abs(z - qz) <= 6) continue;
+            int t = (int) ((h >> 20) & 3);
+            if (t == 0) cherry(x, G, z, 4 + (int) ((h >> 24) & 1));
+            else if (t == 1) tree(x, G, z, 5, "birch_log", "birch_leaves");
             else flowers(x, z, h);
         }
-        // mirador
+        // mirador sobre el agua
         int cx = 0;
         fill(cx - 3, G - 1, RIVER_Z2 + 2, cx + 3, G - 1, RIVER_Z2 + 4, b("spruce_planks"));
         rail(cx - 3, G, RIVER_Z2 + 2, cx + 3, RIVER_Z2 + 4, "spruce_fence");
@@ -1214,6 +1356,99 @@ final class CityBuilder {
             int fx = x + (int) ((h >> (k * 3)) & 3) - 1;
             int fz = z + (int) ((h >> (k * 3 + 2)) & 3) - 1;
             if (get(fx, G - 1, fz).is(Blocks.GRASS_BLOCK) && air(fx, G, fz)) set(fx, G, fz, b(fl[(int) Math.floorMod(h >> k, fl.length)]));
+        }
+    }
+
+    // ================================================================ las colinas del valle
+
+    /** Ruido suave (0..1) a partir de una rejilla de valores al azar. */
+    private static double noise(int x, int z, int scale, int salt) {
+        double fx = (double) x / scale;
+        double fz = (double) z / scale;
+        int ix = (int) Math.floor(fx);
+        int iz = (int) Math.floor(fz);
+        double tx = fx - ix;
+        double tz = fz - iz;
+        tx = tx * tx * (3 - 2 * tx);
+        tz = tz * tz * (3 - 2 * tz);
+        double a = (hash(ix * 7 + salt, iz * 13) & 0xFFFF) / 65535.0;
+        double b2 = (hash(ix * 7 + 7 + salt, iz * 13) & 0xFFFF) / 65535.0;
+        double c = (hash(ix * 7 + salt, iz * 13 + 13) & 0xFFFF) / 65535.0;
+        double d = (hash(ix * 7 + 7 + salt, iz * 13 + 13) & 0xFFFF) / 65535.0;
+        return (a + (b2 - a) * tx) * (1 - tz) + (c + (d - c) * tx) * tz;
+    }
+
+    /** Altura de las colinas (en bloques sobre el suelo) en una columna: 0 dentro de la ciudad y del bosque. */
+    static double hillHeight(int x, int z) {
+        double dx = Math.max(0, Math.abs(x) - OUT);
+        double dz = z < -OUT ? -OUT - z : z > SOUTH ? z - SOUTH : 0;
+        double d = Math.sqrt(dx * dx + dz * dz);
+        if (d <= 0) return 0;
+        double t = Math.min(1.0, d / 44.0);
+        double ease = t * t * (3 - 2 * t);
+        double n = noise(x, z, 26, 11) * 0.65 + noise(x, z, 9, 23) * 0.25 + 0.1;
+        double h = ease * (12 + 30 * n);
+        // la garganta del río: las colinas se abren donde sale el agua
+        if (Math.abs(x) > OUT - 4) {
+            double rz = z < RIVER_Z1 - 3 ? RIVER_Z1 - 3 - z : z > RIVER_Z2 + 3 ? z - RIVER_Z2 - 3 : 0;
+            double g = Math.min(1.0, rz / 14.0);
+            h *= g * g * (3 - 2 * g);
+        }
+        return h;
+    }
+
+    private int hillTop(int x, int z) {
+        return G - 1 + (int) Math.round(hillHeight(x, z));
+    }
+
+    private void hillLine(int x) {
+        for (int z = HZ1; z <= HZ2; z++) {
+            boolean inside = Math.abs(x) <= OUT && z >= -OUT && z <= SOUTH;
+            if (inside) continue;
+            // el río sigue por la garganta hasta perderse entre las colinas
+            if (z >= RIVER_Z1 && z <= RIVER_Z2 && Math.abs(x) > OUT) {
+                for (int y = G - 5; y <= G - 2; y++) set(x, y, z, b("water"));
+                set(x, G - 6, z, (hash(x, z) & 3) == 0 ? b("gravel") : b("sand"));
+                set(x, G - 1, z, Blocks.AIR.defaultBlockState());
+                continue;
+            }
+            int top = hillTop(x, z);
+            if (top < G) continue;
+            int low = Math.min(Math.min(hillTop(x + 1, z), hillTop(x - 1, z)), Math.min(hillTop(x, z + 1), hillTop(x, z - 1)));
+            int from = Math.max(G, Math.min(top, low) - 1);
+            boolean cliff = top - low >= 3;
+            double h = top - G + 1;
+            for (int y = from; y <= top; y++) {
+                BlockState st;
+                if (y == top) {
+                    st = h > 34 ? b("snow_block") : cliff ? ((hash(x, z) & 1) == 0 ? b("stone") : b("andesite"))
+                            : (hash(x * 3, z) & 15) == 0 ? b("coarse_dirt") : b("grass_block");
+                } else if (cliff || y < top - 3) {
+                    st = (hash(x, y * 7 + z) & 3) == 0 ? b("andesite") : b("stone");
+                } else {
+                    st = b("dirt");
+                }
+                set(x, y, z, st);
+            }
+            if (!cliff && h < 30 && (hash(x * 11, z * 5) & 63) == 0) {
+                set(x, top + 1, z, b((hash(x, z * 3) & 1) == 0 ? "short_grass" : "fern"));
+            }
+        }
+    }
+
+    /** Árboles en las laderas (abetos arriba, robles y abedules abajo). */
+    private void hillTrees(int part) {
+        for (int k = 0; k < 260; k++) {
+            long h = hash(part * 977 + k, 4243);
+            int x = -HX + (int) Math.floorMod(h, 2 * HX + 1);
+            int z = HZ1 + (int) Math.floorMod(h >> 16, HZ2 - HZ1 + 1);
+            if (Math.abs(x) <= OUT + 2 && z >= -OUT - 2 && z <= SOUTH + 2) continue;
+            int top = hillTop(x, z);
+            if (top < G || !get(x, top, z).is(Blocks.GRASS_BLOCK) || !air(x, top + 1, z)) continue;
+            int hh = top - G + 1;
+            if (hh > 22) tree(x, top + 1, z, 7 + (int) ((h >> 40) & 3), "spruce_log", "spruce_leaves");
+            else if (((h >> 33) & 3) == 0) tree(x, top + 1, z, 6, "birch_log", "birch_leaves");
+            else tree(x, top + 1, z, 5 + (int) ((h >> 36) & 1), "oak_log", "oak_leaves");
         }
     }
 
@@ -1306,39 +1541,41 @@ final class CityBuilder {
         }
         for (int y = G + 61; y <= G + 64; y++) set(ex, y, ez, b("sea_lantern"));
         set(ex, G + 59, ez, b("sea_lantern"));
-        // mirador: planta de cristal transparente
+        // mirador al aire libre: suelo, barandilla de cristal de 2 de alto (no se puede saltar), columnas y corona
         int dx1 = x0 + 5;
         int dx2 = x0 + 15;
         int dz1 = z0 + 6;
         int dz2 = z0 + 14;
         fill(x1, G + 70, z1, x2, G + 70, z2, band);
-        for (int y = G + 71; y <= G + 80; y++) {
-            for (int x = dx1; x <= dx2; x++) {
-                for (int z = dz1; z <= dz2; z++) {
-                    boolean wall = x == dx1 || x == dx2 || z == dz1 || z == dz2;
-                    boolean corner = (x == dx1 || x == dx2) && (z == dz1 || z == dz2);
-                    if (!wall) {
-                        set(x, y, z, Blocks.AIR.defaultBlockState());
-                        continue;
-                    }
-                    set(x, y, z, corner || y == G + 71 || y == G + 80 ? frame : (y <= G + 77 ? b("glass") : glass));
-                }
-            }
-        }
+        fill(dx1, G + 71, dz1, dx2, G + 71, dz2, frame);
         fill(dx1 + 1, G + 72, dz1 + 1, dx2 - 1, G + 72, dz2 - 1, b("polished_diorite"));
-        fill(dx1 + 1, G + 80, dz1 + 1, dx2 - 1, G + 80, dz2 - 1, band);
+        fill(dx1 + 1, G + 73, dz1 + 1, dx2 - 1, G + 79, dz2 - 1, Blocks.AIR.defaultBlockState());
+        walls(dx1, G + 72, dz1, dx2, G + 72, dz2, frame);
+        rail(dx1, G + 73, dz1, dx2, dz2, "glass_pane");
+        rail(dx1, G + 74, dz1, dx2, dz2, "glass_pane");
         for (int x = dx1 + 2; x < dx2 - 1; x += 3) {
-            for (int z = dz1 + 2; z < dz2 - 1; z += 3) set(x, G + 80, z, b("sea_lantern"));
+            for (int z = dz1 + 2; z < dz2 - 1; z += 3) set(x, G + 72, z, b("sea_lantern"));
         }
-        // bancos y telescopios
-        bench2(dx1 + 2, G + 73, dz2 - 1, Direction.NORTH, 3);
-        bench2(dx2 - 4, G + 73, dz2 - 1, Direction.NORTH, 3);
-        for (int x : new int[]{dx2 - 4, dx2 - 2}) {
-            set(x, G + 73, dz1 + 1, b("polished_blackstone_wall"));
-            set(x, G + 74, dz1 + 1, b("lightning_rod"));
+        // columnas en las esquinas y en el centro de cada lado
+        int mx = (dx1 + dx2) / 2;
+        int mz = (dz1 + dz2) / 2;
+        for (int[] c : new int[][]{{dx1, dz1}, {dx2, dz1}, {dx1, dz2}, {dx2, dz2}, {dx1, mz}, {dx2, mz}}) {
+            fill(c[0], G + 73, c[1], c[0], G + 79, c[1], axis("quartz_pillar", Direction.Axis.Y));
         }
-        set(dx2 - 1, G + 73, dz2 - 1, b("potted_flowering_azalea_bush"));
-        sign(x0 + 10, G + 74, dz1 + 1, Direction.SOUTH, DyeColor.CYAN, "MIRADOR DE LA", "ASOCIACIÓN", "Altura: 150 m", "");
+        // techo: anillo de cuarzo con luces y un lucernario de cristal
+        walls(dx1, G + 80, dz1, dx2, G + 80, dz2, band);
+        fill(dx1 + 1, G + 80, dz1 + 1, dx2 - 1, G + 80, dz2 - 1, glass);
+        for (int x = dx1 + 1; x < dx2; x += 2) {
+            set(x, G + 79, dz1, b("sea_lantern"));
+            set(x, G + 79, dz2, b("sea_lantern"));
+        }
+        // telescopios y un cartel
+        for (int[] c : new int[][]{{dx2 - 2, dz2 - 1}, {dx1 + 4, dz2 - 1}, {dx2 - 1, mz + 2}}) {
+            set(c[0], G + 73, c[1], b("polished_blackstone_wall"));
+            set(c[0], G + 74, c[1], b("lightning_rod"));
+        }
+        set(dx2 - 1, G + 73, dz1 + 1, b("potted_flowering_azalea_bush"));
+        sign(mx, G + 74, dz1 + 1, Direction.SOUTH, DyeColor.CYAN, "MIRADOR DE LA", "ASOCIACIÓN", "73 bloques", "de altura");
         // ascensor del mirador (baja al vestíbulo)
         elevatorCabin(dx1 + 1, G + 73, dz1 + 1, false);
         // corona y aguja
@@ -1536,7 +1773,17 @@ final class CityBuilder {
             }
         }
         for (int x = x1; x <= x2; x++) {
-            for (int z = z1; z <= z2; z++) set(x, G + 13, z, (Math.floorMod(x, 4) == 0 || Math.floorMod(z, 4) == 0) ? b("polished_deepslate") : b("tinted_glass"));
+            for (int z = z1; z <= z2; z++) set(x, G + 13, z, (Math.floorMod(x, 4) == 0 || Math.floorMod(z, 4) == 0) ? b("polished_deepslate") : b("purple_stained_glass"));
+        }
+        // suelo con dibujo y un camino de luz desde la entrada hasta la puerta
+        for (int x = x1 + 1; x < x2; x++) {
+            for (int z = z1 + 1; z <= z2; z++) {
+                set(x, G - 1, z, Math.floorMod(x - cx, 4) == 0 ? b("polished_blackstone_bricks") : b("polished_deepslate"));
+            }
+        }
+        for (int z = z0 + 11; z <= z2; z++) {
+            set(cx - 2, G - 1, z, Math.floorMod(z, 3) == 0 ? b("sea_lantern") : b("purple_concrete"));
+            set(cx + 2, G - 1, z, Math.floorMod(z, 3) == 0 ? b("sea_lantern") : b("purple_concrete"));
         }
         // columnas de la fachada abierta al sur
         for (int x = x1; x <= x2; x += 6) fill(x, G, z2, x, G + 12, z2, b("polished_deepslate"));
@@ -1551,7 +1798,19 @@ final class CityBuilder {
                 else if (d <= 4.5) set(x, y, gz, b("purple_stained_glass"));
             }
         }
-        for (int x = cx - 3; x <= cx + 3; x += 3) set(x, gy, gz - 1, light(13));
+        // el disco brilla: luces detrás del cristal y un marco de amatista
+        for (int x = cx - 4; x <= cx + 4; x += 2) {
+            for (int y = G + 2; y <= G + 10; y += 2) {
+                if ((x - cx) * (x - cx) + (y - gy) * (y - gy) <= 18) set(x, y, gz - 1, light(14));
+            }
+        }
+        for (int x = cx - 6; x <= cx + 6; x++) {
+            for (int y = G; y <= G + 12; y++) {
+                double d = Math.sqrt((x - cx) * (x - cx) + (y - gy) * (y - gy));
+                if (d >= 5.7 && d < 6.4) set(x, y, gz, b("amethyst_block"));
+            }
+        }
+        fill(cx - 2, G, gz, cx + 2, G, gz, b("crying_obsidian"));
         // vallas de seguridad amarillas y negras delante del anillo
         for (int x = cx - 6; x <= cx + 6; x++) {
             if (Math.abs(x - cx) <= 1) continue;
@@ -1574,8 +1833,16 @@ final class CityBuilder {
             fill(x2 - 1, G + 2, z, x2 - 1, G + 4, z + 2, b("black_concrete"));
             fill(x2 - 1, G + 3, z, x2 - 1, G + 3, z + 2, b("purple_stained_glass"));
         }
-        for (int x = x1 + 3; x < x2; x += 5) {
-            for (int z = z1 + 3; z < z2; z += 5) set(x, G + 11, z, light(14));
+        for (int x = x1 + 2; x < x2; x += 4) {
+            for (int z = z1 + 2; z < z2; z += 4) {
+                set(x, G + 11, z, light(15));
+                set(x, G + 5, z, light(13));
+            }
+        }
+        // lámparas colgantes
+        for (int x = cx - 6; x <= cx + 6; x += 6) {
+            fill(x, G + 9, z0 + 13, x, G + 12, z0 + 13, b("chain"));
+            set(x, G + 8, z0 + 13, hanging("soul_lantern"));
         }
         sign(cx + 3, G + 3, z2 + 1, Direction.SOUTH, DyeColor.PURPLE, "ESTACIÓN DE", "PUERTAS", "Hugo abre puertas", "de tu rango");
         sign(cx - 3, G + 3, z2 + 1, Direction.SOUTH, DyeColor.WHITE, "ASOCIACIÓN DE", "CAZADORES", "Zona vigilada", "");
@@ -2038,7 +2305,7 @@ final class CityBuilder {
     }
 
     private void store24(int x0, int z0) {
-        int zf = shopBox(x0, z0, false, b("white_concrete"), b("lime_concrete"), b("white_concrete"), b("glass"),
+        int zf = shopBox(x0, z0, false, b("white_concrete"), b("light_gray_concrete"), b("white_concrete"), b("glass"),
                 "lime_wool", "white_wool", 4);
         int cx = x0 + 10;
         sign(cx, G + 3, zf - 1, Direction.NORTH, DyeColor.LIME, "TIENDA 24H", "Abierto siempre", "Paco te atiende", "");
@@ -2195,6 +2462,25 @@ final class CityBuilder {
         sign(mx + 1, G + 2, mz - 2, Direction.NORTH, DyeColor.WHITE, "METRO", "Plaza del", "Sistema", "");
         sign(cx + 2, G, z0 + 1, Direction.NORTH, DyeColor.WHITE, "PASEO SUR", "Parque Central", "y río", "");
         set(cx + 2, G - 1, z0 + 1, b("polished_andesite"));
+        // puestos callejeros: helados y flores
+        stall(cx - 6, z0 + 6, "light_blue_wool", "white_wool", "HELADOS", "pink_concrete");
+        stall(cx + 3, z0 + 15, "lime_wool", "white_wool", "FLORES", "potted_red_tulip");
+    }
+
+    /** Puesto callejero: mostrador, toldo a rayas, cartel y algo a la venta encima. */
+    private void stall(int x, int z, String a, String c, String name, String goods) {
+        if (!air(x, G, z) || !air(x + 2, G, z)) return;
+        fill(x, G, z, x + 2, G, z, b("white_concrete"));
+        set(x + 1, G + 1, z, b(goods));
+        set(x, G + 1, z, b("spruce_fence"));
+        set(x + 2, G + 1, z, b("spruce_fence"));
+        set(x, G + 2, z, b("spruce_fence"));
+        set(x + 2, G + 2, z, b("spruce_fence"));
+        for (int dx = 0; dx <= 2; dx++) {
+            for (int dz = -1; dz <= 1; dz++) set(x + dx, G + 3, z + dz, b(Math.floorMod(dx + dz, 2) == 0 ? a : c));
+        }
+        sign(x + 1, G + 2, z + 1, Direction.SOUTH, DyeColor.WHITE, "", name, "", "");
+        set(x + 1, G + 2, z - 1, light(12));
     }
 
     private void park(int x0, int z0, int i, int j, boolean big) {

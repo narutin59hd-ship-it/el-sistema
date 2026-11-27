@@ -580,6 +580,7 @@ public final class ClientSelfTest {
             case 1976 -> {
                 mc.setScreen(null);
                 mc.options.hideGui = true;
+                mc.options.renderDistance().set(10);
                 trial(30);
             }
             case 2100 -> {
@@ -661,7 +662,10 @@ public final class ClientSelfTest {
                 mc.options.hideGui = false;
                 trial(51);
             }
-            case 3220 -> finish(mc);
+            case 3220 -> {
+                mc.options.renderDistance().set(6);
+                finish(mc);
+            }
             default -> {
             }
         }

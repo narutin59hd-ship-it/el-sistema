@@ -389,10 +389,10 @@ public final class SelfTest {
     private static void cityBuild(MinecraftServer server) {
         ServerLevel city = City.level(server);
         if (city == null) throw new IllegalStateException("no existe la dimensión de la ciudad");
-        if (!City.building()) throw new IllegalStateException("la ciudad no se está construyendo en un mundo nuevo");
+        if (!City.building() && !City.isReady(city)) throw new IllegalStateException("la ciudad ni se está construyendo ni está construida");
         City.budgetMs = 300;
         cityPhase = 1;
-        ElSistema.LOGGER.info("[SELFTEST] la ciudad se está construyendo ({} %)", City.buildPercent());
+        ElSistema.LOGGER.info("[SELFTEST] la ciudad: {} ({} %)", City.building() ? "en obras" : "terminada", City.buildPercent());
     }
 
     private static void cityCheck(MinecraftServer server) {
@@ -419,6 +419,16 @@ public final class SelfTest {
         if (City.lastRoles != CityNpc.ROLES) {
             throw new IllegalStateException("faltan vecinos en la ciudad: " + City.lastRoles + " de " + CityNpc.ROLES);
         }
+        if (City.lastAnimals < 15) throw new IllegalStateException("faltan animales en la ciudad: " + City.lastAnimals);
+        int hillTop = -1;
+        for (int y = City.G + 50; y >= City.G; y--) {
+            if (!city.getBlockState(new BlockPos(CityBuilder.HX - 20, y, 0)).isAir()) {
+                hillTop = y;
+                break;
+            }
+        }
+        if (hillTop < City.G + 4) throw new IllegalStateException("faltan las colinas alrededor de la ciudad (" + hillTop + ")");
+        ElSistema.LOGGER.info("[SELFTEST] OK colinas del valle: {} bloques de altura en x = {}", hillTop - City.G + 1, CityBuilder.HX - 20);
         ElSistema.LOGGER.info("[SELFTEST] OK ciudad nueva: {} sitios comprobados y {} vecinos en su sitio", want.length, City.lastRoles);
     }
 
@@ -508,7 +518,7 @@ public final class SelfTest {
             case 24 -> {
                 p.getAbilities().flying = true;
                 p.onUpdateAbilities();
-                p.teleportTo(p.serverLevel(), 70.5, City.G + 72, 128.5, 152.0F, 24.0F);
+                p.teleportTo(p.serverLevel(), 40.5, City.G + 60, 60.5, 146.0F, 30.0F);
             }
             case 25 -> {
                 p.getAbilities().flying = false;
@@ -558,7 +568,7 @@ public final class SelfTest {
                     throw new IllegalStateException("el ascensor no subió al mirador (y = " + p.getY() + ")");
                 }
                 ElSistema.LOGGER.info("[SELFTEST] OK ascensor: en el mirador a {} bloques de altura", (int) (p.getY() - G));
-                look(p, 0.5, CityBuilder.DECK_Y, -26.5, 0.0F, 22.0F);
+                look(p, 0.5, CityBuilder.DECK_Y, -25.5, 0.0F, 24.0F);
             }
             case 35 -> {
                 p.setHealth(6.0F);
@@ -623,18 +633,18 @@ public final class SelfTest {
                 ElSistema.LOGGER.info("[SELFTEST] OK viaje dentro de la ciudad: {}", CityPlaces.LIST[14].name());
                 look(p, 0.5, G + 9, 44.5, 0.0F, 26.0F);
             }
-            case 47 -> look(p, 30.5, G + 8, 99.5, 45.0F, 12.0F);
+            case 47 -> look(p, 22.5, G + 16, 96.5, 32.0F, 22.0F);
             case 48 -> {
                 City.goTo(p, d, 12);
                 look(p, CityBuilder.HOME_X0 + 16.5, G, CityBuilder.HOME_Z0 + 3.5, 60.0F, 15.0F);
             }
             case 49 -> {
-                p.getServer().overworld().setDayTime(12600L);
-                look(p, -96.5, G + 64, -104.5, -42.0F, 22.0F);
+                p.getServer().overworld().setDayTime(13250L);
+                look(p, -60.5, G + 56, 70.5, 217.0F, 24.0F);
             }
             case 50 -> {
                 p.getServer().overworld().setDayTime(18000L);
-                look(p, 52.5, G + 22, 40.5, 135.0F, 12.0F);
+                look(p, 40.5, G + 40, 60.5, 146.0F, 22.0F);
             }
             case 51 -> {
                 p.getAbilities().flying = false;

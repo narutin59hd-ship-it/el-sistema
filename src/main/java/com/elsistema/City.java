@@ -132,8 +132,8 @@ public final class City {
     }
 
     private static void addTickets(ServerLevel city) {
-        for (int cx = (-CityBuilder.OUT) >> 4; cx <= CityBuilder.OUT >> 4; cx++) {
-            for (int cz = (-CityBuilder.OUT) >> 4; cz <= CityBuilder.SOUTH >> 4; cz++) {
+        for (int cx = (-CityBuilder.HX) >> 4; cx <= CityBuilder.HX >> 4; cx++) {
+            for (int cz = CityBuilder.HZ1 >> 4; cz <= CityBuilder.HZ2 >> 4; cz++) {
                 ChunkPos cp = new ChunkPos(cx, cz);
                 city.getChunkSource().addRegionTicket(TICKET, cp, 0, cp);
             }
@@ -141,8 +141,8 @@ public final class City {
     }
 
     private static void releaseTickets(ServerLevel city) {
-        for (int cx = (-CityBuilder.OUT) >> 4; cx <= CityBuilder.OUT >> 4; cx++) {
-            for (int cz = (-CityBuilder.OUT) >> 4; cz <= CityBuilder.SOUTH >> 4; cz++) {
+        for (int cx = (-CityBuilder.HX) >> 4; cx <= CityBuilder.HX >> 4; cx++) {
+            for (int cz = CityBuilder.HZ1 >> 4; cz <= CityBuilder.HZ2 >> 4; cz++) {
                 ChunkPos cp = new ChunkPos(cx, cz);
                 city.getChunkSource().removeRegionTicket(TICKET, cp, 0, cp);
             }
@@ -187,14 +187,15 @@ public final class City {
         ready = true;
         builtFlag = true;
         int made = checkNpcs(city);
+        int animals = spawnAnimals(city);
         Set<Integer> roles = new HashSet<>();
         for (CityNpc n : city.getEntitiesOfClass(CityNpc.class, AREA, n -> n.isAlive())) roles.add(n.role());
         lastRoles = roles.size();
         missingBlocks = List.copyOf(b.missing);
         releaseTickets(city);
         long ms = System.currentTimeMillis() - jobStart;
-        ElSistema.LOGGER.info("Ciudad de los Cazadores v{} construida: {} bloques en {} s ({} ticks); {} vecinos nuevos ({} viejos fuera){}",
-                VERSION, b.count, ms / 1000, jobTicks, made, gone, b.missing.isEmpty() ? "" : "; faltan bloques: " + b.missing);
+        ElSistema.LOGGER.info("Ciudad de los Cazadores v{} construida: {} bloques en {} s ({} ticks); {} vecinos nuevos ({} viejos fuera), {} animales{}",
+                VERSION, b.count, ms / 1000, jobTicks, made, gone, animals, b.missing.isEmpty() ? "" : "; faltan bloques: " + b.missing);
         for (UUID id : List.copyOf(WAITING)) {
             ServerPlayer p = server.getPlayerList().getPlayer(id);
             if (p == null || !p.isAlive()) continue;
@@ -203,6 +204,57 @@ public final class City {
             travel(p, d);
         }
         WAITING.clear();
+    }
+
+    // ================================================================ animales de la ciudad
+
+    public static final String PET_TAG = "es_ciudad_animal";
+    public static int lastAnimals = 0;
+
+    /** Gatos en las plazas y parques, loros en el jardín, conejos y zorros en la orilla y peces en el río y la fuente. */
+    private static int spawnAnimals(ServerLevel city) {
+        for (net.minecraft.world.entity.Entity e : city.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, AREA.inflate(60),
+                e -> e.getTags().contains(PET_TAG))) {
+            e.discard();
+        }
+        int rz = CityBuilder.RIVER_Z1 + 6;
+        Object[][] list = {
+                {net.minecraft.world.entity.EntityType.CAT, -6, 4}, {net.minecraft.world.entity.EntityType.CAT, 5, -6},
+                {net.minecraft.world.entity.EntityType.CAT, -26, 4}, {net.minecraft.world.entity.EntityType.CAT, 2, 52},
+                {net.minecraft.world.entity.EntityType.CAT, -52, 54}, {net.minecraft.world.entity.EntityType.CAT, -30, 24},
+                {net.minecraft.world.entity.EntityType.PARROT, -26, -24}, {net.minecraft.world.entity.EntityType.PARROT, -32, -32},
+                {net.minecraft.world.entity.EntityType.PARROT, 4, 48}, {net.minecraft.world.entity.EntityType.PARROT, 26, 6},
+                {net.minecraft.world.entity.EntityType.RABBIT, -20, 140}, {net.minecraft.world.entity.EntityType.RABBIT, 30, 136},
+                {net.minecraft.world.entity.EntityType.RABBIT, -64, 142}, {net.minecraft.world.entity.EntityType.RABBIT, 70, 146},
+                {net.minecraft.world.entity.EntityType.FOX, 112, -112}, {net.minecraft.world.entity.EntityType.FOX, -114, 40},
+                {net.minecraft.world.entity.EntityType.TROPICAL_FISH, -20, rz}, {net.minecraft.world.entity.EntityType.TROPICAL_FISH, 6, rz + 2},
+                {net.minecraft.world.entity.EntityType.TROPICAL_FISH, 30, rz - 1}, {net.minecraft.world.entity.EntityType.TROPICAL_FISH, 60, rz + 1},
+                {net.minecraft.world.entity.EntityType.TROPICAL_FISH, -50, rz}, {net.minecraft.world.entity.EntityType.AXOLOTL, -80, rz + 3},
+                {net.minecraft.world.entity.EntityType.AXOLOTL, 90, rz - 2}, {net.minecraft.world.entity.EntityType.SALMON, 0, rz + 4}};
+        int n = 0;
+        for (Object[] o : list) {
+            @SuppressWarnings("unchecked")
+            net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob> type =
+                    (net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob>) o[0];
+            int x = (Integer) o[1];
+            int z = (Integer) o[2];
+            boolean water = z >= CityBuilder.RIVER_Z1 && z <= CityBuilder.RIVER_Z2;
+            BlockPos at = water ? new BlockPos(x, G - 3, z) : freeSpot(city, new BlockPos(x, G, z));
+            try {
+                net.minecraft.world.entity.Mob m = type.spawn(city, at, net.minecraft.world.entity.MobSpawnType.EVENT);
+                if (m == null) continue;
+                m.setPersistenceRequired();
+                m.setInvulnerable(true);
+                m.addTag(PET_TAG);
+                if (m instanceof net.minecraft.world.entity.animal.AbstractFish f) f.setFromBucket(true);
+                if (m instanceof net.minecraft.world.entity.animal.axolotl.Axolotl a) a.setFromBucket(true);
+                n++;
+            } catch (Exception e) {
+                ElSistema.LOGGER.warn("[ciudad] no pude poner un {}: {}", type.getDescriptionId(), e.toString());
+            }
+        }
+        lastAnimals = n;
+        return n;
     }
 
     // ================================================================ viajar
@@ -356,6 +408,8 @@ public final class City {
             }
         }
         long t = server.getTickCount();
+        fireworks(city, t);
+        if (t % 8 == 0) music(city);
         if (t % 40 == 0) {
             Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL, -9.0, G + 1.5, 0.5, 10, 0.4, 1.0, 1.6, 0.02);
             Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.END_ROD, 0.5, G + 16.0, 0.5, 3, 0.4, 0.6, 0.4, 0.01);
@@ -369,6 +423,60 @@ public final class City {
                 Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.SPLASH, 0.5 + Math.cos(a) * 4.0, G - 0.1, 0.5 + Math.sin(a) * 4.0,
                         6, 0.4, 0.1, 0.4, 0.1);
             }
+        }
+    }
+
+    /** Al anochecer hay fuegos artificiales sobre la plaza (medio minuto, si hay alguien cerca para verlos). */
+    private static void fireworks(ServerLevel city, long t) {
+        long time = city.getDayTime() % 24000L;
+        if (time < 13200L || time > 13800L || t % 12 != 0) return;
+        boolean near = false;
+        for (ServerPlayer p : city.players()) {
+            if (p.distanceToSqr(0.5, G, 0.5) < 160 * 160) near = true;
+        }
+        if (!near) return;
+        net.minecraft.util.RandomSource r = city.getRandom();
+        int[] colors = {0x5FD7FF, 0x3A8DFF, 0xB57BFF, 0xFFFFFF, 0xFFC857, 0xFF6A9A};
+        net.minecraft.world.item.component.FireworkExplosion.Shape[] shapes = {
+                net.minecraft.world.item.component.FireworkExplosion.Shape.LARGE_BALL,
+                net.minecraft.world.item.component.FireworkExplosion.Shape.SMALL_BALL,
+                net.minecraft.world.item.component.FireworkExplosion.Shape.STAR,
+                net.minecraft.world.item.component.FireworkExplosion.Shape.BURST};
+        net.minecraft.world.item.component.FireworkExplosion boom = new net.minecraft.world.item.component.FireworkExplosion(
+                shapes[r.nextInt(shapes.length)],
+                it.unimi.dsi.fastutil.ints.IntList.of(colors[r.nextInt(colors.length)], colors[r.nextInt(colors.length)]),
+                it.unimi.dsi.fastutil.ints.IntList.of(colors[r.nextInt(colors.length)]), r.nextBoolean(), r.nextBoolean());
+        net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FIREWORK_ROCKET);
+        stack.set(net.minecraft.core.component.DataComponents.FIREWORKS,
+                new net.minecraft.world.item.component.Fireworks(2 + r.nextInt(2), List.of(boom)));
+        double a = r.nextDouble() * Math.PI * 2.0;
+        double d = 6.0 + r.nextDouble() * 4.0;
+        city.addFreshEntity(new net.minecraft.world.entity.projectile.FireworkRocketEntity(city, 0.5 + Math.cos(a) * d, G + 1.0,
+                0.5 + Math.sin(a) * d, stack));
+    }
+
+    /** Mateo, el músico callejero, toca (una melodía en escala pentatónica) si hay alguien cerca. */
+    private static int note = 7;
+
+    private static void music(ServerLevel city) {
+        BlockPos home = npcHome(CityNpc.MUSICIAN);
+        boolean near = false;
+        for (ServerPlayer p : city.players()) {
+            if (p.distanceToSqr(home.getX(), home.getY(), home.getZ()) < 20 * 20) near = true;
+        }
+        if (!near) return;
+        List<CityNpc> l = city.getEntitiesOfClass(CityNpc.class, new AABB(home).inflate(18), n -> n.role() == CityNpc.MUSICIAN);
+        if (l.isEmpty()) return;
+        CityNpc m = l.get(0);
+        net.minecraft.util.RandomSource r = city.getRandom();
+        if (r.nextInt(5) == 0) return; // silencios
+        int[] scale = {0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24};
+        note = Math.max(0, Math.min(scale.length - 1, note + r.nextInt(5) - 2));
+        float pitch = (float) Math.pow(2.0, (scale[note] - 12) / 12.0);
+        city.playSound((Player) null, m.getX(), m.getY() + 1.0, m.getZ(),
+                r.nextInt(4) == 0 ? SoundEvents.NOTE_BLOCK_BASS.value() : SoundEvents.NOTE_BLOCK_GUITAR.value(), SoundSource.RECORDS, 0.7F, pitch);
+        if (r.nextInt(3) == 0) {
+            Fx.ambient(city, net.minecraft.core.particles.ParticleTypes.NOTE, m.getX(), m.getY() + 2.2, m.getZ(), 1, 0.2, 0.1, 0.2, 1.0);
         }
     }
 

@@ -352,7 +352,9 @@ public class NpcScreen extends Screen {
             Ui.border(g, x1 + 8, ry, x2 - 8, ry + ROW - 4, Ui.fade(0xFF24364A, a));
             if (a >= 0.99F) g.renderItem(offerIcon(role, i), x1 + 11, ry + 2);
             Ui.text(g, f, o.name(), x1 + 31, ry + 3, Ui.WHITE, a);
-            Ui.text(g, f, fit(f, o.desc(), x2 - x1 - 140), x1 + 31, ry + 12, Ui.GRAY, a * 0.9F);
+            String priceTxt = o.essences() ? "◆ " + o.price() : o.price() + " oro";
+            int descW = buyButton(i)[0] - 14 - f.width(priceTxt) - (x1 + 31);
+            Ui.text(g, f, fit(f, o.desc(), descW), x1 + 31, ry + 12, Ui.GRAY, a * 0.9F);
             int need = CityShop.rankNeeded(role, i);
             boolean rankOk = need < 0 || CData.hunterRank() >= need;
             boolean ok = (o.essences() ? CData.essences() >= o.price() : CData.coins() >= o.price()) && rankOk;
