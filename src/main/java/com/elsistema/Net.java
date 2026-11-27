@@ -43,7 +43,7 @@ public final class Net {
     public static final int N_ARISE_OK = 28;      // a = id de la sombra, b = rango
     public static final int N_ARISE_FAIL = 29;    // a = intentos que quedan
     public static final int N_ARMY_FULL = 30;     // a = sombras, b = máximo
-    public static final int N_SHADOW_BACK = 31;   // a = segundos de recuperación
+    public static final int N_SHADOW_BACK = 31;   // a = días inhabilitada, b = id de la sombra
     public static final int N_SHADOW_MARK = 32;   // a = id de entidad, b = 1 es sombra
     public static final int N_NO_CORPSE = 33;
     public static final int N_SHADOWS_OUT = 34;   // a = cuántas
@@ -64,6 +64,14 @@ public final class Net {
     public static final int N_TRIAL_START = 49;   // a = rango, b = nivel
     public static final int N_TRIAL_DENIED = 50;  // a = motivo
     public static final int N_SLOTS_UP = 51;      // a = sombras extra, b = máximo
+    public static final int N_CORPSE_INFO = 52;   // a = % de éxito, b = intentos + 10 * maná
+    public static final int N_EXAM_READY = 53;    // a = rango al que puedes ascender
+    public static final int N_EXAM_START = 54;    // a = rango, b = nivel
+    public static final int N_EXAM_FAIL = 55;     // a = motivo (1 tiempo, 2 caído), b = intentos
+    public static final int N_EXAM_DENIED = 56;   // a = motivo, b = nivel necesario
+    public static final int N_PRESTIGE = 57;      // a = prestigio, b = clase
+    public static final int N_PRESTIGE_DENIED = 58; // a = motivo
+    public static final int N_SHADOW_READY = 59;  // a = id de la sombra
 
     // Acciones (cliente -> servidor)
     public static final int ACT_SKILL = 1;
@@ -77,6 +85,7 @@ public final class Net {
     public static final int ACT_SHADOW = 9;        // a = id, b = 0 invocar, 1 guardar, 2 liberar
     public static final int ACT_SHADOWS_ALL = 10;  // a = 1 invocar todas, 0 guardar todas
     public static final int ACT_QUEST = 11;        // a = misión, b = 0 empezar la prueba
+    public static final int ACT_RANK = 12;         // a = 0 examen de ascenso, 1 prestigio
 
     /** Servidor -> cliente: todos los datos del Jugador. */
     public record SyncPayload(List<Integer> data) implements CustomPacketPayload {
@@ -109,7 +118,7 @@ public final class Net {
         }
     }
 
-    /** Servidor -> cliente: lista de sombras (7 números y 2 textos por sombra). */
+    /** Servidor -> cliente: lista de sombras (8 números y 2 textos por sombra). */
     public record ShadowsPayload(List<Integer> nums, List<String> strs) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<ShadowsPayload> TYPE =
                 new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(ElSistema.MOD_ID, "shadows"));

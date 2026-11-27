@@ -35,9 +35,12 @@ public final class SelfTest {
     /**
      * El cliente pide los pasos de la prueba del cambio de clase: 1 empezar, 2 saltar al jefe secreto,
      * 3 derrotarlo, 4 comprobar la mutación y usar las habilidades mutadas de las 5 clases.
+     * Después, el examen de ascenso y el prestigio: 5 matar una sombra y empezar el examen, 6 saltar al examinador,
+     * 7 derrotarlo, 8 comprobar el ascenso y llegar al nivel 500, 9 hacer el prestigio y comprobar la sombra caída.
      */
     public static volatile int trialRequest = 0;
     private static int trialDone = 0;
+    private static Data.ShadowRec fallen;
 
     private static boolean clientMode = false;
     private static int ticks = 0;
@@ -141,9 +144,48 @@ public final class SelfTest {
         rec.type = "minecraft:zombie";
         rec.nbt = "{id:\"minecraft:zombie\"}";
         d.shadows.add(rec);
+        d.prestige = 2;
+        d.hunterRank = 4;
         Data back = new Gson().fromJson(new Gson().toJson(d), Data.class);
         back.fix();
         if (back.shadows.size() != 1) throw new IllegalStateException("datos de sombras");
+        if (back.prestige != 2 || back.hunterRank != 4) throw new IllegalStateException("datos de rango y prestigio");
+        // Datos de antes de la 1.4.0 (sin rango): el rango sale del nivel
+        Data old = new Gson().fromJson("{\"awakened\":1,\"race\":0,\"cls\":0,\"level\":70}", Data.class);
+        old.fix();
+        if (old.rank() != 4) throw new IllegalStateException("migración del rango: " + old.rank());
+        // Probabilidad de ¡Levántate!: baja con el rango del muerto y sube con la Perspicacia
+        Data hunter = new Data();
+        hunter.awakened = 1;
+        hunter.race = 0;
+        hunter.cls = 0;
+        hunter.hunterRank = 2;
+        int e = Shadows.ariseChance(hunter, 0, false);
+        int s = Shadows.ariseChance(hunter, 5, false);
+        hunter.shadowTree[1] = 10;
+        int s2 = Shadows.ariseChance(hunter, 5, false);
+        if (!(e > s && s2 > s)) throw new IllegalStateException("probabilidades: E " + e + ", S " + s + ", S con Perspicacia " + s2);
+        if (Shadows.ariseCost(5, true) <= Shadows.ariseCost(0, false)) throw new IllegalStateException("coste de ¡Levántate!");
+        Data.ShadowRec weak = new Data.ShadowRec();
+        weak.type = "minecraft:zombie";
+        weak.rank = 0;
+        weak.level = 10;
+        Data.ShadowRec strong = new Data.ShadowRec();
+        strong.type = "minecraft:zombie";
+        strong.rank = 5;
+        strong.level = 10;
+        Data.ShadowRec cow = new Data.ShadowRec();
+        cow.type = "minecraft:cow";
+        cow.rank = 0;
+        cow.level = 10;
+        if (!(Shadows.attackOf(strong, null) > Shadows.attackOf(weak, null) && Shadows.attackOf(cow, null) > 0)) {
+            throw new IllegalStateException("daño de las sombras");
+        }
+        for (int lv = 1; lv < Defs.MAX_LEVEL; lv++) {
+            if (Defs.xpNeeded(lv) <= 0 || Defs.xpNeeded(lv + 1) < Defs.xpNeeded(lv)) throw new IllegalStateException("EXP del nivel " + lv);
+        }
+        ElSistema.LOGGER.info("[SELFTEST] rango, prestigio y sombras: E {}% · S {}% · S con Perspicacia {}% · ataque S {} / E {}",
+                e, s, s2, Math.round(Shadows.attackOf(strong, null)), Math.round(Shadows.attackOf(weak, null)));
         Dungeons.selfTest(lvl, base);
         ElSistema.LOGGER.info("[SELFTEST] mazmorras construidas y limpiadas (también la prueba y los jefes secretos)");
         secretBosses(lvl, base);
@@ -226,6 +268,53 @@ public final class SelfTest {
                 ElSistema.LOGGER.info("[SELFTEST] OK prueba del cambio de clase: {} y las 5 habilidades mutadas",
                         Defs.MUTATION_NAME[cls]);
             }
+            case 5 -> {
+                fallen = Shadows.testKillOne(p);
+                if (fallen == null || fallen.state != Shadows.RECOVERING) throw new IllegalStateException("la sombra no cayó");
+                long left = Shadows.downLeft(fallen, p.getServer().overworld());
+                if (left < Defs.SHADOW_DOWN_TICKS - 200) throw new IllegalStateException("la sombra caída no quedó 3 días: " + left);
+                ElSistema.LOGGER.info("[SELFTEST] sombra caída: inhabilitada {} ticks", left);
+                if (d.rank() != 0 || !Ranking.examReady(d)) throw new IllegalStateException("el examen al rango D no está disponible");
+                Ranking.startExam(p);
+                if (!Dungeons.inDungeon(p)) throw new IllegalStateException("no empezó el examen de ascenso");
+                ElSistema.LOGGER.info("[SELFTEST] examen de ascenso al rango D empezado");
+            }
+            case 6 -> {
+                if (!Dungeons.testSkipToBoss(p)) throw new IllegalStateException("no se pudo saltar al examinador");
+            }
+            case 7 -> {
+                int n = Dungeons.testWin(p);
+                if (n <= 0) throw new IllegalStateException("no había nadie en el examen (" + n + ")");
+            }
+            case 8 -> {
+                if (d.rank() != 1) throw new IllegalStateException("no se subió al rango D tras el examen: " + d.rank());
+                ElSistema.LOGGER.info("[SELFTEST] OK examen de ascenso: rango {}", Defs.RANK[d.rank()]);
+                d.level = Defs.MAX_LEVEL;
+                d.xp = 0;
+                SystemLogic.applyAll(p, d);
+                SystemLogic.sync(p, d);
+            }
+            case 9 -> {
+                if (Dungeons.inDungeon(p) || d.inDungeon == 1) throw new IllegalStateException("sigue dentro del examen");
+                int cls = d.cls;
+                Ranking.prestige(p);
+                if (d.prestige != 1 || d.level != 1) throw new IllegalStateException("el prestigio no se hizo: " + d.prestige + " / nivel " + d.level);
+                boolean weapon = false;
+                for (int i = 0; i < p.getInventory().getContainerSize(); i++) {
+                    if (p.getInventory().getItem(i).is(ModItems.SOBERANO[cls])) weapon = true;
+                }
+                if (!weapon) throw new IllegalStateException("no se recibió el arma del Monarca");
+                if (fallen != null) {
+                    fallen.recoverTick = 1L;
+                    fallen.recoverDay = 0L;
+                }
+                ElSistema.LOGGER.info("[SELFTEST] OK prestigio: {} con {}", Defs.prestigeName(d.prestige),
+                        ModItems.SOBERANO[cls].getDescriptionId());
+            }
+            case 10 -> {
+                if (fallen != null && fallen.state == Shadows.RECOVERING) throw new IllegalStateException("la sombra caída no volvió");
+                ElSistema.LOGGER.info("[SELFTEST] OK la sombra caída volvió al pasar el tiempo");
+            }
             default -> {
             }
         }
@@ -238,6 +327,7 @@ public final class SelfTest {
         d.race = 5;
         d.cls = 2;
         d.level = 45;
+        d.hunterRank = 0;
         d.points = 3;
         d.skillPoints = 4;
         d.coins = 123456;

@@ -208,7 +208,7 @@ public final class Quests {
             }
             case Q_BEYOND -> {
                 d.points += 5;
-                give(p, ModItems.KEYS[Math.min(5, Defs.rank(d.level) + 1)], 1);
+                give(p, ModItems.KEYS[Math.min(5, d.rank() + 1)], 1);
             }
             case Q_ECLIPSE -> {
                 give(p, ModItems.COLMILLO, 1);
@@ -358,7 +358,7 @@ public final class Quests {
 
     /** Al terminar una mazmorra normal. */
     public static void onDungeonClear(ServerPlayer p, Data d, int rank) {
-        if (d.awakened == 1 && rank > Defs.rank(d.level)) add(p, d, Q_BEYOND, 1);
+        if (d.awakened == 1 && rank > d.rank()) add(p, d, Q_BEYOND, 1);
     }
 
     // ================================================================ prueba del cambio de clase

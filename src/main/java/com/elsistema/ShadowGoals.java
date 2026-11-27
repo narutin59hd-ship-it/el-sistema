@@ -1,5 +1,6 @@
 package com.elsistema;
 
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -10,7 +11,7 @@ import net.minecraft.world.entity.player.Player;
 import java.util.EnumSet;
 import java.util.List;
 
-/** Inteligencia de las sombras: seguir a su Monarca y defenderle. */
+/** Inteligencia de las sombras: seguir a su Monarca, defenderle y atacar. */
 public final class ShadowGoals {
     private ShadowGoals() {}
 
@@ -127,6 +128,65 @@ public final class ShadowGoals {
         @Override
         public void stop() {
             this.mob.setTarget(null);
+        }
+    }
+
+    /**
+     * Golpe de sombra: para las criaturas que no tienen ataque propio (vacas, ovejas, caballos...).
+     * Corre hacia el enemigo y le golpea cada segundo con el daño de la sombra (criatura, nivel, rango y poder).
+     */
+    public static final class Strike extends Goal {
+        private final Mob mob;
+        private int cooldown;
+        private int repath;
+
+        public Strike(Mob mob) {
+            this.mob = mob;
+            this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+        }
+
+        @Override
+        public boolean canUse() {
+            LivingEntity t = this.mob.getTarget();
+            return t != null && t.isAlive() && t.level() == this.mob.level();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return this.canUse();
+        }
+
+        @Override
+        public void start() {
+            this.repath = 0;
+        }
+
+        @Override
+        public void stop() {
+            this.mob.getNavigation().stop();
+        }
+
+        @Override
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
+
+        @Override
+        public void tick() {
+            LivingEntity t = this.mob.getTarget();
+            if (t == null) return;
+            this.mob.getLookControl().setLookAt(t, 30.0F, 30.0F);
+            if (--this.repath <= 0) {
+                this.repath = 8;
+                this.mob.getNavigation().moveTo(t, 1.35);
+            }
+            if (this.cooldown > 0) this.cooldown--;
+            double reach = this.mob.getBbWidth() * 0.5 + t.getBbWidth() * 0.5 + 1.3;
+            if (this.cooldown <= 0 && this.mob.distanceToSqr(t) <= reach * reach && this.mob.hasLineOfSight(t)) {
+                this.cooldown = 20;
+                this.mob.swing(InteractionHand.MAIN_HAND);
+                t.hurt(this.mob.damageSources().mobAttack(this.mob), Shadows.strikeDamage(this.mob));
+            }
         }
     }
 }

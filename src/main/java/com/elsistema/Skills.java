@@ -182,27 +182,34 @@ public final class Skills {
 
     /** Báculo arcano: rayo corto que atraviesa monstruos (más daño con INTELIGENCIA). */
     public static void bolt(ServerPlayer p, Data d) {
+        bolt(p, d, 1.0F, false);
+    }
+
+    /** Rayo arcano. El Báculo del Monarca lo lanza más lejos, con llamas de alma y el triple de daño. */
+    public static void bolt(ServerPlayer p, Data d, float mult, boolean sovereign) {
         ServerLevel lvl = (ServerLevel) p.level();
         Vec3 eye = p.getEyePosition();
-        Vec3 end = eye.add(p.getLookAngle().scale(18.0));
+        Vec3 end = eye.add(p.getLookAngle().scale(sovereign ? 28.0 : 18.0));
         BlockHitResult bh = lvl.clip(new ClipContext(eye, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, p));
         if (bh.getType() != HitResult.Type.MISS) {
             end = bh.getLocation();
         }
         final Vec3 from = eye;
         final Vec3 to = end;
-        float dmg = (float) (5.0 + 0.25 * d.bonus(3) + 0.05 * d.level);
+        float dmg = (float) ((5.0 + 0.25 * d.bonus(3) + 0.05 * d.level) * mult);
         List<LivingEntity> hits = lvl.getEntitiesOfClass(LivingEntity.class, new AABB(from, to).inflate(1.0),
                 e -> isTarget(e, p) && e.getBoundingBox().inflate(0.3).clip(from, to).isPresent());
         for (LivingEntity e : hits) {
             e.hurt(p.damageSources().indirectMagic(p, p), dmg);
-            lvl.sendParticles(ParticleTypes.WITCH, e.getX(), e.getY() + e.getBbHeight() / 2.0, e.getZ(), 10, 0.3, 0.3, 0.3, 0.05);
+            lvl.sendParticles(sovereign ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.WITCH,
+                    e.getX(), e.getY() + e.getBbHeight() / 2.0, e.getZ(), 10, 0.3, 0.3, 0.3, 0.05);
+            if (sovereign) e.addEffect(new MobEffectInstance(MobEffects.WITHER, 60, 1), p);
         }
         double len = from.distanceTo(to);
         Vec3 dir = to.subtract(from).normalize();
         for (double t = 0.8; t < len; t += 0.5) {
             Vec3 q = from.add(dir.scale(t));
-            lvl.sendParticles(ParticleTypes.WITCH, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
+            lvl.sendParticles(sovereign ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.WITCH, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
         }
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.EVOKER_CAST_SPELL, 0.7F, 1.9F);
     }

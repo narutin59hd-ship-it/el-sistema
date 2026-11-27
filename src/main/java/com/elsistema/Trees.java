@@ -31,9 +31,9 @@ public final class Trees {
     public static final int FX_FIRE_ARROWS = 21;  // flechas en llamas
     public static final int FX_DROP = 22;         // % de probabilidad de botín
     public static final int FX_SHADOW_SLOTS = 23; // sombras extra en el ejército
-    public static final int FX_SHADOW_CHANCE = 24; // % de probabilidad de extracción
+    public static final int FX_SHADOW_CHANCE = 24; // % de probabilidad de levantar a un muerto (Perspicacia)
     public static final int FX_SHADOW_POWER = 25; // % de vida y daño de las sombras
-    public static final int FX_SHADOW_REGEN = 26; // curación de las sombras y recuperación más rápida
+    public static final int FX_SHADOW_REGEN = 26; // curación de las sombras
 
     // Tipos de árbol
     public static final int KIND_RACE = 0;
@@ -143,10 +143,10 @@ public final class Trees {
 
     public static final Node[] SHADOW = {
             n("Ejército de sombras", "+1 sombra en tu ejército por rango", 10, 1, FX_SHADOW_SLOTS, 1),
-            n("Extracción perfecta", "+5% de probabilidad de extraer una sombra por rango", 5, 5, FX_SHADOW_CHANCE, 5),
+            n("Perspicacia", "+4% de probabilidad de levantar a un muerto por rango", 10, 5, FX_SHADOW_CHANCE, 4),
             n("Poder de las sombras", "+5% de vida y daño de tus sombras por rango", 10, 5, FX_SHADOW_POWER, 5),
             n("Legión", "+2 sombras en tu ejército por rango", 5, 25, FX_SHADOW_SLOTS, 2),
-            n("Soberano de la noche", "Tus sombras se curan 1 de vida por segundo y vuelven 15 s antes por rango", 3, 40, FX_SHADOW_REGEN, 1)};
+            n("Soberano de la noche", "Tus sombras se curan 1 de vida por segundo por rango", 3, 40, FX_SHADOW_REGEN, 1)};
 
     public static Node[] tree(boolean race, int index) {
         Node[][] all = race ? RACE : CLASS;
@@ -193,9 +193,9 @@ public final class Trees {
             case FX_FIRE_ARROWS -> rank > 0 ? "Flechas en llamas" : "Sin efecto";
             case FX_DROP -> "+" + x + "% de botín";
             case FX_SHADOW_SLOTS -> "+" + x + " sombras";
-            case FX_SHADOW_CHANCE -> "+" + x + "% de extracción";
+            case FX_SHADOW_CHANCE -> "+" + x + "% de levantar muertos";
             case FX_SHADOW_POWER -> "+" + x + "% de poder de las sombras";
-            case FX_SHADOW_REGEN -> "+" + x + " vida/s, -" + num(15 * v) + " s de recuperación";
+            case FX_SHADOW_REGEN -> "+" + x + " de vida por segundo";
             case A_HP -> "+" + x + " de vida máxima";
             case A_ARMOR -> "+" + x + " de armadura";
             case A_DMG -> "+" + x + " de daño";

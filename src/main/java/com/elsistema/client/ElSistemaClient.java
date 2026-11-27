@@ -1,5 +1,7 @@
 package com.elsistema.client;
 
+import com.elsistema.Defs;
+import com.elsistema.ModItems;
 import com.elsistema.Net;
 import com.elsistema.client.render.ModRenderers;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -10,6 +12,9 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.renderer.item.ItemProperties;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import org.lwjgl.glfw.GLFW;
 
 public class ElSistemaClient implements ClientModInitializer {
@@ -32,6 +37,7 @@ public class ElSistemaClient implements ClientModInitializer {
                 "key.elsistema.shadows", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, "key.categories.elsistema"));
 
         ModRenderers.register();
+        registerBow(ModItems.SOBERANO[Defs.ARQUERO]);
 
         ClientPlayNetworking.registerGlobalReceiver(Net.SyncPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> CData.set(payload.data())));
@@ -85,5 +91,16 @@ public class ElSistemaClient implements ClientModInitializer {
         if ("client".equalsIgnoreCase(System.getenv("ELSISTEMA_SELFTEST"))) {
             ClientSelfTest.register();
         }
+    }
+
+    /** El Arco del Monarca se tensa como un arco normal (modelos arco_monarca_pulling_0/1/2). */
+    private static void registerBow(Item bow) {
+        if (bow == null) return;
+        ItemProperties.register(bow, ResourceLocation.withDefaultNamespace("pull"), (stack, level, entity, seed) -> {
+            if (entity == null || entity.getUseItem() != stack) return 0.0F;
+            return (stack.getUseDuration(entity) - entity.getUseItemRemainingTicks()) / 20.0F;
+        });
+        ItemProperties.register(bow, ResourceLocation.withDefaultNamespace("pulling"), (stack, level, entity, seed) ->
+                entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? 1.0F : 0.0F);
     }
 }

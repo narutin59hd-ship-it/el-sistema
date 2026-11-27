@@ -47,6 +47,10 @@ public final class Hud {
     private static long corpseTotal = 1;
     private static long ariseTime = -1;
     private static int ariseCount = 0;
+    /** Probabilidad, intentos y maná del cadáver más interesante (-1 = sin datos). */
+    private static int corpseChance = -1;
+    private static int corpseTries = 0;
+    private static int corpseCost = 0;
 
     private record Note(String text, int color, long start) {}
 
@@ -128,9 +132,14 @@ public final class Hud {
         TOASTS.clear();
         NOTES.clear();
         corpseUntil = -1;
+        corpseChance = -1;
         bigStart = -1;
         callStart = -1;
         warnTime = -1;
+    }
+
+    private static String join(List<String> l) {
+        return String.join("  ·  ", l);
     }
 
     // ================================================================== avisos del servidor
@@ -172,12 +181,24 @@ public final class Hud {
             case Net.N_SKILL -> callout(Defs.skillName(a, b == 1).toUpperCase(Locale.ROOT), b == 1 ? Ui.GOLD : Ui.WHITE);
             case Net.N_COOLDOWN -> warn("Habilidad en enfriamiento: " + a + " s");
             case Net.N_NO_MP -> warn("Maná insuficiente (" + b + "/" + a + " MP)");
-            case Net.N_RANK_UP -> toast("NOTIFICACIÓN", Defs.RANK_COLOR[Math.max(0, Math.min(5, a))],
-                    "¡Tu rango de cazador ha subido!",
-                    "Rango " + name(Defs.RANK, b) + "   »   Rango " + name(Defs.RANK, a));
+            case Net.N_RANK_UP -> {
+                int r = Math.max(0, Math.min(5, a));
+                big("¡ASCENSO DE RANGO!", "Rango " + name(Defs.RANK, b) + "   »   Rango " + name(Defs.RANK, a),
+                        0x90000000 | (Defs.RANK_COLOR[r] & 0xFFFFFF), 0x66000000 | (Defs.RANK_COLOR[r] & 0xFFFFFF));
+                List<String> lines = new ArrayList<>();
+                lines.add("Has superado el examen. Ahora eres un cazador de rango " + name(Defs.RANK, a) + ".");
+                List<String> buffs = Defs.rankBuffs(r);
+                if (!buffs.isEmpty()) lines.add(join(buffs));
+                toast("NOTIFICACIÓN", Defs.RANK_COLOR[r], lines.toArray(new String[0]));
+                sound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 1.2F);
+            }
             case Net.N_NOT_AWAKENED -> warn("Aún no has despertado. Pulsa " + v + ".");
-            case Net.N_MAX_LEVEL -> toast("NOTIFICACIÓN", Ui.GOLD, "Has alcanzado el nivel máximo.",
-                    "Ya no queda nadie por encima de ti.");
+            case Net.N_MAX_LEVEL -> {
+                big("NIVEL " + Defs.MAX_LEVEL, "¡El prestigio está disponible!", 0x90C77DFF, 0x66B07AFF);
+                toast("NOTIFICACIÓN", Defs.MONARCA_COLOR, "Has alcanzado el nivel máximo.",
+                        "Haz el PRESTIGIO en la pestaña Rango (" + v + ", tecla 6).",
+                        "Vuelves al nivel 1 y te conviertes en MONARCA.");
+            }
             case Net.N_WELCOME -> toast("NOTIFICACIÓN", Ui.CYAN, "Bienvenido de nuevo, Jugador.");
             case Net.N_GATE_OPEN -> toast("¡ALERTA!", Defs.RANK_COLOR[Math.max(0, Math.min(5, a))],
                     "Se ha abierto una puerta de mazmorra de rango " + name(Defs.RANK, a) + ".",
@@ -186,7 +207,13 @@ public final class Hud {
             case Net.N_DUNGEON_ENTER -> big("MAZMORRA DE RANGO " + name(Defs.RANK, a),
                     "Nivel " + b + "   ·   Elimina a todos los monstruos", 0x90B050FF, 0x55301060);
             case Net.N_WAVE -> callout("OLEADA " + a + "/" + b, Ui.CYAN);
-            case Net.N_BOSS -> big("¡JEFE DE MAZMORRA!", "Rango " + name(Defs.RANK, a) + "   ·   Derrótalo para terminar", 0x90FF3030, 0x66B01010);
+            case Net.N_BOSS -> {
+                if (b == 1) {
+                    big("¡EXAMINADOR!", "Rango " + name(Defs.RANK, a) + "   ·   Derrótalo para ascender", 0x90FF3030, 0x66B01010);
+                } else {
+                    big("¡JEFE DE MAZMORRA!", "Rango " + name(Defs.RANK, a) + "   ·   Derrótalo para terminar", 0x90FF3030, 0x66B01010);
+                }
+            }
             case Net.N_DUNGEON_CLEAR -> {
                 big("¡MAZMORRA COMPLETADA!", "+" + b + " de oro   ·   Recoge el botín: vuelves en 8 s", 0x90FFC857, 0x55FFC857);
                 toast("RECOMPENSA", Ui.GOLD, "Mazmorra de rango " + name(Defs.RANK, a) + " superada.",
@@ -230,15 +257,29 @@ public final class Hud {
                         "Una sombra de rango " + name(Defs.RANK, b) + " se une a tu ejército", 0x909A4DFF, 0x55200040);
             }
             case Net.N_ARISE_FAIL -> {
-                if (a <= 0) corpseUntil = -1;
-                warn(a > 0 ? "La extracción ha fallado. Quedan " + a + " intentos." : "La extracción ha fallado. El alma se ha desvanecido.");
+                if (a <= 0) {
+                    corpseUntil = -1;
+                } else {
+                    corpseTries = a;
+                }
+                warn(a > 1 ? "No se ha levantado. Quedan " + a + " intentos."
+                        : a == 1 ? "No se ha levantado. Queda 1 intento." : "No se ha levantado. El alma se ha desvanecido.");
+            }
+            case Net.N_CORPSE_INFO -> {
+                corpseChance = Math.max(0, Math.min(100, a));
+                corpseTries = b % 10;
+                corpseCost = b / 10;
             }
             case Net.N_ARISE_NO_MP -> warn("Maná insuficiente para la extracción (" + b + "/" + a + " MP)");
             case Net.N_NO_CORPSE -> warn("No hay ningún cadáver tuyo cerca para extraer.");
             case Net.N_ARMY_FULL -> warn("Tu ejército está lleno (" + a + "/" + b + "). Mejóralo en el árbol de sombras.");
             case Net.N_SHADOWS_OUT -> callout(a == 1 ? "SAL, SOMBRA" : "SALID, SOMBRAS (" + a + ")", Ui.SHADOW);
             case Net.N_SHADOWS_IN -> note(a == 1 ? "Una sombra ha vuelto a tu sombra." : a + " sombras han vuelto a tu sombra.", Ui.PURPLE);
-            case Net.N_SHADOW_BACK -> note(shadowName(b) + " ha caído. Vuelve en " + a + " s.", 0xFFD08AFF);
+            case Net.N_SHADOW_BACK -> {
+                note(shadowName(b) + " ha caído.", 0xFFFF8A5A);
+                note("Quedará inhabilitada " + a + " días de Minecraft.", 0xFFD08AFF);
+            }
+            case Net.N_SHADOW_READY -> note(shadowName(a) + " ha vuelto: ya puedes invocarla.", Ui.SHADOW);
             case Net.N_SHADOW_LEVEL -> note(shadowName(a) + " ha subido al nivel " + b + ".", Ui.SHADOW);
             case Net.N_NO_SHADOWS -> warn(a == 0 ? "Aún no tienes sombras. Mata una criatura y pulsa " + key(ElSistemaClient.ARISE) + "."
                     : "No hay sombras disponibles: están fuera o recuperándose.");
@@ -301,6 +342,36 @@ public final class Hud {
                 default -> "Esa prueba no está disponible.";
             });
             case Net.N_SLOTS_UP -> note("+" + a + " sombras en tu ejército para siempre (máximo " + b + ").", Ui.SHADOW);
+            // ---------------------------------------------------------- rango de cazador y prestigio
+            case Net.N_EXAM_READY -> {
+                toast("NOTIFICACIÓN", Defs.RANK_COLOR[Math.max(0, Math.min(5, a))],
+                        "Ya puedes hacer el examen de ascenso a rango " + name(Defs.RANK, a) + ".",
+                        "Está en la pestaña Rango (" + v + ", tecla 6).");
+                sound(SoundEvents.ENCHANTMENT_TABLE_USE, 1.0F, 1.2F);
+            }
+            case Net.N_EXAM_START -> big("EXAMEN DE ASCENSO", "Rango " + name(Defs.RANK, a) + "   ·   Supera "
+                    + Defs.EXAM_WAVES + " oleadas y derrota al examinador", 0x905FB8FF, 0x55305080);
+            case Net.N_EXAM_FAIL -> toast("EXAMEN SUSPENDIDO", Ui.RED,
+                    a == 1 ? "Se acabó el tiempo." : a == 2 ? "Has caído en el examen." : "Has abandonado el examen.",
+                    "Puedes repetirlo cuando quieras desde la pestaña Rango.");
+            case Net.N_EXAM_DENIED -> warn(switch (a) {
+                case 0 -> "Necesitas nivel " + b + " para este examen.";
+                case 1 -> "Ya estás dentro de una mazmorra.";
+                case 2 -> "No hay sitio para el examen aquí. Prueba en otro lugar.";
+                default -> "Ya eres rango S: no hay examen por encima.";
+            });
+            case Net.N_PRESTIGE -> {
+                big("¡PRESTIGIO!", "Ahora eres " + Defs.prestigeName(a) + "   ·   Vuelves al nivel 1", 0x90C77DFF, 0x66FFC857);
+                List<String> lines = new ArrayList<>();
+                lines.add("Has renacido como " + Defs.prestigeName(a) + ".");
+                List<String> pb = Defs.prestigeBuffs(a);
+                if (pb.size() >= 2) lines.add(join(pb.subList(0, 2)));
+                if (b >= 0 && b < Defs.CLASS_NAME.length) lines.add("Recibes el arma del Monarca de tu clase.");
+                toast("PRESTIGIO", Defs.MONARCA_COLOR, lines.toArray(new String[0]));
+                sound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 0.8F);
+            }
+            case Net.N_PRESTIGE_DENIED -> warn(a == 0 ? "Necesitas nivel " + Defs.MAX_LEVEL + " para el prestigio."
+                    : "No puedes hacer el prestigio dentro de una mazmorra.");
             default -> {
             }
         }
@@ -337,9 +408,8 @@ public final class Hud {
 
         int lvl = CData.level();
         Ui.glow(g, f, "Nv. " + lvl, x1 + 5, y1 + 4, Ui.WHITE, Ui.GLOW, 1F);
-        int r = Defs.rank(lvl);
-        String rk = "RANGO " + Defs.RANK[r];
-        Ui.glow(g, f, rk, x2 - 5 - f.width(rk), y1 + 4, Defs.RANK_COLOR[r], 0x40FFFFFF, 1F);
+        String rk = CData.prestige() > 0 ? "★ " + CData.rankLabel() : "RANGO " + CData.rankLabel();
+        Ui.glow(g, f, rk, x2 - 5 - f.width(rk), y1 + 4, CData.rankColor(), 0x40FFFFFF, 1F);
         String sub = CData.className() + " · " + name(Defs.RACE_NAME, CData.race());
         Ui.text(g, f, sub.toUpperCase(Locale.ROOT), x1 + 5, y1 + 15, CData.mutated() ? Ui.GOLD : Ui.GRAY, 1F);
 
@@ -435,13 +505,20 @@ public final class Hud {
         float a = Ui.clamp01((now - corpseStart) / 200F) * Ui.clamp01(left / 500F);
         float pulse = 0.75F + 0.25F * (float) Math.sin(now / 160.0);
         String s = "[" + key(ElSistemaClient.ARISE) + "]  ¡LEVÁNTATE!";
+        String info = corpseChance >= 0 ? corpseChance + "%  ·  " + corpseTries + (corpseTries == 1 ? " intento" : " intentos")
+                + "  ·  " + corpseCost + " MP" : "";
         int cx = sw / 2;
         int y = sh / 2 + 20;
-        int w = f.width(s) + 18;
-        Ui.panel(g, cx - w / 2, y - 4, cx + w / 2, y + 13, Ui.SHADOW, a * 0.95F);
+        int w = Math.max(f.width(s), f.width(info)) + 18;
+        int h = info.isEmpty() ? 13 : 23;
+        Ui.panel(g, cx - w / 2, y - 4, cx + w / 2, y + h, Ui.SHADOW, a * 0.95F);
         Ui.glow(g, f, s, cx - f.width(s) / 2, y, Ui.WHITE, 0xA07A3DFF, a * pulse);
+        if (!info.isEmpty()) {
+            int col = corpseChance >= 50 ? Ui.GREEN : corpseChance >= 25 ? Ui.GOLD : Ui.RED;
+            Ui.center(g, f, info, cx, y + 10, col, a);
+        }
         float frac = left / (float) corpseTotal;
-        g.fill(cx - w / 2 + 2, y + 10, cx - w / 2 + 2 + Math.round((w - 4) * frac), y + 11, Ui.fade(Ui.SHADOW, a));
+        g.fill(cx - w / 2 + 2, y + h - 3, cx - w / 2 + 2 + Math.round((w - 4) * frac), y + h - 2, Ui.fade(Ui.SHADOW, a));
     }
 
     /** "+12 EXP" y "+5 oro" que suben y se desvanecen junto al panel. */

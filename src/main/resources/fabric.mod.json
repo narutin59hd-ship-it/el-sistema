@@ -3,7 +3,7 @@
   "id": "elsistema",
   "version": "${version}",
   "name": "El Sistema",
-  "description": "Despierta como Jugador: niveles, rango de cazador, razas, clases, arboles de habilidades, ejercito de sombras, monstruos propios en mazmorras, armas y armaduras de la tienda. V = Sistema, R = habilidad, G = Levantate, H = sombras.",
+  "description": "Despierta como Jugador: niveles hasta el 500 con prestigio, rango de cazador con examen de ascenso, razas, clases, arboles de habilidades, ejercito de sombras, monstruos propios en mazmorras, armas y armaduras de la tienda. V = Sistema, R = habilidad, G = Levantate, H = sombras.",
   "authors": ["Tu"],
   "license": "MIT",
   "environment": "*",

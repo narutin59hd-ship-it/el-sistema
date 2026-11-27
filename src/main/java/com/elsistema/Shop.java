@@ -94,7 +94,7 @@ public final class Shop {
         Data d = Store.get(p);
         if (d.awakened != 1 || i < 0 || i >= OFFERS.size()) return;
         Offer o = OFFERS.get(i);
-        if (Defs.rank(d.level) < o.minRank()) {
+        if (d.rank() < o.minRank()) {
             SystemLogic.notify(p, Net.N_RANK_REQ, o.minRank(), 0);
             return;
         }

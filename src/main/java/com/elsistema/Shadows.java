@@ -26,12 +26,18 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
+import net.minecraft.world.entity.ai.goal.BreedGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
+import net.minecraft.world.entity.ai.goal.FollowParentGoal;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
+import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
+import net.minecraft.world.entity.ai.goal.TemptGoal;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
@@ -51,8 +57,9 @@ import java.util.UUID;
 
 /**
  * Ejército de sombras: al matar una criatura su cuerpo suelta humo oscuro unos segundos; con la tecla G
- * («¡Levántate!») el Jugador intenta convertirla en su sombra. Las sombras le siguen y luchan por él,
- * se guardan y se invocan con H y, si caen, vuelven a su sombra para recuperarse.
+ * («¡Levántate!») el Jugador intenta convertirla en su sombra (3 intentos por cadáver; cuanto más alto el rango
+ * del muerto, más maná cuesta y menos probabilidad hay). Las sombras le siguen y atacan (más fuerte cuanto mejor
+ * es la criatura y su rango), se guardan y se invocan con H y, si caen, quedan inhabilitadas 3 días de Minecraft.
  */
 public final class Shadows {
     private Shadows() {}
@@ -60,6 +67,8 @@ public final class Shadows {
     public static final String TAG = "es_sombra";
     private static final String SID = "es_sid:";
     private static final String OWN = "es_own:";
+    /** Daño por golpe (x10) de las sombras que atacan con el golpe de sombra (animales sin ataque propio). */
+    private static final String ATK = "es_atk:";
     public static final int STORED = 0;
     public static final int OUT = 1;
     public static final int RECOVERING = 2;
@@ -88,7 +97,7 @@ public final class Shadows {
         final int lvl;
         final boolean boss;
         int age = 0;
-        int attempts = 3;
+        int attempts = Defs.ARISE_TRIES;
 
         Corpse(UUID owner, ServerLevel level, Vec3 pos, CompoundTag nbt, String type, String key, int rank, int lvl, boolean boss) {
             this.owner = owner;
@@ -173,6 +182,10 @@ public final class Shadows {
     public static int maxSlots(Data d) {
         int m = BASE_SLOTS + (int) Math.round(d.fx(Trees.FX_SHADOW_SLOTS));
         if (d.setBonus == ModArmor.SET_MONARCA) m += 3;
+        if (d.awakened == 1) {
+            m += Defs.RANK_SLOTS[d.rank()];
+            m += Defs.P_SLOTS * Defs.prestigeLevel(d.prestige);
+        }
         return m;
     }
 
@@ -191,8 +204,92 @@ public final class Shadows {
         return pw;
     }
 
-    private static long recoverMs(Data d) {
-        return Math.max(10_000L, 60_000L - (long) (15_000L * d.fx(Trees.FX_SHADOW_REGEN)));
+    private static int clampRank(int r) {
+        return Math.max(0, Math.min(5, r));
+    }
+
+    // ================================================================ daño de las sombras
+
+    /** Daño base de una criatura: su ataque, o (si no ataca, como los animales) según su vida. */
+    static double baseDamage(EntityType<?> type) {
+        if (type == null) return 2.0;
+        try {
+            if (DefaultAttributes.hasSupplier(type)) {
+                @SuppressWarnings("unchecked")
+                AttributeSupplier sup = DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type);
+                if (sup.hasAttribute(Attributes.ATTACK_DAMAGE)) return Math.max(1.0, sup.getBaseValue(Attributes.ATTACK_DAMAGE));
+                if (sup.hasAttribute(Attributes.MAX_HEALTH)) {
+                    return Math.max(1.0, Math.min(6.0, sup.getBaseValue(Attributes.MAX_HEALTH) / 4.0));
+                }
+            }
+        } catch (Exception ignored) {
+            // criatura rara de otro mod: daño por defecto
+        }
+        return 2.0;
+    }
+
+    /** Multiplicador de daño de una sombra por su rango y el poder de las sombras de su dueño. */
+    public static double damageMult(Mob m) {
+        double mult = Defs.SHADOW_RANK_DMG[clampRank(Ranks.rankOf(m))];
+        ServerPlayer p = ownerPlayer(m);
+        if (p != null) mult *= 1.0 + power(Store.get(p));
+        return mult;
+    }
+
+    /** Daño por golpe de una sombra (el que se ve en la pestaña Sombras): criatura, nivel, rango y poder. */
+    public static double attackOf(ShadowRec rec, Data d) {
+        EntityType<?> type = EntityType.byString(rec.type).orElse(null);
+        double mult = (1.0 + 0.03 * rec.level + (rec.boss ? 0.5 : 0.0)) * Defs.SHADOW_RANK_DMG[clampRank(rec.rank)];
+        if (d != null) mult *= 1.0 + power(d);
+        return baseDamage(type) * mult;
+    }
+
+    /** Daño del golpe de sombra (para las criaturas que no tienen ataque propio). */
+    public static float strikeDamage(Mob m) {
+        for (String t : m.getTags()) {
+            if (t.startsWith(ATK)) {
+                try {
+                    return Math.max(1.0F, Integer.parseInt(t.substring(ATK.length())) / 10.0F);
+                } catch (NumberFormatException ignored) {
+                    break;
+                }
+            }
+        }
+        return 2.0F;
+    }
+
+    // ================================================================ probabilidad y coste de ¡Levántate!
+
+    /** Probabilidad (%) de levantar a un muerto: baja con su rango, sube con tu rango, la Perspicacia y la INT. */
+    public static int ariseChance(Data d, int rank, boolean boss) {
+        int r = clampRank(rank);
+        double c = Defs.ARISE_BASE[r];
+        int diff = d.rank() - r;
+        c += diff > 0 ? 5.0 * diff : 10.0 * diff;
+        c += d.fx(Trees.FX_SHADOW_CHANCE);
+        c += Math.min(15.0, 0.1 * d.bonus(3));
+        c += Defs.RANK_ARISE[d.rank()];
+        if (boss) c *= 0.6;
+        return (int) Math.round(Math.max(3.0, Math.min(95.0, c)));
+    }
+
+    /** Maná que cuesta cada intento: sube con el rango del muerto (los jefes, un 50% más). */
+    public static int ariseCost(int rank, boolean boss) {
+        int c = Defs.ARISE_COST[clampRank(rank)];
+        return boss ? c + c / 2 : c;
+    }
+
+    /** Envía al HUD la probabilidad, los intentos y el coste del mejor cadáver cercano. */
+    private static void sendCorpseInfo(ServerPlayer p, Data d) {
+        Corpse best = null;
+        for (Corpse c : CORPSES) {
+            if (!c.owner.equals(p.getUUID()) || c.level != p.level() || c.attempts <= 0) continue;
+            if (c.pos.distanceToSqr(p.position()) > ARISE_RANGE * ARISE_RANGE * 4) continue;
+            if (best == null || c.rank > best.rank || c.rank == best.rank && c.age < best.age) best = c;
+        }
+        if (best == null) return;
+        SystemLogic.notify(p, Net.N_CORPSE_INFO, ariseChance(d, best.rank, best.boss),
+                best.attempts + 10 * ariseCost(best.rank, best.boss));
     }
 
     public static boolean canExtract(LivingEntity e) {
@@ -231,9 +328,12 @@ public final class Shadows {
                 }
             }
         }
+        boolean boss = Ranks.isBoss(dead);
         CORPSES.add(new Corpse(owner.getUUID(), lvl, dead.position(), tag, type, dead.getType().getDescriptionId(),
-                rank, level, Ranks.isBoss(dead)));
+                rank, level, boss));
         SystemLogic.notify(owner, Net.N_CORPSE, CORPSE_TICKS / 20, 0);
+        SystemLogic.notify(owner, Net.N_CORPSE_INFO, ariseChance(d, rank, boss),
+                Defs.ARISE_TRIES + 10 * ariseCost(rank, boss));
     }
 
     /** Quita del NBT guardado lo que no debe copiarse a la sombra. */
@@ -292,16 +392,14 @@ public final class Shadows {
                 SystemLogic.notify(p, Net.N_ARMY_FULL, count(d), maxSlots(d));
                 break;
             }
-            int cost = 10 + 5 * c.rank + (c.boss ? 20 : 0);
+            int cost = ariseCost(c.rank, c.boss);
             if (d.mp < cost && !p.isCreative()) {
                 SystemLogic.notify(p, Net.N_ARISE_NO_MP, cost, (int) Math.floor(d.mp));
                 break;
             }
             if (!p.isCreative()) d.mp -= cost;
-            double chance = 65.0 + 10.0 * (Defs.rank(d.level) - c.rank) + d.fx(Trees.FX_SHADOW_CHANCE)
-                    + 0.25 * d.bonus(3) - (c.boss ? 25.0 : 0.0);
-            chance = Math.max(5.0, Math.min(95.0, chance));
-            if (p.getRandom().nextDouble() * 100.0 < chance) {
+            int chance = ariseChance(d, c.rank, c.boss);
+            if (p.getRandom().nextInt(100) < chance) {
                 ShadowRec rec = new ShadowRec();
                 rec.id = d.nextShadow++;
                 rec.type = c.type;
@@ -334,6 +432,7 @@ public final class Shadows {
             sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.WITHER_SPAWN, 0.35F, 1.6F);
             Quests.onArmy(p, d);
         }
+        sendCorpseInfo(p, d);
         SystemLogic.sync(p, d);
         sendList(p);
     }
@@ -571,6 +670,15 @@ public final class Shadows {
         double pw = d == null ? 0.0 : power(d);
         Ranks.mod(m, Attributes.MAX_HEALTH, "sombra_poder", pw, Operation.ADD_MULTIPLIED_TOTAL);
         Ranks.mod(m, Attributes.ATTACK_DAMAGE, "sombra_poder", pw, Operation.ADD_MULTIPLIED_TOTAL);
+        // Cuanto mejor es el rango de la sombra, más daño hace
+        Ranks.mod(m, Attributes.ATTACK_DAMAGE, "sombra_rango", Defs.SHADOW_RANK_DMG[clampRank(rec.rank)] - 1.0,
+                Operation.ADD_MULTIPLIED_TOTAL);
+        for (String t : new ArrayList<>(m.getTags())) {
+            if (t.startsWith(ATK)) m.removeTag(t);
+        }
+        if (m.getAttribute(Attributes.ATTACK_DAMAGE) == null) {
+            m.addTag(ATK + Math.max(10, (int) Math.round(attackOf(rec, d) * 10.0)));
+        }
         MutableComponent name = Component.literal("☾ Sombra · ").withStyle(ChatFormatting.DARK_PURPLE);
         name.append(Component.translatable(rec.key.isEmpty() ? m.getType().getDescriptionId() : rec.key).withStyle(ChatFormatting.LIGHT_PURPLE));
         name.append(Component.literal(" [" + Defs.RANK[Math.max(0, Math.min(5, rec.rank))] + "] Nv." + rec.level).withStyle(ChatFormatting.GRAY));
@@ -616,13 +724,16 @@ public final class Shadows {
     public static void addGoals(Mob m) {
         if (hasGoal(m, ShadowGoals.Follow.class)) return;
         m.goalSelector.removeAllGoals(g -> g instanceof RandomStrollGoal || g instanceof AvoidEntityGoal
-                || g instanceof FleeSunGoal || g instanceof RestrictSunGoal);
+                || g instanceof FleeSunGoal || g instanceof RestrictSunGoal || g instanceof PanicGoal
+                || g instanceof TemptGoal || g instanceof BreedGoal || g instanceof FollowParentGoal);
         m.targetSelector.removeAllGoals(g -> true);
         m.setTarget(null);
         m.goalSelector.addGoal(1, new ShadowGoals.Follow(m));
         m.targetSelector.addGoal(1, new ShadowGoals.Defend(m));
-        if (m instanceof PathfinderMob pm && !(m instanceof Enemy) && m.getAttribute(Attributes.ATTACK_DAMAGE) != null
-                && !hasGoal(m, MeleeAttackGoal.class)) {
+        if (m.getAttribute(Attributes.ATTACK_DAMAGE) == null) {
+            // Criaturas sin ataque propio (vacas, ovejas, caballos...): como sombras también golpean
+            m.goalSelector.addGoal(2, new ShadowGoals.Strike(m));
+        } else if (m instanceof PathfinderMob pm && !(m instanceof Enemy) && !hasGoal(m, MeleeAttackGoal.class)) {
             m.goalSelector.addGoal(2, new MeleeAttackGoal(pm, 1.2, true));
         }
     }
@@ -637,25 +748,46 @@ public final class Shadows {
 
     // ================================================================ muerte de una sombra
 
-    /** ALLOW_DEATH: una sombra nunca muere del todo, vuelve a la sombra de su dueño a recuperarse. */
+    /**
+     * ALLOW_DEATH: cuando matan a una sombra se deshace en humo y vuelve a la sombra de su dueño, pero queda
+     * inhabilitada 3 días de Minecraft (no se puede invocar hasta entonces). No se pierde ni suelta botín.
+     */
     public static boolean allowDeath(LivingEntity e, DamageSource src, float amount) {
         if (!isShadow(e) || !(e instanceof Mob m)) return true;
         m.setHealth(m.getMaxHealth());
         ServerPlayer p = ownerPlayer(m);
         Data d = p == null ? null : Store.get(p);
         ShadowRec rec = d == null ? null : d.shadow(sidOf(m));
-        if (rec == null) {
+        if (rec == null || p.getServer() == null) {
             m.discard();
             return false;
+        }
+        if (m.level() instanceof ServerLevel lvl) {
+            double y = m.getY() + m.getBbHeight() / 2.0;
+            lvl.sendParticles(ParticleTypes.SOUL, m.getX(), y, m.getZ(), 25, 0.4, 0.6, 0.4, 0.05);
+            lvl.sendParticles(ParticleTypes.LARGE_SMOKE, m.getX(), y, m.getZ(), 25, 0.4, 0.6, 0.4, 0.03);
+            sound(lvl, m.getX(), m.getY(), m.getZ(), SoundEvents.BEACON_DEACTIVATE, 1.0F, 0.5F);
         }
         store(p, d, rec, m);
         rec.hp = 1.0F;
         rec.state = RECOVERING;
-        long ms = recoverMs(d);
-        rec.recoverAt = System.currentTimeMillis() + ms;
-        SystemLogic.notify(p, Net.N_SHADOW_BACK, (int) (ms / 1000L), rec.id);
+        ServerLevel ow = p.getServer().overworld();
+        rec.recoverDay = ow.getDayTime() + Defs.SHADOW_DOWN_TICKS;
+        rec.recoverTick = ow.getGameTime() + Defs.SHADOW_DOWN_TICKS;
+        SystemLogic.notify(p, Net.N_SHADOW_BACK, Defs.SHADOW_DOWN_DAYS, rec.id);
         sendList(p);
         return false;
+    }
+
+    /**
+     * Ticks de juego que le quedan a una sombra caída. Cuentan los días del mundo (si duermes pasan más rápido)
+     * y, como mucho, 3 días de tiempo de juego (por si se para el ciclo de día o se cambia la hora).
+     */
+    public static long downLeft(ShadowRec r, ServerLevel ow) {
+        if (r.state != RECOVERING || r.recoverTick <= 0) return 0L;
+        long byDay = Math.min(Defs.SHADOW_DOWN_TICKS, r.recoverDay - ow.getDayTime());
+        long byGame = r.recoverTick - ow.getGameTime();
+        return Math.max(0L, Math.min(byDay, byGame));
     }
 
     // ================================================================ tick
@@ -684,15 +816,16 @@ public final class Shadows {
                 }
             }
         }
-        long now = System.currentTimeMillis();
+        ServerLevel ow = server.overworld();
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             Data d = Store.get(p);
             boolean changed = false;
             if (t % 20 == 0) {
                 for (ShadowRec rec : d.shadows) {
-                    if (rec.state == RECOVERING && now >= rec.recoverAt) {
+                    if (rec.state == RECOVERING && downLeft(rec, ow) <= 0L) {
                         rec.state = STORED;
                         changed = true;
+                        if (rec.recoverTick > 0) SystemLogic.notify(p, Net.N_SHADOW_READY, rec.id, 0);
                     }
                 }
             }
@@ -831,15 +964,16 @@ public final class Shadows {
         Data d = Store.get(p);
         List<Integer> nums = new ArrayList<>();
         List<String> strs = new ArrayList<>();
-        long now = System.currentTimeMillis();
+        ServerLevel ow = p.getServer() != null ? p.getServer().overworld() : (ServerLevel) p.level();
         for (ShadowRec r : d.shadows) {
             nums.add(r.id);
             nums.add(r.rank);
             nums.add(r.level);
             nums.add(r.state);
             nums.add(Math.round(r.hp * 100.0F));
-            nums.add(r.state == RECOVERING ? (int) Math.max(0L, (r.recoverAt - now + 999L) / 1000L) : 0);
+            nums.add((int) Math.min(Integer.MAX_VALUE, downLeft(r, ow)));
             nums.add(r.kills | (r.boss ? 1 << 24 : 0));
+            nums.add((int) Math.min(Integer.MAX_VALUE, Math.round(attackOf(r, d) * 10.0)));
             strs.add(r.type);
             strs.add(r.key);
         }
@@ -848,6 +982,19 @@ public final class Shadows {
 
     private static void sound(ServerLevel lvl, double x, double y, double z, SoundEvent s, float volume, float pitch) {
         lvl.playSound((Player) null, x, y, z, s, SoundSource.PLAYERS, volume, pitch);
+    }
+
+    /** Para la prueba automática: mata a una sombra que está fuera y devuelve su registro (o null). */
+    public static ShadowRec testKillOne(ServerPlayer p) {
+        Data d = Store.get(p);
+        for (ShadowRec rec : d.shadows) {
+            if (rec.state != OUT) continue;
+            Mob m = entityOf(p, rec);
+            if (m == null) continue;
+            m.hurt(m.damageSources().generic(), 1.0E7F);
+            return rec;
+        }
+        return null;
     }
 
     /** Para la prueba automática del cliente: registro de sombra hecho a partir de una criatura viva. */

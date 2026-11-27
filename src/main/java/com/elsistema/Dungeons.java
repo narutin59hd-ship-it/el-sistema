@@ -122,7 +122,7 @@ public final class Dungeons {
         final int rank;
         final int lvl;
         int age = 0;
-        /** 0 = puerta normal, 1 = prueba del cambio de clase (privada, sin puerta visible). */
+        /** 0 = puerta normal, 1 = prueba del cambio de clase, 2 = examen de ascenso de rango (privadas, sin puerta). */
         int special = 0;
         Run run;
 
@@ -193,7 +193,14 @@ public final class Dungeons {
         RandomSource r = p.getRandom();
         int min = rank == 0 ? 1 : Defs.RANK_MAX[rank - 1] + 1;
         int max = Defs.RANK_MAX[rank];
-        int gl = level > 0 ? level : min + r.nextInt(max - min + 1);
+        int gl;
+        if (level > 0) {
+            gl = level;
+        } else {
+            // Cerca del nivel del Jugador, dentro de los límites del rango (el rango S llega hasta el 500)
+            int want = Store.get(p).level + r.nextInt(9) - 3;
+            gl = want < min ? min + r.nextInt(Math.min(5, max - min + 1)) : Math.min(max, want);
+        }
         Gate g = new Gate(nextId++, lvl, pos, rank, gl);
         GATES.add(g);
         sound(g, SoundEvents.END_PORTAL_SPAWN, 0.8F, 1.3F);
@@ -431,7 +438,7 @@ public final class Dungeons {
         r.bar.addPlayer(p);
         Data d = Store.get(p);
         d.inDungeon = 1;
-        if (g.special == 1) {
+        if (g.special != 0) {
             d.retX = p.getX();
             d.retY = p.getY();
             d.retZ = p.getZ();
@@ -447,13 +454,16 @@ public final class Dungeons {
         Shadows.recall(p);
         p.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 40, 0, false, false, false));
         p.playNotifySound(SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8F, 0.6F);
-        SystemLogic.notify(p, g.special == 1 ? Net.N_TRIAL_START : Net.N_DUNGEON_ENTER, g.rank, g.lvl);
+        SystemLogic.notify(p, g.special == 1 ? Net.N_TRIAL_START : g.special == 2 ? Net.N_EXAM_START : Net.N_DUNGEON_ENTER,
+                g.rank, g.lvl);
     }
 
     /** Aviso de mazmorra fallida (o de prueba fallida). why = 1 si se acabó el tiempo. */
     private static void failed(Gate g, ServerPlayer p, int why) {
         if (g.special == 1) {
             Quests.trialFailed(p, why);
+        } else if (g.special == 2) {
+            Ranking.examFailed(p, why);
         } else {
             SystemLogic.notify(p, Net.N_DUNGEON_FAIL, why, 0);
         }
@@ -473,6 +483,27 @@ public final class Dungeons {
         GATES.add(g);
         join(g, p);
         return true;
+    }
+
+    /** Examen de ascenso de rango: mazmorra privada con 3 oleadas del rango al que quieres subir y un examinador. */
+    public static boolean startExam(ServerPlayer p, Data d, int target) {
+        ServerLevel lvl = (ServerLevel) p.level();
+        int rank = Math.max(1, Math.min(5, target));
+        Gate g = new Gate(nextId++, lvl, p.blockPosition(), rank, Defs.examLevel(rank, d.level));
+        g.special = 2;
+        if (!build(g)) return false;
+        g.run.total = Defs.EXAM_WAVES + 1;
+        g.run.timer = 100;
+        g.run.bar.setName(Component.literal("Examen de ascenso a rango " + Defs.RANK[rank] + " · Preparándose..."));
+        g.run.bar.setColor(BossEvent.BossBarColor.BLUE);
+        GATES.add(g);
+        join(g, p);
+        return true;
+    }
+
+    private static String runTitle(Gate g) {
+        return g.special == 1 ? "Prueba del cambio de clase" : g.special == 2 ? "Examen de rango " + Defs.RANK[g.rank]
+                : "Mazmorra de rango " + Defs.RANK[g.rank];
     }
 
     private static Gate gateOf(ServerPlayer p) {
@@ -629,8 +660,7 @@ public final class Dungeons {
                     victory(g);
                 } else {
                     r.timer = 80;
-                    r.bar.setName(Component.literal(g.special == 1 ? "Prueba del cambio de clase · Siguiente oleada..."
-                            : "Mazmorra de rango " + Defs.RANK[g.rank] + " · Siguiente oleada..."));
+                    r.bar.setName(Component.literal(runTitle(g) + " · Siguiente oleada..."));
                 }
             }
         }
@@ -642,12 +672,14 @@ public final class Dungeons {
         r.wave++;
         boolean boss = r.wave >= r.total;
         boolean trial = g.special == 1;
+        boolean exam = g.special == 2;
         List<EntityType<? extends Mob>> pool = trial ? trialPool(boss ? 4 : r.wave) : pool(g.rank);
         RandomSource rnd = g.level.getRandom();
         List<UUID> list = new ArrayList<>();
         int n = trial ? (boss ? 2 : TRIAL_SIZE[Math.max(0, Math.min(TRIAL_SIZE.length - 1, r.wave - 1))])
+                : exam ? (boss ? 1 + g.rank / 2 : 2 + g.rank / 2 + r.wave)
                 : boss ? 2 + g.rank / 2 : 3 + g.rank + r.wave;
-        SecretBoss.Kind secret = !boss ? null : trial ? SecretBoss.Kind.GUARDIAN : rollSecret(g.rank, rnd);
+        SecretBoss.Kind secret = !boss || exam ? null : trial ? SecretBoss.Kind.GUARDIAN : rollSecret(g.rank, rnd);
         SecretBoss secretBoss = null;
         r.boss = null;
         Ranks.spawning = true;
@@ -678,12 +710,16 @@ public final class Dungeons {
         if (boss && secretBoss != null) {
             r.bar.setName(Component.literal("☠ JEFE SECRETO: " + SecretBoss.NAME[secret.ordinal()] + " · Rango " + Defs.RANK[g.rank]));
             r.bar.setColor(BossEvent.BossBarColor.RED);
+        } else if (boss && exam) {
+            r.bar.setName(Component.literal("★ EXAMINADOR DE RANGO " + Defs.RANK[g.rank] + " · Derrótalo para ascender"));
+            r.bar.setColor(BossEvent.BossBarColor.RED);
         } else if (boss) {
             r.bar.setName(Component.literal("★ JEFE: " + BOSS_NAME[g.rank] + " · Rango " + Defs.RANK[g.rank]));
             r.bar.setColor(BossEvent.BossBarColor.RED);
         } else {
-            r.bar.setName(Component.literal((trial ? "Prueba del cambio de clase" : THEME[g.rank]) + " · Oleada " + r.wave + "/" + r.total));
-            r.bar.setColor(trial ? BossEvent.BossBarColor.YELLOW : BossEvent.BossBarColor.PURPLE);
+            r.bar.setName(Component.literal((trial ? "Prueba del cambio de clase" : exam ? "Examen de rango " + Defs.RANK[g.rank]
+                    : THEME[g.rank]) + " · Oleada " + r.wave + "/" + r.total));
+            r.bar.setColor(trial ? BossEvent.BossBarColor.YELLOW : exam ? BossEvent.BossBarColor.BLUE : BossEvent.BossBarColor.PURPLE);
         }
         r.bar.setProgress(1.0F);
         MinecraftServer server = g.level.getServer();
@@ -691,7 +727,7 @@ public final class Dungeons {
             ServerPlayer p = server.getPlayerList().getPlayer(id);
             if (p == null) continue;
             if (boss) {
-                if (secretBoss == null) SystemLogic.notify(p, Net.N_BOSS, g.rank, 0);
+                if (secretBoss == null) SystemLogic.notify(p, Net.N_BOSS, g.rank, exam ? 1 : 0);
                 p.playNotifySound(SoundEvents.RAVAGER_ROAR, SoundSource.HOSTILE, 1.0F, 0.6F);
             } else {
                 SystemLogic.notify(p, Net.N_WAVE, r.wave, r.total);
@@ -734,7 +770,8 @@ public final class Dungeons {
         Ranks.apply(m, g.rank, lvl, boss);
         if (boss) {
             m.setGlowingTag(true);
-            MutableComponent name = Component.literal("★ " + BOSS_NAME[g.rank] + " ").withStyle(Ranks.COLOR[g.rank], ChatFormatting.BOLD);
+            String title = g.special == 2 ? "Examinador de rango " + Defs.RANK[g.rank] : BOSS_NAME[g.rank];
+            MutableComponent name = Component.literal("★ " + title + " ").withStyle(Ranks.COLOR[g.rank], ChatFormatting.BOLD);
             name.append(Component.literal("[" + Defs.RANK[g.rank] + "] Nv." + lvl).withStyle(ChatFormatting.WHITE));
             m.setCustomName(name);
             m.setCustomNameVisible(true);
@@ -761,8 +798,11 @@ public final class Dungeons {
         Run r = g.run;
         r.won = true;
         boolean trial = g.special == 1;
-        r.endTimer = trial ? 200 : 160;
-        r.bar.setName(Component.literal(trial ? "¡Prueba superada! Volviendo en 10 s..." : "¡Mazmorra completada! Volviendo en 8 s..."));
+        boolean exam = g.special == 2;
+        r.endTimer = trial || exam ? 200 : 160;
+        r.bar.setName(Component.literal(trial ? "¡Prueba superada! Volviendo en 10 s..."
+                : exam ? "¡Examen superado! Ahora eres rango " + Defs.RANK[g.rank] + ". Volviendo en 10 s..."
+                : "¡Mazmorra completada! Volviendo en 8 s..."));
         r.bar.setColor(BossEvent.BossBarColor.GREEN);
         r.bar.setProgress(1.0F);
         MinecraftServer server = g.level.getServer();
@@ -774,6 +814,10 @@ public final class Dungeons {
             SystemLogic.addXp(p, (int) (60 * (rank + 1) * (1 + g.lvl / 10.0)));
             if (trial) {
                 Quests.trialWon(p);
+                continue;
+            }
+            if (exam) {
+                Ranking.examWon(p, g.rank);
                 continue;
             }
             int gold = SystemLogic.addCoins(p, (int) (40 * (rank + 1) * (rank + 1) * (1 + g.lvl / 20.0)));
@@ -896,6 +940,14 @@ public final class Dungeons {
             throw new IllegalStateException("la prueba no tiene al Guardián del Juicio");
         }
         cleanup(t);
+        // Examen de ascenso (al rango A): 3 oleadas y el examinador
+        Gate x = new Gate(nextId++, lvl, pos, 4, Defs.examLevel(4, 70));
+        x.special = 2;
+        if (!build(x)) throw new IllegalStateException("no se pudo construir el examen de ascenso");
+        x.run.total = 1;
+        spawnWave(x);
+        if (x.run.boss == null || x.run.mobs.isEmpty()) throw new IllegalStateException("el examen no tiene examinador");
+        cleanup(x);
         // Jefes secretos de las mazmorras B y S
         forceSecret = true;
         try {

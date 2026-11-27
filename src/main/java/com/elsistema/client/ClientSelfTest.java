@@ -166,7 +166,8 @@ public final class ClientSelfTest {
         List<Integer> d = new ArrayList<>();
         int[] base = {1, 5, 2, 45, 1200, 5000, 3, 40, 22, 30, 55, 18, 140, 260, 0, 1, 123456, 4,
                 6, 3, 0, 0, 0, 10, 2, 4, 0, 0, 4, 2, 3, 0, 0, 5, 9, 3,
-                0, 7, 1, 1, 1, 0, 2, 0, 1, 0, 0, 0, 37, 4, 10, 0, 0, 0, 0};
+                0, 7, 1, 1, 1, 0, 2, 0, 1, 0, 0, 0, 37, 4, 10, 0, 0, 0, 0,
+                3, 0, 1};
         for (int v : base) {
             d.add(v);
         }
@@ -174,17 +175,17 @@ public final class ClientSelfTest {
         List<Integer> nums = new ArrayList<>();
         List<String> strs = new ArrayList<>();
         Object[][] army = {
-                {1, 2, 24, 1, 80, 0, 14, "elsistema:goblin", "entity.elsistema.goblin"},
-                {2, 3, 31, 0, 100, 0, 40, "elsistema:lobo_acero", "entity.elsistema.lobo_acero"},
-                {3, 4, 52, 2, 0, 37, 77, "elsistema:caballero", "entity.elsistema.caballero"},
-                {4, 1, 12, 0, 100, 0, 3, "minecraft:zombie", "entity.minecraft.zombie"},
-                {5, 5, 60, 1, 55, 0, (1 << 24) | 120, "elsistema:coloso", "entity.elsistema.coloso"}};
+                {1, 2, 24, 1, 80, 0, 14, 95, "elsistema:goblin", "entity.elsistema.goblin"},
+                {2, 3, 31, 0, 100, 0, 40, 160, "elsistema:lobo_acero", "entity.elsistema.lobo_acero"},
+                {3, 4, 52, 2, 0, 53000, 77, 412, "elsistema:caballero", "entity.elsistema.caballero"},
+                {4, 1, 12, 0, 100, 0, 3, 51, "minecraft:zombie", "entity.minecraft.zombie"},
+                {5, 5, 60, 1, 55, 0, (1 << 24) | 120, 980, "elsistema:coloso", "entity.elsistema.coloso"}};
         for (Object[] r : army) {
-            for (int i = 0; i < 7; i++) {
+            for (int i = 0; i < 8; i++) {
                 nums.add((Integer) r[i]);
             }
-            strs.add((String) r[7]);
             strs.add((String) r[8]);
+            strs.add((String) r[9]);
         }
         ClientShadows.set(nums, strs);
     }
@@ -240,7 +241,10 @@ public final class ClientSelfTest {
                         {Net.N_RANK_UP, 3, 2}, {Net.N_SHADOW_MARK, -5, 1}, {Net.N_QUEST_FOUND, 1, 0},
                         {Net.N_HIDDEN_REWARD, 3, 0}, {Net.N_SECRET_FLED, 1, 0}, {Net.N_TRIAL_DENIED, 1, 0},
                         {Net.N_SLOTS_UP, 2, 22}, {Net.N_TRIAL_FAIL, 0, 1}, {Net.N_TRIAL_START, 3, 48}, {Net.N_QUEST_DONE, 3, 0},
-                        {Net.N_HIDDEN_REWARD, 8, 0}, {Net.N_SKILL, 2, 1}};
+                        {Net.N_HIDDEN_REWARD, 8, 0}, {Net.N_SKILL, 2, 1}, {Net.N_CORPSE_INFO, 42, 3 + 220},
+                        {Net.N_EXAM_READY, 2, 25}, {Net.N_EXAM_FAIL, 2, 1}, {Net.N_EXAM_DENIED, 0, 25},
+                        {Net.N_EXAM_DENIED, 3, 0}, {Net.N_PRESTIGE_DENIED, 0, 0}, {Net.N_SHADOW_READY, 1, 0},
+                        {Net.N_BOSS, 3, 1}, {Net.N_EXAM_START, 2, 27}};
                 for (int[] n : all) {
                     note(n[0], n[1], n[2]);
                 }
@@ -265,7 +269,9 @@ public final class ClientSelfTest {
             case 194 -> view(mc, 4, 0, 0);
             case 204 -> shot(mc, "pestaña MISIONES");
             case 208 -> view(mc, 4, 1, 0);
-            case 218 -> shot(mc, "misiones: hitos de nivel");
+            case 216 -> shot(mc, "misiones: hitos de nivel");
+            case 218 -> view(mc, 5, 0, 0);
+            case 221 -> shot(mc, "pestaña RANGO (examen disponible)");
             case 222 -> {
                 try {
                     ElSistema.LOGGER.info("[SELFTEST-CLIENTE] {} textos de la ventana revisados", SystemScreen.selfCheck());
@@ -301,7 +307,39 @@ public final class ClientSelfTest {
             case 490 -> {
                 if (worldMode) shot(mc, "tercera persona: armadura del Monarca y guadaña");
             }
-            case 520 -> finish(mc);
+            case 500 -> {
+                if (worldMode) mc.options.setCameraType(CameraType.FIRST_PERSON);
+            }
+            // ---------------------------------------------------- examen de ascenso, sombra caída y prestigio
+            case 640 -> trial(5);
+            case 646 -> {
+                if (worldMode) shot(mc, "examen de ascenso al rango D (y aviso de sombra caída)");
+            }
+            case 700 -> trial(6);
+            case 730 -> {
+                if (worldMode) shot(mc, "examen: el examinador");
+            }
+            case 740 -> trial(7);
+            case 770 -> {
+                if (worldMode) shot(mc, "¡ascenso de rango!");
+            }
+            case 790 -> trial(8);
+            case 800 -> view(mc, 5, 0, 0);
+            case 812 -> shot(mc, "pestaña RANGO: rango D y prestigio disponible");
+            case 816 -> view(mc, 2, 0, 0);
+            case 828 -> shot(mc, "pestaña SOMBRAS: ataque y sombra caída");
+            case 832 -> mc.setScreen(null);
+            case 1000 -> trial(9);
+            case 1016 -> {
+                if (worldMode) shot(mc, "¡prestigio!");
+            }
+            case 1040 -> trial(10);
+            case 1044 -> view(mc, 5, 0, 0);
+            case 1056 -> shot(mc, "pestaña RANGO tras el prestigio (MONARCA)");
+            case 1060 -> view(mc, 0, 0, 0);
+            case 1072 -> shot(mc, "pestaña ESTADO tras el prestigio");
+            case 1076 -> mc.setScreen(null);
+            case 1100 -> finish(mc);
             default -> {
             }
         }

@@ -14,6 +14,7 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -21,6 +22,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -168,6 +170,9 @@ public final class SystemLogic {
         for (int i = 0; i < Quests.COUNT; i++) {
             l.add(d.questProg[i]);
         }
+        l.add(d.rank());
+        l.add(d.prestige);
+        l.add(d.examTries);
         ServerPlayNetworking.send(p, new Net.SyncPayload(l));
     }
 
@@ -217,7 +222,14 @@ public final class SystemLogic {
         double m = 1.0 + d.fx(Trees.FX_XP) / 100.0;
         if (d.race == Defs.HUMANO) m += 0.1;
         if (d.race == Defs.DRAGON) m -= 0.1;
+        m += Defs.RANK_XP[d.rank()] / 100.0;
+        m += Defs.P_XP * Defs.prestigeLevel(d.prestige) / 100.0;
         return m;
+    }
+
+    /** Puntos de estadística por nivel (Humano +1 y +1 por cada prestigio). */
+    public static int pointsPerLevel(Data d) {
+        return (d.race == Defs.HUMANO ? 4 : 3) + Defs.P_POINTS * Defs.prestigeLevel(d.prestige);
     }
 
     // ================================================================ Atributos
@@ -262,6 +274,15 @@ public final class SystemLogic {
                 }
             }
         }
+        // Rango de cazador y prestigio: % de daño, de vida y de velocidad
+        boolean on = d.awakened == 1;
+        int pl = Defs.prestigeLevel(d.prestige);
+        setMod(p, Attributes.ATTACK_DAMAGE, "rango_cazador_dano",
+                on ? (Defs.RANK_DMG[d.rank()] + Defs.P_DMG * pl) / 100.0 : 0.0, Operation.ADD_MULTIPLIED_TOTAL);
+        setMod(p, Attributes.MAX_HEALTH, "rango_cazador_vida",
+                on ? (Defs.RANK_HP[d.rank()] + Defs.P_HP * pl) / 100.0 : 0.0, Operation.ADD_MULTIPLIED_TOTAL);
+        setMod(p, Attributes.MOVEMENT_SPEED, "rango_cazador_velocidad",
+                on ? Defs.RANK_SPEED[d.rank()] / 100.0 : 0.0, Operation.ADD_MULTIPLIED_BASE);
         d.swordOn = false;
         setMod(p, Attributes.ATTACK_DAMAGE, "clase_espada", 0.0, Operation.ADD_VALUE);
         updateSword(p, d);
@@ -299,12 +320,12 @@ public final class SystemLogic {
         notify(p, Net.N_XP, amount, 0);
 
         int oldLevel = d.level;
-        int oldRank = Defs.rank(d.level);
+        boolean couldExam = Ranking.examReady(d);
         int gained = 0;
         while (d.level < Defs.MAX_LEVEL && d.xp >= Defs.xpNeeded(d.level)) {
             d.xp -= Defs.xpNeeded(d.level);
             d.level++;
-            int pts = d.race == Defs.HUMANO ? 4 : 3;
+            int pts = pointsPerLevel(d);
             d.points += pts;
             gained += pts;
             d.skillPoints++;
@@ -320,9 +341,9 @@ public final class SystemLogic {
             d.anim = 40;
             levelUpSounds(p);
             notify(p, Net.N_LEVEL_UP, d.level, gained);
-            int newRank = Defs.rank(d.level);
-            if (newRank > oldRank) {
-                notify(p, Net.N_RANK_UP, newRank, oldRank);
+            // El rango ya no sube solo: al llegar al nivel del rango siguiente se desbloquea su examen
+            if (!couldExam && Ranking.examReady(d)) {
+                notify(p, Net.N_EXAM_READY, d.rank() + 1, Defs.RANK_MIN[d.rank() + 1]);
             }
             if (d.level >= Defs.MAX_LEVEL) {
                 notify(p, Net.N_MAX_LEVEL, 0, 0);
@@ -449,6 +470,7 @@ public final class SystemLogic {
             case Net.ACT_SHADOWS_TOGGLE -> Shadows.toggle(p);
             case Net.ACT_QUEST -> Quests.action(p, a, b);
             case Net.ACT_SHADOW -> Shadows.action(p, a, b);
+            case Net.ACT_RANK -> Ranking.action(p, a, b);
             case Net.ACT_SHADOWS_ALL -> {
                 if (a == 1) {
                     if (Shadows.summonAll(p) == 0) notify(p, Net.N_NO_SHADOWS, Store.get(p).shadows.size(), 0);
@@ -571,6 +593,9 @@ public final class SystemLogic {
         d.raceTree = new int[Trees.RACE.length][5];
         d.classTree = new int[Trees.CLASS.length][5];
         d.shadowTree = new int[5];
+        d.hunterRank = 0;
+        d.examTries = 0;
+        d.prestige = 0;
         Quests.wipe(d);
         Shadows.wipe(p);
         applyAll(p, d);
@@ -601,19 +626,36 @@ public final class SystemLogic {
         sync(p, d);
     }
 
-    /** Al aparecer una entidad: flechas del Jugador más fuertes y monstruos con rango. */
+    /** Al aparecer una entidad: flechas del Jugador más fuertes, flechas de monstruos con rango y monstruos con rango. */
     public static void onEntityLoad(Entity entity) {
         if (entity instanceof AbstractArrow arrow) {
             if (arrow.getTags().contains(ARROW_TAG)) return;
-            if (!(arrow.getOwner() instanceof ServerPlayer sp)) return;
-            arrow.addTag(ARROW_TAG);
-            Data d = Store.get(sp);
-            double b = arrowBonus(d);
-            if (b > 1.0) {
-                arrow.setBaseDamage(arrow.getBaseDamage() * b);
-            }
-            if (d.fx(Trees.FX_FIRE_ARROWS) > 0) {
-                arrow.setRemainingFireTicks(2000);
+            Entity owner = arrow.getOwner();
+            if (owner instanceof ServerPlayer sp) {
+                arrow.addTag(ARROW_TAG);
+                Data d = Store.get(sp);
+                double b = arrowBonus(d);
+                ItemStack bow = ModItems.SOBERANO[Defs.ARQUERO] == null ? ItemStack.EMPTY
+                        : sp.getMainHandItem().is(ModItems.SOBERANO[Defs.ARQUERO]) ? sp.getMainHandItem()
+                        : sp.getOffhandItem().is(ModItems.SOBERANO[Defs.ARQUERO]) ? sp.getOffhandItem() : ItemStack.EMPTY;
+                if (!bow.isEmpty()) {
+                    // Arco del Monarca: flechas críticas, en llamas y con 2,5 veces el daño
+                    b *= 2.5;
+                    arrow.setCritArrow(true);
+                    arrow.setRemainingFireTicks(2000);
+                }
+                if (b > 1.0) {
+                    arrow.setBaseDamage(arrow.getBaseDamage() * b);
+                }
+                if (d.fx(Trees.FX_FIRE_ARROWS) > 0) {
+                    arrow.setRemainingFireTicks(2000);
+                }
+            } else if (owner instanceof Mob mob && mob.getTags().contains(Ranks.TAG)) {
+                // Los arqueros con rango (y las sombras arqueras) disparan más fuerte según su nivel y rango
+                arrow.addTag(ARROW_TAG);
+                double m = Ranks.arrowMult(mob);
+                if (Shadows.isShadow(mob)) m *= Shadows.damageMult(mob);
+                if (m > 1.0) arrow.setBaseDamage(arrow.getBaseDamage() * m);
             }
             return;
         }

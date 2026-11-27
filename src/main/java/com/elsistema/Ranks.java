@@ -129,6 +129,12 @@ public final class Ranks {
         return e.getTags().contains(BOSS_TAG);
     }
 
+    /** Multiplicador de las flechas de un monstruo con rango (igual que su daño cuerpo a cuerpo). */
+    public static double arrowMult(Entity e) {
+        if (rankOf(e) < 0) return 1.0;
+        return (1.0 + 0.03 * levelOf(e)) * (isBoss(e) ? 1.5 : 1.0);
+    }
+
     /** Recompensas al matar una criatura: EXP, oro y botín según rango y nivel. xpMult < 1 si la mató una sombra. */
     public static void onKill(ServerPlayer p, LivingEntity dead, double xpMult) {
         if (dead instanceof Player || Shadows.isShadow(dead)) return;

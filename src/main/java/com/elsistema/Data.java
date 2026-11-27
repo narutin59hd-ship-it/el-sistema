@@ -38,6 +38,12 @@ public class Data {
     public int bonusSlots = 0;
     public int trialTries = 0;
 
+    // Rango de cazador (se sube con el examen de ascenso) y prestigio (nivel 500)
+    /** 0 = E ... 5 = S. -1 = datos de antes de la 1.4.0 (se calcula con el nivel al cargar). */
+    public int hunterRank = -1;
+    public int examTries = 0;
+    public int prestige = 0;
+
     // Para volver de una mazmorra si el juego se cierra dentro
     public int inDungeon = 0;
     public double retX = 0;
@@ -68,8 +74,12 @@ public class Data {
         public int kills;
         public boolean boss;
         public String nbt = "";
-        public int state;           // 0 guardada, 1 fuera, 2 recuperándose
+        public int state;           // 0 guardada, 1 fuera, 2 caída (inhabilitada)
+        /** (Antiguo, en milisegundos: ya no se usa.) */
         public long recoverAt;
+        /** Hora del mundo (getDayTime) y tiempo de juego (getGameTime) a los que vuelve una sombra caída. */
+        public long recoverDay;
+        public long recoverTick;
         public float hp = 1F;
         public boolean wasOut;
     }
@@ -127,6 +137,11 @@ public class Data {
         return s + Quests.fx(this, effect);
     }
 
+    /** Rango de cazador (0 = E ... 5 = S). */
+    public int rank() {
+        return Math.max(0, Math.min(5, hunterRank));
+    }
+
     public boolean isMutated() {
         return awakened == 1 && mutated == 1;
     }
@@ -171,6 +186,16 @@ public class Data {
         if (mutated != 1) mutated = 0;
         bonusSlots = Math.max(0, Math.min(60, bonusSlots));
         if (trialTries < 0) trialTries = 0;
+        // Los cazadores de antes de la 1.4.0 conservan el rango que tenían por su nivel
+        if (hunterRank < 0) hunterRank = awakened == 1 ? Defs.rank(level) : 0;
+        if (hunterRank > 5) hunterRank = 5;
+        if (examTries < 0) examTries = 0;
+        if (prestige < 0) prestige = 0;
+        if (prestige > 99) prestige = 99;
+        for (ShadowRec r : shadows) {
+            // Sombras que se estaban recuperando con el sistema antiguo: vuelven enseguida
+            if (r.state == 2 && r.recoverTick == 0 && r.recoverDay == 0) r.recoverTick = -1;
+        }
         // Puntos de habilidad para los niveles que ya tenías antes de esta versión
         int target = level - 1;
         if (spGranted < target) {

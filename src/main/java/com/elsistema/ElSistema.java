@@ -187,6 +187,52 @@ public class ElSistema implements ModInitializer {
                                 .executes(ctx -> {
                                     SystemLogic.reset(ctx.getSource().getPlayerOrException());
                                     return 1;
+                                }))
+                        .then(Commands.literal("nivel")
+                                .then(Commands.argument("nivel", IntegerArgumentType.integer(1, Defs.MAX_LEVEL))
+                                        .executes(ctx -> {
+                                            ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                            Data d = Store.get(sp);
+                                            if (d.awakened != 1) {
+                                                sp.sendSystemMessage(Component.literal("[Sistema] Primero tienes que despertar (pulsa V)."));
+                                                return 0;
+                                            }
+                                            int lv = IntegerArgumentType.getInteger(ctx, "nivel");
+                                            if (lv > d.level) d.points += (lv - d.level) * SystemLogic.pointsPerLevel(d);
+                                            d.level = lv;
+                                            d.xp = 0;
+                                            SystemLogic.applyAll(sp, d);
+                                            SystemLogic.sync(sp, d);
+                                            sp.sendSystemMessage(Component.literal("[Sistema] Ahora eres nivel " + lv + "."));
+                                            return 1;
+                                        })))
+                        .then(Commands.literal("rango")
+                                .then(Commands.argument("rango", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            ServerPlayer sp = ctx.getSource().getPlayerOrException();
+                                            int rank = Defs.rankIndex(StringArgumentType.getString(ctx, "rango"));
+                                            if (rank < 0) {
+                                                sp.sendSystemMessage(Component.literal("[Sistema] Rango no válido. Usa E, D, C, B, A o S."));
+                                                return 0;
+                                            }
+                                            Data d = Store.get(sp);
+                                            d.hunterRank = rank;
+                                            SystemLogic.applyAll(sp, d);
+                                            Shadows.refresh(sp);
+                                            SystemLogic.sync(sp, d);
+                                            Shadows.sendList(sp);
+                                            sp.sendSystemMessage(Component.literal("[Sistema] Ahora eres rango " + Defs.RANK[rank] + "."));
+                                            return 1;
+                                        })))
+                        .then(Commands.literal("examen")
+                                .executes(ctx -> {
+                                    Ranking.startExam(ctx.getSource().getPlayerOrException());
+                                    return 1;
+                                }))
+                        .then(Commands.literal("prestigio")
+                                .executes(ctx -> {
+                                    Ranking.prestige(ctx.getSource().getPlayerOrException());
+                                    return 1;
                                 }))));
 
         String selfTest = System.getenv("ELSISTEMA_SELFTEST");

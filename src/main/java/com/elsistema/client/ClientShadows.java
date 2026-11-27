@@ -18,12 +18,17 @@ public final class ClientShadows {
     public static final int OUT = 1;
     public static final int RECOVERING = 2;
 
-    /** Una sombra del ejército tal y como la manda el servidor. */
+    /** Una sombra del ejército tal y como la manda el servidor (recover = ticks de juego, attack = daño x10). */
     public record Entry(int id, int rank, int level, int state, int hp, int recover, int kills, boolean boss,
-                        String type, String key) {
+                        int attack, String type, String key) {
         public String name() {
             if (key == null || key.isEmpty()) return type;
             return Component.translatable(key).getString();
+        }
+
+        /** Daño por golpe con un decimal. */
+        public String attackText() {
+            return attack % 10 == 0 ? String.valueOf(attack / 10) : (attack / 10) + "," + (attack % 10);
         }
     }
 
@@ -57,12 +62,13 @@ public final class ClientShadows {
     public static void set(List<Integer> nums, List<String> strs) {
         List<Entry> out = new ArrayList<>();
         if (nums != null && strs != null) {
-            int n = Math.min(nums.size() / 7, strs.size() / 2);
+            int n = Math.min(nums.size() / 8, strs.size() / 2);
             for (int i = 0; i < n; i++) {
-                int b = i * 7;
+                int b = i * 8;
                 int killsBoss = nums.get(b + 6);
                 out.add(new Entry(nums.get(b), nums.get(b + 1), nums.get(b + 2), nums.get(b + 3), nums.get(b + 4),
-                        nums.get(b + 5), killsBoss & 0xFFFFFF, (killsBoss >> 24) != 0, strs.get(i * 2), strs.get(i * 2 + 1)));
+                        nums.get(b + 5), killsBoss & 0xFFFFFF, (killsBoss >> 24) != 0, nums.get(b + 7),
+                        strs.get(i * 2), strs.get(i * 2 + 1)));
             }
         }
         list = Collections.unmodifiableList(out);
@@ -80,11 +86,21 @@ public final class ClientShadows {
         return null;
     }
 
-    /** Segundos que le quedan a una sombra para recuperarse (cuenta atrás en el cliente). */
+    /** Ticks de juego que le quedan a una sombra caída (cuenta atrás en el cliente). */
     public static int recoverLeft(Entry e) {
         if (e.state() != RECOVERING) return 0;
-        long passed = (System.currentTimeMillis() - listTime) / 1000L;
+        long passed = (System.currentTimeMillis() - listTime) / 50L;
         return (int) Math.max(0L, e.recover() - passed);
+    }
+
+    /** "2 días 5 h", "7 h" o "menos de 1 h" (días y horas de Minecraft). */
+    public static String downText(Entry e) {
+        int left = recoverLeft(e);
+        int days = left / 24000;
+        int hours = (left % 24000) / 1000;
+        if (days > 0) return days + (days == 1 ? " día " : " días ") + hours + " h";
+        if (hours > 0) return hours + " h";
+        return "menos de 1 h";
     }
 
     public static int out() {

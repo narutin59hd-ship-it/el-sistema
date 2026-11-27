@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -17,6 +18,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -24,6 +26,7 @@ import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.Tier;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.component.Unbreakable;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 
@@ -50,6 +53,8 @@ public final class ModItems {
     public static Item COLMILLO;
     public static Item AGUIJON;
     public static Item CORAZON;
+    /** Armas del Monarca (recompensa del prestigio), una por clase: espadachín, arquero, mago, asesino y tanque. */
+    public static final Item[] SOBERANO = new Item[5];
     /** Armaduras por set (cazador, archimago, caballero negro, monarca) y pieza (casco, peto, grebas, botas). */
     public static final Item[][] ARMOR = new Item[4][4];
     private static final String[][] ARMOR_ID = {
@@ -86,6 +91,16 @@ public final class ModItems {
         AGUIJON = reg("aguijon_carmesi", new LegendarySword(ModArmor.Tiers.MONARCA, 4, -2.0F,
                 "Envenena (Veneno II) a quien golpeas", "El aguijón de la Reina Carmesí"));
         CORAZON = reg("corazon_primordial", new HeartItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC).fireResistant()));
+        SOBERANO[Defs.ESPADACHIN] = reg("filo_monarca", new SovereignSword(ModArmor.Tiers.SOBERANO, 12, -2.2F,
+                "Tajo sombrío: cada golpe corta también a los enemigos de alrededor"));
+        SOBERANO[Defs.ARQUERO] = reg("arco_monarca", new SovereignBow(new Item.Properties().durability(2000).rarity(Rarity.EPIC)
+                .fireResistant().component(DataComponents.UNBREAKABLE, new Unbreakable(false))));
+        SOBERANO[Defs.MAGO] = reg("baculo_monarca", new SovereignStaff(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)
+                .fireResistant()));
+        SOBERANO[Defs.ASESINO] = reg("colmillos_monarca", new SovereignSword(ModArmor.Tiers.SOBERANO, 6, -1.0F,
+                "Veneno II y Marchitamiento; te curas con cada golpe"));
+        SOBERANO[Defs.TANQUE] = reg("martillo_monarca", new SovereignSword(ModArmor.Tiers.SOBERANO, 16, -3.1F,
+                "Onda de choque: daña y empuja a los de alrededor y te da Absorción"));
         ArmorItem.Type[] types = {ArmorItem.Type.HELMET, ArmorItem.Type.CHESTPLATE, ArmorItem.Type.LEGGINGS, ArmorItem.Type.BOOTS};
         for (int set = 0; set < 4; set++) {
             for (int piece = 0; piece < 4; piece++) {
@@ -111,6 +126,9 @@ public final class ModItems {
             entries.accept(COLMILLO);
             entries.accept(AGUIJON);
             entries.accept(CORAZON);
+            for (Item w : SOBERANO) {
+                entries.accept(w);
+            }
             for (Item[] set : ARMOR) {
                 for (Item piece : set) {
                     entries.accept(piece);
@@ -194,7 +212,9 @@ public final class ModItems {
         @Override
         public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
             lines.add(Component.literal("Abre una puerta de mazmorra de rango " + Defs.RANK[rank] + ".").withStyle(ChatFormatting.GRAY));
-            lines.add(Component.literal("Nivel de los monstruos: " + (rank == 0 ? 1 : Defs.RANK_MAX[rank - 1] + 1) + "-" + Defs.RANK_MAX[rank]).withStyle(ChatFormatting.DARK_AQUA));
+            String range = (rank == 0 ? 1 : Defs.RANK_MAX[rank - 1] + 1) + "-" + Defs.RANK_MAX[rank];
+            if (rank == 5) range += " (según tu nivel)";
+            lines.add(Component.literal("Nivel de los monstruos: " + range).withStyle(ChatFormatting.DARK_AQUA));
             lines.add(Component.literal("Clic derecho para usarla.").withStyle(ChatFormatting.YELLOW));
         }
 
@@ -273,6 +293,92 @@ public final class ModItems {
             lines.add(Component.literal(this.effect).withStyle(ChatFormatting.LIGHT_PURPLE));
             lines.add(Component.literal(this.lore).withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
             lines.add(Component.literal("Recompensa oculta del Sistema").withStyle(ChatFormatting.DARK_AQUA));
+        }
+
+        @Override
+        public boolean isFoil(ItemStack stack) {
+            return true;
+        }
+    }
+
+    /** Líneas comunes de las armas del Monarca. */
+    static void sovereignLore(List<Component> lines, String effect) {
+        lines.add(Component.literal("✦ ARMA DEL MONARCA").withStyle(ChatFormatting.LIGHT_PURPLE, ChatFormatting.BOLD));
+        lines.add(Component.literal(effect).withStyle(ChatFormatting.GOLD));
+        lines.add(Component.literal("Indestructible").withStyle(ChatFormatting.GRAY));
+        lines.add(Component.literal("Recompensa del prestigio (nivel 500)").withStyle(ChatFormatting.DARK_AQUA));
+    }
+
+    /** Armas cuerpo a cuerpo del Monarca (sus efectos están en Combat). */
+    public static class SovereignSword extends SwordItem {
+        private final String effect;
+
+        public SovereignSword(Tier tier, int damage, float speed, String effect) {
+            super(tier, new Item.Properties().attributes(SwordItem.createAttributes(tier, damage, speed))
+                    .rarity(Rarity.EPIC).fireResistant().component(DataComponents.UNBREAKABLE, new Unbreakable(false)));
+            this.effect = effect;
+        }
+
+        @Override
+        public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
+            sovereignLore(lines, this.effect);
+        }
+
+        @Override
+        public boolean isFoil(ItemStack stack) {
+            return true;
+        }
+    }
+
+    /** Arco del Monarca: flechas críticas, en llamas y con 2,5 veces el daño (en SystemLogic.onEntityLoad). */
+    public static class SovereignBow extends BowItem {
+        public SovereignBow(Item.Properties p) {
+            super(p);
+        }
+
+        @Override
+        public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
+            sovereignLore(lines, "Flechas críticas en llamas con 2,5 veces el daño");
+        }
+
+        @Override
+        public boolean isFoil(ItemStack stack) {
+            return true;
+        }
+    }
+
+    /** Báculo del Monarca: rayo de llamas de alma más largo, con el triple de daño y Marchitamiento. */
+    public static class SovereignStaff extends Item {
+        public static final int COST = 6;
+
+        public SovereignStaff(Item.Properties p) {
+            super(p);
+        }
+
+        @Override
+        public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+            ItemStack stack = player.getItemInHand(hand);
+            if (!level.isClientSide() && player instanceof ServerPlayer sp) {
+                Data d = Store.get(sp);
+                if (d.awakened != 1) {
+                    SystemLogic.notify(sp, Net.N_NOT_AWAKENED, 0, 0);
+                    return InteractionResultHolder.fail(stack);
+                }
+                if (d.mp < COST && !sp.isCreative()) {
+                    SystemLogic.notify(sp, Net.N_NO_MP, COST, (int) Math.floor(d.mp));
+                    return InteractionResultHolder.fail(stack);
+                }
+                if (!sp.isCreative()) d.mp -= COST;
+                Skills.bolt(sp, d, 3.0F, true);
+                sp.getCooldowns().addCooldown(this, 8);
+                SystemLogic.sync(sp, d);
+            }
+            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+        }
+
+        @Override
+        public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> lines, TooltipFlag flag) {
+            sovereignLore(lines, "Clic derecho: rayo de almas (" + COST + " de maná), triple de daño");
         }
 
         @Override

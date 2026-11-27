@@ -67,5 +67,10 @@
   "item.elsistema.hoja_juicio": "Blade of Judgment",
   "item.elsistema.colmillo_eclipse": "Eclipse Fang",
   "item.elsistema.aguijon_carmesi": "Crimson Stinger",
-  "item.elsistema.corazon_primordial": "Primordial Heart"
+  "item.elsistema.corazon_primordial": "Primordial Heart",
+  "item.elsistema.filo_monarca": "Monarch's Edge",
+  "item.elsistema.arco_monarca": "Monarch's Bow",
+  "item.elsistema.baculo_monarca": "Monarch's Staff",
+  "item.elsistema.colmillos_monarca": "Monarch's Fangs",
+  "item.elsistema.martillo_monarca": "Monarch's Hammer"
 }

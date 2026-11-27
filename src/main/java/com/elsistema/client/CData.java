@@ -6,8 +6,10 @@ import java.util.List;
 public final class CData {
     private CData() {}
 
-    /** 36 números del Jugador + mutación, hitos, intentos de la prueba y 8 misiones (estado y progreso). */
-    public static final int SIZE = 39 + 2 * com.elsistema.Quests.COUNT;
+    /** 36 números del Jugador + mutación, hitos, intentos de la prueba, 8 misiones (estado y progreso),
+     *  rango de cazador, prestigio e intentos del examen de ascenso. */
+    public static final int SIZE = 39 + 2 * com.elsistema.Quests.COUNT + 3;
+    private static final int R0 = 39 + 2 * com.elsistema.Quests.COUNT;
     private static int[] d = fresh();
 
     private static int[] fresh() {
@@ -74,6 +76,18 @@ public final class CData {
     public static int questProg(int q) {
         return q >= 0 && q < com.elsistema.Quests.COUNT ? d[39 + com.elsistema.Quests.COUNT + q] : 0;
     }
+    /** Rango de cazador: 0 = E ... 5 = S. */
+    public static int hunterRank() { return Math.max(0, Math.min(5, d[R0])); }
+    public static int prestige() { return Math.max(0, d[R0 + 1]); }
+    public static int examTries() { return d[R0 + 2]; }
+    /** ¿Puede hacer el examen al rango siguiente? */
+    public static boolean examReady() {
+        return awakened() && hunterRank() < 5 && level() >= com.elsistema.Defs.RANK_MIN[hunterRank() + 1];
+    }
+    public static boolean prestigeReady() { return awakened() && level() >= com.elsistema.Defs.MAX_LEVEL; }
+    /** Texto del rango: la letra o el rango único del prestigio (MONARCA). */
+    public static String rankLabel() { return com.elsistema.Defs.rankLabel(hunterRank(), prestige()); }
+    public static int rankColor() { return com.elsistema.Defs.rankLabelColor(hunterRank(), prestige()); }
     public static String className() { return com.elsistema.Defs.className(cls(), mutated()); }
     public static String skillName() { return com.elsistema.Defs.skillName(cls(), mutated()); }
 

@@ -28,13 +28,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Ventana del Sistema (tecla V): Estado, Habilidades (3 árboles), Sombras, Tienda y Misiones. */
+/** Ventana del Sistema (tecla V): Estado, Habilidades (3 árboles), Sombras, Tienda, Misiones y Rango. */
 public class SystemScreen extends Screen {
     private static int lastTab = 0;
     private static int lastSub = 0;
     private static int lastCat = 0;
     private static int lastQSub = 0;
-    private static final String[] TABS = {"ESTADO", "HABILIDADES", "SOMBRAS", "TIENDA", "MISIONES"};
+    private static final String[] TABS = {"ESTADO", "HABILIDADES", "SOMBRAS", "TIENDA", "MISIONES", "RANGO"};
+    private static final int TAB_RANK = 5;
     private static final int TAB_H = 14;
     private static final int TAB_Y = 6;
 
@@ -90,6 +91,8 @@ public class SystemScreen extends Screen {
     private long releaseTime = 0L;
     private LivingEntity preview;
     private String previewType = "";
+    private boolean prestigeArmed = false;
+    private long prestigeTime = 0L;
 
     /** Rectángulo de la ventana. */
     private record Box(int x1, int y1, int x2, int y2) {
@@ -159,7 +162,7 @@ public class SystemScreen extends Screen {
     }
 
     private static int tabAccent(int i) {
-        return i == 2 ? Ui.SHADOW : i == 4 ? Ui.GOLD : Ui.CYAN;
+        return i == 2 ? Ui.SHADOW : i == 4 ? Ui.GOLD : i == TAB_RANK ? CData.rankColor() : Ui.CYAN;
     }
 
     // ================================================================== dibujo
@@ -188,6 +191,7 @@ public class SystemScreen extends Screen {
             case 2 -> shadows(g, x1, y1, x2, y2, mx, my, ca, now);
             case 3 -> shop(g, x1, y1, x2, y2, mx, my, ca);
             case 4 -> quests(g, x1, y1, x2, y2, mx, my, ca, now);
+            case TAB_RANK -> rankTab(g, x1, y1, x2, y2, mx, my, ca, now);
             default -> status(g, x1, y1, x2, y2, mx, my, ca, now);
         };
         g.disableScissor();
@@ -205,12 +209,14 @@ public class SystemScreen extends Screen {
             boolean on = i == tab;
             boolean hover = Ui.inside(mx, my, tx, ty, tw, TAB_H);
             int acc = tabAccent(i);
-            int bg = on ? (i == 2 ? 0xA05A2D9F : i == 4 ? 0xA08A6A1A : 0xA03A8DFF) : hover ? 0x60305070 : 0x40101A28;
+            int bg = on ? (i == 2 ? 0xA05A2D9F : i == 4 ? 0xA08A6A1A : i == TAB_RANK ? 0xA0000000 | ((acc >> 1) & 0x7F7F7F)
+                    : 0xA03A8DFF) : hover ? 0x60305070 : 0x40101A28;
             g.fill(tx, ty, tx + tw, ty + TAB_H, Ui.fade(bg, a));
             Ui.border(g, tx, ty, tx + tw, ty + TAB_H, Ui.fade(on ? acc : 0xFF3C5A74, a));
             String label = TABS[i];
             if ((i == 0 && CData.points() > 0) || (i == 1 && CData.skillPoints() > 0)) label += " *";
-            boolean alert = i == 4 && CData.quest(Quests.Q_CLASS) == Quests.ACTIVE;
+            boolean alert = i == 4 && CData.quest(Quests.Q_CLASS) == Quests.ACTIVE
+                    || i == TAB_RANK && (CData.examReady() || CData.prestigeReady());
             if (alert) label += " !";
             Ui.center(g, f, fit(f, label, tw - 4), tx + tw / 2, ty + 3, on ? Ui.WHITE : alert ? Ui.GOLD : Ui.GRAY, a);
         }
@@ -257,8 +263,7 @@ public class SystemScreen extends Screen {
                 ? this.minecraft.player.getName().getString() : "?";
         label(g, f, "NOMBRE", name, lx, y1 + Y_NAME, Ui.WHITE, a);
         label(g, f, "NIVEL", String.valueOf(CData.level()), mid, y1 + Y_NAME, Ui.WHITE, a);
-        int r = Defs.rank(CData.level());
-        label(g, f, "RANGO", Defs.RANK[r], lx, y1 + Y_RANK, Defs.RANK_COLOR[r], a);
+        label(g, f, "RANGO", CData.rankLabel(), lx, y1 + Y_RANK, CData.rankColor(), a);
         label(g, f, "CLASE", CData.className(), mid, y1 + Y_RANK, CData.mutated() ? Ui.GOLD : Ui.WHITE, a);
         label(g, f, "RAZA", Hud.name(Defs.RACE_NAME, CData.race()), lx, y1 + Y_RACE, Ui.WHITE, a);
         label(g, f, "ORO", String.valueOf(CData.coins()), mid, y1 + Y_RACE, Ui.GOLD, a);
@@ -344,7 +349,7 @@ public class SystemScreen extends Screen {
             String b = fit(f, ModArmor.SET_BONUS[set], rx - (lx + f.width(k) + f.width(v) + 16));
             Ui.text(g, f, b, rx - f.width(b), sy, Ui.WHITE, a);
         }
-        hint(g, "Esc: cerrar   ·   1-5: pestañas   ·   ratón encima: detalles", x1, x2, y2, a);
+        hint(g, "Esc: cerrar   ·   1-6: pestañas   ·   ratón encima: detalles", x1, x2, y2, a);
         return tip;
     }
 
@@ -742,7 +747,7 @@ public class SystemScreen extends Screen {
     private static String stateText(ClientShadows.Entry e) {
         return switch (e.state()) {
             case ClientShadows.OUT -> "En el campo";
-            case ClientShadows.RECOVERING -> "Recuperándose · " + ClientShadows.recoverLeft(e) + " s";
+            case ClientShadows.RECOVERING -> "Caída · vuelve en " + ClientShadows.downText(e);
             default -> "Guardada en tu sombra";
         };
     }
@@ -831,7 +836,8 @@ public class SystemScreen extends Screen {
                 Ui.bar(g, right - 40, ry + 14, 40, 3, e.hp() / 100F, Ui.HP_RED, a);
             }
             if (hover) {
-                tip = List.of(e.name(), "Rango " + rt + " · nivel " + e.level() + " · " + e.kills() + " bajas", "Clic: seleccionar");
+                tip = List.of(e.name(), "Rango " + rt + " · nivel " + e.level() + " · " + e.kills() + " bajas",
+                        "Ataque: " + e.attackText() + " por golpe", "Clic: seleccionar");
             }
         }
         g.disableScissor();
@@ -860,9 +866,9 @@ public class SystemScreen extends Screen {
         String[] steps = {
                 "1. Mata a una criatura.",
                 "2. Mientras su cadáver humea (10 s),",
-                "    pulsa " + arise + ": ¡Levántate!",
-                "3. Si sale bien, se alza como tu sombra",
-                "    y te seguirá y luchará por ti."};
+                "    pulsa " + arise + ": ¡Levántate! (3 intentos)",
+                "3. Más rango = más maná y menos %.",
+                "    Sube la Perspicacia en el árbol."};
         for (String s : steps) {
             Ui.text(g, f, fit(f, s, lb.w() - 16), lb.x1() + 10, y, 0xFFC8D6E5, a);
             y += 11;
@@ -920,6 +926,8 @@ public class SystemScreen extends Screen {
         Ui.text(g, f, lv, ib.x2() - 7 - f.width(lv), y, Ui.WHITE, a);
         y += 10;
         Ui.text(g, f, fit(f, e.kills() + " bajas" + (e.boss() ? "   ·   JEFE" : ""), w), lx, y, e.boss() ? Ui.GOLD : Ui.GRAY, a);
+        String atk = "Ataque " + e.attackText();
+        Ui.text(g, f, atk, ib.x2() - 7 - f.width(atk), y, Ui.HP_RED, a);
         y += 10;
         if (y < ib.y2() - 30) {
             Ui.text(g, f, fit(f, stateText(e), w), lx, y, stateColor(e.state()), a);
@@ -1006,7 +1014,7 @@ public class SystemScreen extends Screen {
         String sl = sellLabel(cv);
         int bw = f.width(sl) + 16;
         Ui.button(g, f, sl, x2 - 8 - bw, y1 + 44, bw, 14, mx, my, Ui.GOLD, cv[0] > 0, a);
-        int myRank = Defs.rank(CData.level());
+        int myRank = CData.hunterRank();
         List<Integer> ids = offersIn(cat);
         for (int k = 0; k < ids.size(); k++) {
             int i = ids.get(k);
@@ -1060,7 +1068,7 @@ public class SystemScreen extends Screen {
                 l.add(" · " + s.getHoverName().getString());
             }
         }
-        l.add(myRank >= o.minRank() ? "Clic: comprar   ·   Mayús + clic: comprar 5" : "Exclusivo: sube de rango para comprarlo");
+        l.add(myRank >= o.minRank() ? "Clic: comprar   ·   Mayús + clic: comprar 5" : "Exclusivo: necesitas rango " + Defs.RANK[Math.max(0, Math.min(5, o.minRank()))] + " (pestaña Rango)");
         return l;
     }
 
@@ -1410,6 +1418,245 @@ public class SystemScreen extends Screen {
         return false;
     }
 
+    // ------------------------------------------------------------------ pestaña RANGO
+
+    private Box rankBox() {
+        int x1 = px();
+        int y1 = py();
+        return new Box(x1 + 8, y1 + 28, x1 + pw() * 42 / 100, y1 + ph() - 17);
+    }
+
+    private Box examBox() {
+        Box l = rankBox();
+        int h = (l.h() - 6) * 54 / 100;
+        return new Box(l.x2() + 6, l.y1(), px() + pw() - 8, l.y1() + h);
+    }
+
+    private Box prestigeBox() {
+        Box l = rankBox();
+        Box e = examBox();
+        return new Box(e.x1(), e.y2() + 6, e.x2(), l.y2());
+    }
+
+    private static Box bottomButton(Box b) {
+        return new Box(b.x1() + 8, b.y2() - 20, b.x2() - 8, b.y2() - 6);
+    }
+
+    private static void card(GuiGraphics g, Box b, int accent, float a) {
+        g.fill(b.x1(), b.y1(), b.x2(), b.y2(), Ui.fade(0x90070E1A, a));
+        Ui.border(g, b.x1(), b.y1(), b.x2(), b.y2(), Ui.fade((accent & 0x00FFFFFF) | 0x90000000, a));
+        Ui.corners(g, b.x1() - 1, b.y1() - 1, b.x2() + 1, b.y2() + 1, 6, Ui.fade(accent, a));
+    }
+
+    /** Etiqueta de estado arriba a la derecha de una tarjeta. */
+    private static void stateTag(GuiGraphics g, Font f, Box b, String state, int col, float a) {
+        int y = b.y1() + 7;
+        int sw = f.width(state) + 8;
+        g.fill(b.x2() - 8 - sw, y - 2, b.x2() - 8, y + 9, Ui.fade((col & 0x00FFFFFF) | 0x40000000, a));
+        Ui.border(g, b.x2() - 8 - sw, y - 2, b.x2() - 8, y + 9, Ui.fade(col, a));
+        Ui.center(g, f, state, b.x2() - 8 - sw / 2, y, col, a);
+    }
+
+    private static List<String> rankTip(int i) {
+        List<String> l = new ArrayList<>();
+        l.add("RANGO " + Defs.RANK[i] + (i == 0 ? "  (el de partida)" : "  (examen desde el nivel " + Defs.RANK_MIN[i] + ")"));
+        List<String> bf = Defs.rankBuffs(i);
+        if (bf.isEmpty()) {
+            l.add("Sin bonus");
+        } else {
+            l.addAll(bf);
+        }
+        return l;
+    }
+
+    private static List<String> prestigeTip(int next) {
+        List<String> l = new ArrayList<>();
+        l.add("PRESTIGIO " + next + ": " + Defs.prestigeName(next));
+        l.add("Vuelves al nivel 1 y tus estadísticas vuelven a 10.");
+        l.add("Conservas raza, clase, árboles, sombras, oro, objetos y rango.");
+        l.add("Recibes el arma del Monarca de tu clase.");
+        l.add("Bonus totales con este prestigio:");
+        for (String s : Defs.prestigeBuffs(next)) {
+            l.add("  " + s);
+        }
+        return l;
+    }
+
+    private List<String> rankTab(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
+        Font f = this.font;
+        List<String> tip = null;
+        int rank = CData.hunterRank();
+        int pres = CData.prestige();
+        int col = CData.rankColor();
+        int glowCol = 0x50000000 | (col & 0xFFFFFF);
+        float pulse = 0.65F + 0.35F * (float) Math.sin(now / 300.0);
+
+        // ---- izquierda: insignia, escalera de rangos y bonus actuales
+        Box lb = rankBox();
+        card(g, lb, col, a);
+        int cx = lb.cx();
+        int y = lb.y1() + 7;
+        Ui.center(g, f, pres > 0 ? "RANGO ÚNICO" : "RANGO DE CAZADOR", cx, y, Ui.GRAY, a);
+        y += 12;
+        int bs = 40;
+        int bx1 = cx - bs / 2;
+        int bx2 = cx + bs / 2;
+        g.fill(bx1, y, bx2, y + bs, Ui.fade(0xA0000000 | ((col >> 2) & 0x3F3F3F), a));
+        Ui.border(g, bx1, y, bx2, y + bs, Ui.fade(col, a));
+        Ui.corners(g, bx1 - 2, y - 2, bx2 + 2, y + bs + 2, 5, Ui.fade(col, a * pulse));
+        Ui.bigCenter(g, f, pres > 0 ? "★" : Defs.RANK[rank], cx, y + bs / 2F + 1F, 3.0F, col, glowCol, a);
+        if (Ui.inside(mx, my, bx1, y, bs, bs)) tip = pres > 0 ? prestigeTip(pres) : rankTip(rank);
+        y += bs + 6;
+        String title = fit(f, pres > 0 ? Defs.prestigeName(pres) : "Cazador de rango " + Defs.RANK[rank], lb.w() - 12);
+        Ui.glow(g, f, title, cx - f.width(title) / 2, y, col, glowCol, a);
+        y += 13;
+        int cell = Math.min(22, (lb.w() - 16) / 6);
+        int lx0 = cx - cell * 3;
+        for (int i = 0; i < 6; i++) {
+            int qx = lx0 + i * cell;
+            boolean got = i <= rank;
+            boolean cur = i == rank;
+            int rc = Defs.RANK_COLOR[i];
+            g.fill(qx + 1, y, qx + cell - 1, y + 13, Ui.fade(got ? 0x60000000 | (rc & 0xFFFFFF) : 0x50101A28, a));
+            Ui.border(g, qx + 1, y, qx + cell - 1, y + 13, Ui.fade(cur ? Ui.WHITE : got ? rc : 0xFF2E4458, a));
+            Ui.center(g, f, Defs.RANK[i], qx + cell / 2, y + 3, got ? Ui.WHITE : 0xFF56626E, a);
+            if (Ui.inside(mx, my, qx, y, cell, 13)) tip = rankTip(i);
+        }
+        y += 19;
+        Ui.text(g, f, "BONUS ACTUALES:", lb.x1() + 8, y, Ui.GRAY, a);
+        y += 11;
+        List<String> buffs = new ArrayList<>(Defs.rankBuffs(rank));
+        for (String s : Defs.prestigeBuffs(pres)) {
+            buffs.add("★ " + s);
+        }
+        if (buffs.isEmpty()) buffs.add("Ninguno todavía: ¡haz el examen!");
+        for (String s : buffs) {
+            if (y > lb.y2() - 13) break;
+            boolean star = s.startsWith("★");
+            Ui.text(g, f, fit(f, (star ? "" : "• ") + s, lb.w() - 16), lb.x1() + 8, y,
+                    star ? Defs.MONARCA_COLOR : buffs.size() == 1 && rank == 0 && pres == 0 ? Ui.MUTED : Ui.GREEN, a);
+            y += 10;
+        }
+
+        // ---- derecha arriba: examen de ascenso
+        Box eb = examBox();
+        boolean maxRank = rank >= 5;
+        int next = Math.min(5, rank + 1);
+        int ecol = maxRank ? Ui.GOLD : Defs.RANK_COLOR[next];
+        boolean ready = CData.examReady();
+        card(g, eb, ecol, a);
+        int ex = eb.x1() + 8;
+        int ew = eb.w() - 16;
+        stateTag(g, f, eb, maxRank ? "COMPLETADO" : ready ? "DISPONIBLE" : "BLOQUEADO",
+                maxRank ? Ui.GREEN : ready ? Ui.GOLD : 0xFF56626E, a);
+        y = eb.y1() + 7;
+        Ui.glow(g, f, "EXAMEN DE ASCENSO", ex, y, Ui.WHITE, 0x405FB8FF, a);
+        y += 13;
+        g.fill(ex, y, eb.x2() - 8, y + 1, Ui.fade((ecol & 0x00FFFFFF) | 0x60000000, a));
+        y += 5;
+        Box eBtn = bottomButton(eb);
+        if (maxRank) {
+            for (String l : Ui.wrap(f, "Eres un cazador de rango S: lo más alto de la Asociación. Por encima solo queda "
+                    + "el prestigio en el nivel " + Defs.MAX_LEVEL + ".", ew)) {
+                if (y > eb.y2() - 12) break;
+                Ui.text(g, f, l, ex, y, 0xFFC8D6E5, a);
+                y += 10;
+            }
+        } else {
+            String k = "Siguiente: ";
+            Ui.text(g, f, k, ex, y, Ui.GRAY, a);
+            Ui.glow(g, f, "RANGO " + Defs.RANK[next], ex + f.width(k), y, ecol, 0x50000000 | (ecol & 0xFFFFFF), a);
+            String req = "Nivel " + Defs.RANK_MIN[next];
+            Ui.text(g, f, req, eb.x2() - 8 - f.width(req), y, CData.level() >= Defs.RANK_MIN[next] ? Ui.GREEN : Ui.RED, a);
+            y += 11;
+            String lt = Math.min(CData.level(), Defs.RANK_MIN[next]) + "/" + Defs.RANK_MIN[next];
+            Ui.bar(g, ex, y + 1, ew - f.width(lt) - 6, 4, CData.level() / (float) Defs.RANK_MIN[next], ecol, a);
+            Ui.text(g, f, lt, eb.x2() - 8 - f.width(lt), y, Ui.WHITE, a);
+            y += 11;
+            Ui.text(g, f, fit(f, "Mazmorra privada · " + Defs.EXAM_WAVES + " oleadas + examinador · nivel "
+                    + Defs.examLevel(next, CData.level()), ew), ex, y, Ui.MUTED, a);
+            y += 11;
+            Ui.text(g, f, "AL ASCENDER:", ex, y, Ui.GRAY, a);
+            y += 10;
+            for (String l : Ui.wrap(f, String.join("  ·  ", Defs.rankBuffs(next)), ew)) {
+                if (y > eBtn.y1() - 11) break;
+                Ui.text(g, f, l, ex, y, Ui.GOLD, a);
+                y += 10;
+            }
+            if (ready) {
+                g.fill(eBtn.x1() - 2, eBtn.y1() - 2, eBtn.x2() + 2, eBtn.y2() + 2, Ui.fade(0x30FFC857, a * pulse));
+            }
+            String lbl = ready ? "HACER EL EXAMEN" : "NECESITAS NIVEL " + Defs.RANK_MIN[next];
+            if (ready && CData.examTries() > 0) lbl += "  ·  intentos: " + CData.examTries();
+            Ui.button(g, f, fit(f, lbl, eBtn.w() - 6), eBtn.x1(), eBtn.y1(), eBtn.w(), eBtn.h(), mx, my, ecol, ready, a);
+        }
+
+        // ---- derecha abajo: prestigio
+        Box pb = prestigeBox();
+        int pcol = Defs.MONARCA_COLOR;
+        boolean pReady = CData.prestigeReady();
+        card(g, pb, pcol, a);
+        stateTag(g, f, pb, pReady ? "DISPONIBLE" : pres > 0 ? "PRESTIGIO " + pres : "NIVEL " + Defs.MAX_LEVEL,
+                pReady ? Ui.GOLD : pres > 0 ? pcol : 0xFF56626E, a);
+        y = pb.y1() + 7;
+        Ui.glow(g, f, "PRESTIGIO", ex, y, Ui.WHITE, 0x40C77DFF, a);
+        y += 13;
+        String plt = CData.level() + "/" + Defs.MAX_LEVEL;
+        Ui.bar(g, ex, y + 1, ew - f.width(plt) - 6, 4, CData.level() / (float) Defs.MAX_LEVEL, pcol, a);
+        Ui.text(g, f, plt, pb.x2() - 8 - f.width(plt), y, Ui.WHITE, a);
+        y += 12;
+        Box pBtn = bottomButton(pb);
+        String pdesc = "Vuelves al nivel 1 y conservas todo lo demás. Ganas el rango " + Defs.prestigeName(pres + 1)
+                + ", el arma del Monarca de tu clase, +" + Defs.P_XP + "% de EXP, +" + Defs.P_DMG + "% de daño y vida, +"
+                + Defs.P_SLOTS + " sombras y +" + Defs.P_POINTS + " punto por nivel.";
+        for (String l : Ui.wrap(f, pdesc, ew)) {
+            if (y > pBtn.y1() - 11) break;
+            Ui.text(g, f, l, ex, y, 0xFFC8D6E5, a);
+            y += 10;
+        }
+        if (Ui.inside(mx, my, pb.x1(), pb.y1(), pb.w(), pBtn.y1() - pb.y1())) tip = prestigeTip(pres + 1);
+        boolean armed = prestigeArmed && now - prestigeTime < 3000L;
+        if (pReady) {
+            g.fill(pBtn.x1() - 2, pBtn.y1() - 2, pBtn.x2() + 2, pBtn.y2() + 2, Ui.fade(0x30C77DFF, a * pulse));
+        }
+        String plbl = !pReady ? "NECESITAS NIVEL " + Defs.MAX_LEVEL : armed ? "¿SEGURO? VUELVES AL NIVEL 1" : "HACER PRESTIGIO";
+        Ui.button(g, f, fit(f, plbl, pBtn.w() - 6), pBtn.x1(), pBtn.y1(), pBtn.w(), pBtn.h(), mx, my, armed ? Ui.RED : pcol, pReady, a);
+
+        hint(g, "El rango sube con el examen de ascenso · el prestigio se desbloquea en el nivel " + Defs.MAX_LEVEL, x1, x2, y2, a);
+        return tip;
+    }
+
+    private boolean clickRank(double mx, double my) {
+        if (CData.hunterRank() < 5 && bottomButton(examBox()).in(mx, my)) {
+            if (CData.examReady()) {
+                send(Net.ACT_RANK, 0, 0);
+                Hud.sound(SoundEvents.BEACON_ACTIVATE, 0.8F, 1.2F);
+                this.onClose();
+            } else {
+                Hud.error();
+            }
+            return true;
+        }
+        if (bottomButton(prestigeBox()).in(mx, my)) {
+            if (!CData.prestigeReady()) {
+                Hud.error();
+                return true;
+            }
+            long now = System.currentTimeMillis();
+            if (prestigeArmed && now - prestigeTime < 3000L) {
+                prestigeArmed = false;
+                send(Net.ACT_RANK, 1, 0);
+                Hud.sound(SoundEvents.BEACON_ACTIVATE, 1.0F, 0.6F);
+            } else {
+                prestigeArmed = true;
+                prestigeTime = now;
+                Hud.error();
+            }
+            return true;
+        }
+        return false;
+    }
+
     // ================================================================== ratón y teclado
 
     private void switchTab(int i) {
@@ -1455,6 +1702,7 @@ public class SystemScreen extends Screen {
         if (tab == 2 && button == 0 && clickShadows(mx, my)) return true;
         if (tab == 3 && button == 0 && clickShop(mx, my, y1, x2)) return true;
         if (tab == 4 && button == 0 && clickQuests(mx, my, y1)) return true;
+        if (tab == TAB_RANK && button == 0 && clickRank(mx, my)) return true;
         return super.mouseClicked(mx, my, button);
     }
 
@@ -1577,7 +1825,7 @@ public class SystemScreen extends Screen {
         }
         int cat = Math.max(0, Math.min(Shop.CATS.length - 1, lastCat));
         List<Integer> ids = offersIn(cat);
-        int myRank = Defs.rank(CData.level());
+        int myRank = CData.hunterRank();
         for (int k = 0; k < ids.size(); k++) {
             int[] rr = shopRow(k, ids.size());
             if (Ui.inside(mx, my, rr[0], rr[1], rr[2], SHOP_ROW - 2)) {
@@ -1643,6 +1891,19 @@ public class SystemScreen extends Screen {
     /** Recorre todos los textos de la ventana con todas las razas y clases (para detectar errores). */
     public static int selfCheck() {
         int n = 0;
+        for (int r = 0; r < 6; r++) {
+            rankTip(r);
+            Defs.rankBuffs(r);
+            Defs.examLevel(Math.max(1, r), 40 + r * 60);
+            n++;
+        }
+        for (int p = 0; p <= 12; p++) {
+            Defs.prestigeName(p);
+            Defs.prestigeBuffs(p);
+            prestigeTip(p + 1);
+            Defs.rankLabel(p % 6, p);
+            n++;
+        }
         for (int kind = 0; kind < 3; kind++) {
             int count = kind == 0 ? Trees.RACE.length : kind == 1 ? Trees.CLASS.length : 1;
             for (int idx = 0; idx < count; idx++) {

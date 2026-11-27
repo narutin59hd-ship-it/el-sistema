@@ -40,7 +40,9 @@ public final class ModArmor {
     public enum Tiers implements Tier {
         CAZADOR(900, 8.0F, 3.0F, 15, () -> Ingredient.of(Items.IRON_INGOT)),
         SOMBRIO(1800, 9.0F, 5.0F, 18, () -> Ingredient.of(Items.DIAMOND)),
-        MONARCA(3200, 10.0F, 7.0F, 22, () -> Ingredient.of(Items.NETHERITE_INGOT));
+        MONARCA(3200, 10.0F, 7.0F, 22, () -> Ingredient.of(Items.NETHERITE_INGOT)),
+        /** Armas del Monarca (recompensa del prestigio): indestructibles. */
+        SOBERANO(4000, 12.0F, 10.0F, 25, () -> Ingredient.of(Items.NETHERITE_INGOT));
 
         private final int uses;
         private final float speed;

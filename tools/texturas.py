@@ -1,4 +1,4 @@
-"""Genera las texturas, modelos de objetos y traducciones extra de El Sistema 1.2.0.
+"""Genera las texturas, modelos de objetos y traducciones extra de El Sistema 1.4.0.
 
 Solo usa la biblioteca estándar de Python (se ejecuta en GitHub Actions). Todo es determinista: el mismo
 script siempre produce los mismos archivos.
@@ -1159,6 +1159,104 @@ def legendaries():
     save_item(t, "corazon_primordial")
 
 
+def line(t, x0, y0, x1, y1, color):
+    """Línea de 1 píxel entre dos puntos."""
+    n = int(max(abs(x1 - x0), abs(y1 - y0)) * 2) + 1
+    for i in range(n + 1):
+        k = i / n
+        t.put(int(round(x0 + (x1 - x0) * k)), int(round(y0 + (y1 - y0) * k)), color)
+
+
+def bow_frame(pull):
+    """Arco del Monarca: arco negro violáceo con puntas de oro. pull = -1 en reposo, 0..2 tensándose."""
+    import math
+    t = Tex(16, 16)
+    limb_dark = (52, 26, 92)
+    limb = (98, 52, 168)
+    gold = (236, 196, 88)
+    pts = []
+    for i in range(0, 91, 3):
+        ang = math.radians(180 + i)
+        pts.append((15 + 12.6 * math.cos(ang), 15 + 12.6 * math.sin(ang)))
+    for k, (x, y) in enumerate(pts):
+        c = gold if k < 3 or k > len(pts) - 4 else (limb if 11 <= k <= 19 else limb_dark)
+        t.put(int(round(x)), int(round(y)), c)
+        if 8 <= k <= 22:
+            # parte central más gruesa (la empuñadura)
+            t.put(int(round(x)) + 1, int(round(y)) + 1, limb_dark)
+    for (x, y) in ((6, 6), (7, 6), (6, 7)):
+        t.put(x, y, gold)
+    e1 = (2.4, 15.0)
+    e2 = (15.0, 2.4)
+    string = (222, 212, 255)
+    if pull < 0:
+        line(t, e1[0], e1[1], e2[0], e2[1], string)
+    else:
+        d = 1.2 + pull * 1.1
+        px, py = 8.7 + d, 8.7 + d
+        line(t, e1[0], e1[1], px, py, string)
+        line(t, px, py, e2[0], e2[1], string)
+        shaft = (170, 120, 255)
+        tip = (240, 220, 255)
+        line(t, px, py, px - 8.5, py - 8.5, shaft)
+        for (x, y) in ((px - 8.5, py - 8.5), (px - 7.5, py - 8.5), (px - 8.5, py - 7.5)):
+            t.put(int(round(x)), int(round(y)), tip)
+    t = shade_icon(t)
+    outline(t, (14, 6, 24))
+    return t
+
+
+def sovereign():
+    """Armas del Monarca (recompensa del prestigio): negro, violeta y oro."""
+    # Filo del Monarca: espadón negro con filo violeta
+    p = {"R": (196, 140, 255), "k": (24, 16, 40), "g": (180, 140, 50), "G": (255, 214, 90), "h": (44, 28, 66),
+         "p": (200, 130, 255)}
+    t = from_mask(ESPADA, p)
+    outline(t, (10, 4, 18))
+    save_item(t, "filo_monarca")
+
+    # Colmillos del Monarca: daga negra con filo de alma
+    p = {"a": (150, 110, 230), "W": (236, 226, 255), "b": (66, 40, 120), "g": (230, 190, 80), "h": (30, 18, 46),
+         "p": (200, 120, 255)}
+    t = shade_icon(from_mask(DAGA, p))
+    outline(t, (10, 4, 18))
+    save_item(t, "colmillos_monarca")
+
+    # Báculo del Monarca: báculo oscuro con orbe de almas
+    p = {"c": (90, 40, 150), "C": (190, 120, 255), "W": (255, 255, 255), "g": (236, 196, 88), "w": (44, 28, 66)}
+    t = from_mask(BACULO, p)
+    outline(t, (10, 4, 18))
+    save_item(t, "baculo_monarca")
+
+    # Martillo del Monarca: cabeza enorme de obsidiana con gema y remates de oro
+    t = Tex(16, 16)
+    for k in range(10):
+        x, y = 1 + k, 14 - k
+        t.put(x, y, (236, 196, 88) if k % 3 == 0 else (66, 40, 96))
+    cx, cy = 10.0, 5.0
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x - cx, y - cy
+            a = (dx - dy) / 1.4142
+            b = (dx + dy) / 1.4142
+            if abs(a) <= 2.3 and abs(b) <= 4.7:
+                if abs(b) > 3.7:
+                    c = (236, 196, 88)
+                elif abs(a) < 0.9 and abs(b) < 1.4:
+                    c = (210, 130, 255)
+                else:
+                    c = mix((34, 24, 52), (92, 70, 136), (a + 2.3) / 4.6)
+                t.put(x, y, c)
+    t = shade_icon(t)
+    outline(t, (10, 4, 18))
+    save_item(t, "martillo_monarca")
+
+    # Arco del Monarca y sus 3 posiciones al tensarlo
+    save_item(bow_frame(-1), "arco_monarca")
+    for i in range(3):
+        save_item(bow_frame(i), "arco_monarca_pulling_%d" % i)
+
+
 def items():
     p = {"a": (150, 150, 170), "W": (232, 230, 255), "b": (110, 96, 150), "g": (60, 50, 70), "h": (40, 30, 34),
          "p": (150, 110, 255)}
@@ -1370,8 +1468,20 @@ def models():
             f.write("\n")
 
     for n in ("daga_asesino", "espada_caballero", "hacha_berserker", "guadana_monarca", "baculo_arcano",
-              "hoja_juicio", "colmillo_eclipse", "aguijon_carmesi"):
+              "hoja_juicio", "colmillo_eclipse", "aguijon_carmesi", "filo_monarca", "colmillos_monarca",
+              "baculo_monarca", "martillo_monarca"):
         write(n, {"parent": "minecraft:item/handheld", "textures": {"layer0": "elsistema:item/" + n}})
+    # Arco del Monarca: se tensa como el arco normal
+    write("arco_monarca", {
+        "parent": "minecraft:item/bow",
+        "textures": {"layer0": "elsistema:item/arco_monarca"},
+        "overrides": [
+            {"predicate": {"pulling": 1}, "model": "elsistema:item/arco_monarca_pulling_0"},
+            {"predicate": {"pulling": 1, "pull": 0.65}, "model": "elsistema:item/arco_monarca_pulling_1"},
+            {"predicate": {"pulling": 1, "pull": 0.9}, "model": "elsistema:item/arco_monarca_pulling_2"}]})
+    for i in range(3):
+        write("arco_monarca_pulling_%d" % i, {"parent": "minecraft:item/bow",
+                                                "textures": {"layer0": "elsistema:item/arco_monarca_pulling_%d" % i}})
     names = ["pocion_mana", "elixir_vida", "piedra_retorno", "velo_sombra", "corazon_primordial"]
     for v in ARMOR_ICONS.values():
         names.extend(v)
@@ -1404,6 +1514,7 @@ def main():
     armors()
     items()
     legendaries()
+    sovereign()
     armor_icons()
     models()
     locales()
