@@ -46,7 +46,7 @@ public final class Combat {
                         busy = false;
                     }
                     if (victim.level() instanceof ServerLevel lvl) {
-                        lvl.sendParticles(ParticleTypes.CRIT, victim.getX(), victim.getY() + victim.getBbHeight() * 0.6, victim.getZ(),
+                        Fx.send(lvl, ParticleTypes.CRIT, victim.getX(), victim.getY() + victim.getBbHeight() * 0.6, victim.getZ(),
                                 14, 0.3, 0.3, 0.3, 0.25);
                         lvl.playSound((Player) null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.PLAYER_ATTACK_CRIT,
                                 SoundSource.HOSTILE, 0.8F, 0.7F);
@@ -151,10 +151,10 @@ public final class Combat {
         } finally {
             busy = false;
         }
-        lvl.sendParticles(ParticleTypes.SWEEP_ATTACK, victim.getX(), victim.getY() + victim.getBbHeight() * 0.5, victim.getZ(),
+        Fx.send(lvl, ParticleTypes.SWEEP_ATTACK, victim.getX(), victim.getY() + victim.getBbHeight() * 0.5, victim.getZ(),
                 6, radius * 0.4, 0.2, radius * 0.4, 0.0);
         if (push) {
-            lvl.sendParticles(ParticleTypes.EXPLOSION, victim.getX(), victim.getY() + 0.3, victim.getZ(), 2, 0.5, 0.1, 0.5, 0.0);
+            Fx.send(lvl, ParticleTypes.EXPLOSION, victim.getX(), victim.getY() + 0.3, victim.getZ(), 2, 0.5, 0.1, 0.5, 0.0);
         }
     }
 }

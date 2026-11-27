@@ -89,6 +89,7 @@ public final class Net {
     public static final int ACT_QUEST = 11;        // a = misión, b = 0 empezar la prueba
     public static final int ACT_RANK = 12;         // a = 0 examen de ascenso, 1 prestigio
     public static final int ACT_SHADOW_TREE = 13;  // a = id de la sombra, b = nudo de su árbol propio
+    public static final int ACT_SETTINGS = 14;     // a = ajustes del cliente (bits de Fx: sin partículas, modo rendimiento)
 
     /** Números por sombra en la lista de la pestaña Sombras (8 + EXP + puntos + los rangos de su árbol). */
     public static final int SHADOW_STRIDE = 10 + ShadowTree.SIZE;

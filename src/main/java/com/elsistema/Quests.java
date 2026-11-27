@@ -166,7 +166,7 @@ public final class Quests {
         SystemLogic.notify(p, Net.N_QUEST_DONE, q, 0);
         reward(p, d, q);
         p.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
-        ((ServerLevel) p.level()).sendParticles(ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(),
+        Fx.send((ServerLevel) p.level(), ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(),
                 60, 0.6, 1.0, 0.6, 0.3);
         SystemLogic.applyAll(p, d);
         if (q == Q_CLASS) {

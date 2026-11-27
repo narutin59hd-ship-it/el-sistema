@@ -1,4 +1,4 @@
-# El Sistema 1.5.0 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.6.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
@@ -8,12 +8,30 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 ## Controles
 
 - **V**: ventana del Sistema (o el despertar, si todavía no has despertado).
-  - Pestañas **Estado**, **Habilidades**, **Sombras**, **Tienda**, **Misiones** y **Rango** (también con las teclas 1 a 6).
+  - Pestañas **Estado**, **Habilidades**, **Sombras**, **Tienda**, **Misiones** y **Rango** (también con las teclas 1 a 6)
+    y el engranaje de los **Ajustes** (tecla 7).
 - **R**: habilidad de tu clase.
 - **G**: ¡Levántate! (extraer la sombra de una criatura muerta).
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.6.0
+
+### Menú de ajustes (engranaje de la ventana del Sistema, tecla 7)
+- **Partículas del mod**: SÍ / NO. Sin ellas no salen las partículas de las habilidades, las sombras, los jefes
+  ni las mazmorras. Las puertas de mazmorra, los cadáveres que se pueden levantar y las nubes de veneno de la
+  Reina Carmesí se siguen viendo con unas pocas, porque hacen falta para jugar.
+- **Modo rendimiento**: todo más ligero para el PC. Sólo sale 1 de cada 3 partículas del mod, no hay auras en las
+  sombras ni remolinos en las puertas y los ojos, runas y magma de los monstruos no brillan.
+- Los ajustes son de cada jugador (en un servidor cada uno elige los suyos) y se guardan en `config/elsistema.json`.
+
+### Animaciones nuevas de las sombras
+- **¡Levántate!**: el humo y las almas se juntan en un círculo morado sobre el cadáver y la sombra sale despacio
+  del suelo; al terminar estalla en almas. Los bordes de la pantalla se oscurecen de morado mientras tanto.
+- **Invocar** (H o INVOCAR): cada sombra sale deprisa de un charco de oscuridad, una detrás de otra.
+- **Guardar** (H o GUARDAR): las sombras se hunden en el suelo antes de desaparecer. Las que caen en combate
+  también se hunden en su sombra.
 
 ## Novedades de la 1.5.0
 

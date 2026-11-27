@@ -378,16 +378,16 @@ public final class SystemLogic {
         ServerLevel lvl = (ServerLevel) p.level();
         int age = 40 - d.anim;
         if (age == 0) {
-            lvl.sendParticles(ParticleTypes.ELECTRIC_SPARK, p.getX(), p.getY() + 1.0, p.getZ(), 60, 0.6, 1.0, 0.6, 0.15);
-            lvl.sendParticles(ParticleTypes.ENCHANT, p.getX(), p.getY() + 1.2, p.getZ(), 80, 0.8, 1.0, 0.8, 0.5);
+            Fx.send(lvl, ParticleTypes.ELECTRIC_SPARK, p.getX(), p.getY() + 1.0, p.getZ(), 60, 0.6, 1.0, 0.6, 0.15);
+            Fx.send(lvl, ParticleTypes.ENCHANT, p.getX(), p.getY() + 1.2, p.getZ(), 80, 0.8, 1.0, 0.8, 0.5);
         }
         double h = age * 0.07;
         for (int k = 0; k < 3; k++) {
             double ang = age * 0.45 + k * (Math.PI * 2.0 / 3.0);
             double x = p.getX() + Math.cos(ang) * 0.9;
             double z = p.getZ() + Math.sin(ang) * 0.9;
-            lvl.sendParticles(ParticleTypes.END_ROD, x, p.getY() + h, z, 1, 0.0, 0.0, 0.0, 0.0);
-            lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, x, p.getY() + h, z, 1, 0.0, 0.02, 0.0, 0.01);
+            Fx.send(lvl, ParticleTypes.END_ROD, x, p.getY() + h, z, 1, 0.0, 0.0, 0.0, 0.0);
+            Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, x, p.getY() + h, z, 1, 0.0, 0.02, 0.0, 0.01);
         }
         d.anim--;
     }
@@ -475,6 +475,7 @@ public final class SystemLogic {
             case Net.ACT_SHADOW -> Shadows.action(p, a, b);
             case Net.ACT_RANK -> Ranking.action(p, a, b);
             case Net.ACT_SHADOW_TREE -> Shadows.treeUp(p, a, b);
+            case Net.ACT_SETTINGS -> Fx.set(p, a);
             case Net.ACT_SHADOWS_ALL -> {
                 if (a == 1) {
                     if (Shadows.summonAll(p) == 0) notify(p, Net.N_NO_SHADOWS, Store.get(p).shadows.size(), 0);

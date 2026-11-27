@@ -119,6 +119,8 @@ public final class Shadows {
     private static final List<Mob> PENDING_DISCARD = new ArrayList<>();
     /** En la prueba automática las sombras sin dueño no se borran. */
     public static boolean selfTest = false;
+    /** Prueba automática: ¡Levántate! siempre sale bien. */
+    public static boolean forceArise = false;
 
     // ================================================================ identificar sombras
 
@@ -429,7 +431,7 @@ public final class Shadows {
                 float frac = m.getHealth() / Math.max(1.0F, m.getMaxHealth());
                 prepare(m, rec, p.getUUID(), d);
                 m.setHealth(Math.max(1.0F, frac * m.getMaxHealth()));
-                ((ServerLevel) m.level()).sendParticles(ParticleTypes.TOTEM_OF_UNDYING, m.getX(), m.getY() + m.getBbHeight() / 2.0,
+                Fx.send((ServerLevel) m.level(), ParticleTypes.TOTEM_OF_UNDYING, m.getX(), m.getY() + m.getBbHeight() / 2.0,
                         m.getZ(), 20, 0.3, 0.5, 0.3, 0.2);
             }
         }
@@ -454,7 +456,7 @@ public final class Shadows {
                 float frac = m.getHealth() / Math.max(1.0F, m.getMaxHealth());
                 prepare(m, rec, p.getUUID(), d);
                 m.setHealth(Math.max(1.0F, frac * m.getMaxHealth()));
-                ((ServerLevel) m.level()).sendParticles(ParticleTypes.WITCH, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
+                Fx.send((ServerLevel) m.level(), ParticleTypes.WITCH, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
                         12, 0.3, 0.4, 0.3, 0.05);
             }
         }
@@ -493,7 +495,7 @@ public final class Shadows {
         }
         mine.sort(Comparator.comparingInt((Corpse c) -> c.rank).reversed());
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.EVOKER_PREPARE_SUMMON, 1.0F, 0.6F);
-        lvl.sendParticles(ParticleTypes.SCULK_SOUL, p.getX(), p.getY() + 0.2, p.getZ(), 30, 1.2, 0.1, 1.2, 0.02);
+        Fx.send(lvl, ParticleTypes.SCULK_SOUL, p.getX(), p.getY() + 0.2, p.getZ(), 30, 1.2, 0.1, 1.2, 0.02);
         int ok = 0;
         int failAttempts = -1;
         for (Corpse c : mine) {
@@ -508,7 +510,7 @@ public final class Shadows {
             }
             if (!p.isCreative()) d.mp -= cost;
             int chance = ariseChance(d, c.rank, c.boss);
-            if (p.getRandom().nextInt(100) < chance) {
+            if (forceArise || p.getRandom().nextInt(100) < chance) {
                 ShadowRec rec = new ShadowRec();
                 rec.id = d.nextShadow++;
                 rec.type = c.type;
@@ -520,16 +522,14 @@ public final class Shadows {
                 rec.state = STORED;
                 d.shadows.add(rec);
                 CORPSES.remove(c);
-                if (summon(p, d, rec, c.pos)) {
+                if (summon(p, d, rec, c.pos, ARISE, ok * 6)) {
                     ok++;
-                    lvl.sendParticles(ParticleTypes.SCULK_SOUL, c.pos.x, c.pos.y + 0.5, c.pos.z, 40, 0.4, 0.8, 0.4, 0.06);
-                    lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, c.pos.x, c.pos.y + 1.0, c.pos.z, 60, 0.4, 1.0, 0.4, 0.1);
                     SystemLogic.notify(p, Net.N_ARISE_OK, rec.id, rec.rank);
                 }
             } else {
                 c.attempts--;
                 failAttempts = Math.max(failAttempts, c.attempts);
-                lvl.sendParticles(ParticleTypes.LARGE_SMOKE, c.pos.x, c.pos.y + 0.5, c.pos.z, 20, 0.3, 0.4, 0.3, 0.02);
+                Fx.send(lvl, ParticleTypes.LARGE_SMOKE, c.pos.x, c.pos.y + 0.5, c.pos.z, 20, 0.3, 0.4, 0.3, 0.02);
                 if (c.attempts <= 0) CORPSES.remove(c);
             }
         }
@@ -538,7 +538,7 @@ public final class Shadows {
             sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.DISPENSER_FAIL, 1.0F, 0.6F);
         }
         if (ok > 0) {
-            sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.WITHER_SPAWN, 0.35F, 1.6F);
+            sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.SCULK_SHRIEKER_SHRIEK, 0.5F, 0.6F);
             Quests.onArmy(p, d);
         }
         sendCorpseInfo(p, d);
@@ -554,8 +554,13 @@ public final class Shadows {
         return new Vec3(p.getX() + Math.cos(ang) * r, p.getY(), p.getZ() + Math.sin(ang) * r);
     }
 
-    /** Saca una sombra guardada junto al Jugador (o en «at»). */
+    /** Saca una sombra guardada junto al Jugador (o en «at»): sale del suelo. */
     public static boolean summon(ServerPlayer p, Data d, ShadowRec rec, Vec3 at) {
+        return summon(p, d, rec, at, RISE, 0);
+    }
+
+    /** Saca una sombra con una animación (RISE: sale deprisa; ARISE: ¡Levántate!) y «delay» ticks de espera. */
+    public static boolean summon(ServerPlayer p, Data d, ShadowRec rec, Vec3 at, int anim, int delay) {
         if (rec.state != STORED) return false;
         ServerLevel lvl = (ServerLevel) p.level();
         CompoundTag tag;
@@ -578,14 +583,25 @@ public final class Shadows {
         ACTIVE.computeIfAbsent(p.getUUID(), k -> new HashMap<>()).put(rec.id, m.getUUID());
         rec.state = OUT;
         rec.wasOut = false;
+        Anim an = new Anim(m, lvl, spot, anim, Math.max(0, delay));
+        an.hide();
         lvl.addFreshEntity(m);
-        lvl.sendParticles(ParticleTypes.SQUID_INK, spot.x, spot.y + 0.1, spot.z, 25, 0.5, 0.05, 0.5, 0.02);
-        lvl.sendParticles(ParticleTypes.SCULK_SOUL, spot.x, spot.y + 0.5, spot.z, 10, 0.3, 0.6, 0.3, 0.03);
+        ANIMS.add(an);
         return true;
     }
 
-    /** Guarda una sombra que está fuera dentro de la sombra del Jugador. */
+    /** Guarda una sombra que está fuera dentro de la sombra del Jugador (se hunde en el suelo). */
     public static void store(ServerPlayer p, Data d, ShadowRec rec, Mob m) {
+        store(p, d, rec, m, true);
+    }
+
+    /** Guarda una sombra; con «sink» se hunde en el suelo antes de desaparecer (si no, desaparece al momento). */
+    public static void store(ServerPlayer p, Data d, ShadowRec rec, Mob m, boolean sink) {
+        Anim old = animOf(m);
+        if (old != null) {
+            old.restore();
+            ANIMS.remove(old);
+        }
         CompoundTag tag = new CompoundTag();
         if (m.isAlive() && m.saveAsPassenger(tag)) {
             clean(tag);
@@ -595,11 +611,198 @@ public final class Shadows {
         rec.state = STORED;
         Map<Integer, UUID> map = ACTIVE.get(p.getUUID());
         if (map != null) map.remove(rec.id);
+        if (sink && m.isAlive() && m.level() instanceof ServerLevel lvl) {
+            Anim an = new Anim(m, lvl, m.position(), SINK, 0);
+            an.freeze();
+            ANIMS.add(an);
+            return;
+        }
         if (m.level() instanceof ServerLevel lvl) {
-            lvl.sendParticles(ParticleTypes.SQUID_INK, m.getX(), m.getY() + 0.1, m.getZ(), 20, 0.4, 0.05, 0.4, 0.02);
-            lvl.sendParticles(ParticleTypes.LARGE_SMOKE, m.getX(), m.getY() + 0.5, m.getZ(), 10, 0.3, 0.4, 0.3, 0.01);
+            Fx.send(lvl, ParticleTypes.SQUID_INK, m.getX(), m.getY() + 0.1, m.getZ(), 20, 0.4, 0.05, 0.4, 0.02);
+            Fx.send(lvl, ParticleTypes.LARGE_SMOKE, m.getX(), m.getY() + 0.5, m.getZ(), 10, 0.3, 0.4, 0.3, 0.01);
         }
         m.discard();
+    }
+
+    // ================================================================ animaciones: salir del suelo y hundirse
+
+    /** Invocar (tecla H, al entrar...): la sombra sale deprisa de un charco de oscuridad. */
+    public static final int RISE = 0;
+    /** ¡Levántate!: humo y almas que se juntan sobre el cadáver y la sombra sale despacio del suelo. */
+    public static final int ARISE = 1;
+    /** Guardar: la sombra se hunde en el suelo y desaparece. */
+    public static final int SINK = 2;
+    private static final int GATHER_TICKS = 16;
+    private static final List<Anim> ANIMS = new ArrayList<>();
+    private static final DustParticleOptions DARK_DUST = new DustParticleOptions(new Vector3f(0.22F, 0.04F, 0.38F), 1.3F);
+    private static final DustParticleOptions ARISE_DUST = new DustParticleOptions(new Vector3f(0.45F, 0.12F, 0.85F), 1.5F);
+
+    private static final class Anim {
+        final Mob m;
+        final ServerLevel lvl;
+        final double x;
+        final double y;
+        final double z;
+        final double depth;
+        final int kind;
+        /** Ticks de espera (la sombra sigue escondida bajo tierra); en ¡Levántate! incluye cuando se junta el humo. */
+        final int delay;
+        final int dur;
+        final boolean noAi;
+        final boolean invulnerable;
+        final boolean noGravity;
+        int age = 0;
+
+        Anim(Mob m, ServerLevel lvl, Vec3 at, int kind, int delay) {
+            this.m = m;
+            this.lvl = lvl;
+            this.x = at.x;
+            this.y = at.y;
+            this.z = at.z;
+            this.depth = m.getBbHeight() + 0.25;
+            this.kind = kind;
+            this.delay = delay + (kind == ARISE ? GATHER_TICKS : 0);
+            this.dur = kind == ARISE ? 34 : kind == SINK ? 12 : 14;
+            this.noAi = m.isNoAi();
+            this.invulnerable = m.isInvulnerable();
+            this.noGravity = m.isNoGravity();
+        }
+
+        /** Quieta, sin chocar y sin recibir daño mientras dura la animación. */
+        void freeze() {
+            m.setNoAi(true);
+            m.setInvulnerable(true);
+            m.setNoGravity(true);
+            m.noPhysics = true;
+            m.setDeltaMovement(Vec3.ZERO);
+        }
+
+        /** Empieza escondida bajo tierra. */
+        void hide() {
+            freeze();
+            m.moveTo(x, y - depth, z, m.getYRot(), 0.0F);
+        }
+
+        void restore() {
+            m.setNoAi(noAi);
+            m.setInvulnerable(invulnerable);
+            m.setNoGravity(noGravity);
+            m.noPhysics = false;
+        }
+    }
+
+    private static Anim animOf(Mob m) {
+        for (Anim an : ANIMS) {
+            if (an.m == m) return an;
+        }
+        return null;
+    }
+
+    /** True mientras la sombra está saliendo del suelo o hundiéndose. */
+    public static boolean animating(Entity e) {
+        return e instanceof Mob m && animOf(m) != null;
+    }
+
+    private static float easeOut(float t) {
+        float u = 1F - t;
+        return 1F - u * u * u;
+    }
+
+    private static void tickAnims() {
+        for (Iterator<Anim> it = ANIMS.iterator(); it.hasNext(); ) {
+            Anim an = it.next();
+            Mob m = an.m;
+            if (m.isRemoved() || m.level() != an.lvl) {
+                it.remove();
+                continue;
+            }
+            an.age++;
+            int t = an.age - an.delay;
+            if (t < 0) {
+                m.setPos(an.x, an.y - an.depth, an.z);
+                m.setDeltaMovement(Vec3.ZERO);
+                if (an.kind == ARISE && t >= -GATHER_TICKS) gather(an, t + GATHER_TICKS);
+                continue;
+            }
+            float p = Math.min(1F, t / (float) an.dur);
+            double off = an.kind == SINK ? an.depth * p * p : an.depth * (1F - easeOut(p));
+            m.setPos(an.x, an.y - off, an.z);
+            m.setDeltaMovement(Vec3.ZERO);
+            animFx(an, t, p);
+            if (p >= 1F) {
+                it.remove();
+                if (an.kind == SINK) {
+                    Fx.send(an.lvl, ParticleTypes.SOUL, an.x, an.y + 0.2, an.z, 4, 0.3, 0.1, 0.3, 0.02);
+                    m.discard();
+                } else {
+                    an.restore();
+                    m.setPos(an.x, an.y, an.z);
+                    finishFx(an);
+                }
+            }
+        }
+    }
+
+    /** ¡Levántate!, primera parte: el humo y las almas se juntan sobre el cadáver. */
+    private static void gather(Anim an, int t) {
+        ServerLevel l = an.lvl;
+        double r = 1.8 - 1.2 * (t / (double) GATHER_TICKS);
+        double base = an.age * 0.35;
+        for (int i = 0; i < 8; i++) {
+            double a = base + i * Math.PI / 4.0;
+            Fx.send(l, ARISE_DUST, an.x + Math.cos(a) * r, an.y + 0.08, an.z + Math.sin(a) * r, 1, 0.0, 0.0, 0.0, 0.0);
+        }
+        // Almas que vuelan hacia el centro (cantidad 0 = dirección y velocidad)
+        double a = an.age * 1.7;
+        double sx = Math.cos(a) * 2.2;
+        double sz = Math.sin(a) * 2.2;
+        Fx.send(l, ParticleTypes.SOUL, an.x + sx, an.y + 1.2, an.z + sz, 0, -sx, -0.4, -sz, 0.06);
+        Fx.send(l, ParticleTypes.LARGE_SMOKE, an.x, an.y + 0.1, an.z, 0, 0.0, 1.0, 0.0, 0.09);
+        if (t % 4 == 0) Fx.send(l, ParticleTypes.SQUID_INK, an.x, an.y + 0.05, an.z, 4, 0.5, 0.02, 0.5, 0.01);
+        if (t == 0) sound(l, an.x, an.y, an.z, SoundEvents.SCULK_CATALYST_BLOOM, 1.2F, 0.6F);
+        if (t == GATHER_TICKS - 4) sound(l, an.x, an.y, an.z, SoundEvents.WARDEN_SONIC_CHARGE, 0.6F, 1.4F);
+    }
+
+    /** Mientras sale o se hunde: círculo de oscuridad en el suelo, tinta y almas. */
+    private static void animFx(Anim an, int t, float p) {
+        ServerLevel l = an.lvl;
+        double w = Math.max(0.5, an.m.getBbWidth() * 0.8);
+        double base = an.age * 0.45;
+        int dots = an.kind == ARISE ? 6 : 4;
+        double r = an.kind == SINK ? w * (1.0 - p * 0.6) : w * (0.7 + 0.3 * p);
+        for (int i = 0; i < dots; i++) {
+            double a = base + i * Math.PI * 2.0 / dots;
+            Fx.send(l, an.kind == ARISE ? ARISE_DUST : DARK_DUST, an.x + Math.cos(a) * r, an.y + 0.06, an.z + Math.sin(a) * r,
+                    1, 0.0, 0.0, 0.0, 0.0);
+        }
+        Fx.send(l, ParticleTypes.SQUID_INK, an.x, an.y + 0.05, an.z, 1, w * 0.4, 0.02, w * 0.4, 0.01);
+        if (an.kind == ARISE) {
+            double h = an.m.getBbHeight() * p;
+            Fx.send(l, ParticleTypes.REVERSE_PORTAL, an.x, an.y + h * 0.5, an.z, 3, w * 0.5, Math.max(0.2, h * 0.4), w * 0.5, 0.05);
+            if (t % 2 == 0) Fx.send(l, ParticleTypes.SCULK_SOUL, an.x, an.y + 0.2, an.z, 1, w * 0.5, 0.1, w * 0.5, 0.04);
+            if (t == 0) sound(l, an.x, an.y, an.z, SoundEvents.WARDEN_EMERGE, 0.8F, 1.3F);
+        } else if (an.kind == RISE) {
+            if (t % 2 == 0) Fx.send(l, ParticleTypes.SCULK_SOUL, an.x, an.y + 0.3, an.z, 1, w * 0.4, 0.2, w * 0.4, 0.03);
+            if (t == 0) sound(l, an.x, an.y, an.z, SoundEvents.SCULK_BLOCK_SPREAD, 1.0F, 0.7F);
+        } else {
+            Fx.send(l, ParticleTypes.LARGE_SMOKE, an.x, an.y + 0.3, an.z, 1, w * 0.3, 0.2, w * 0.3, 0.01);
+            if (t == 0) sound(l, an.x, an.y, an.z, SoundEvents.SCULK_BLOCK_BREAK, 1.0F, 0.6F);
+        }
+    }
+
+    /** Ya ha salido: estallido de almas (más grande en ¡Levántate!). */
+    private static void finishFx(Anim an) {
+        ServerLevel l = an.lvl;
+        double h = an.m.getBbHeight();
+        if (an.kind == ARISE) {
+            Fx.send(l, ParticleTypes.SCULK_SOUL, an.x, an.y + h * 0.5, an.z, 30, 0.5, h * 0.4, 0.5, 0.08);
+            Fx.send(l, ParticleTypes.END_ROD, an.x, an.y + h * 0.6, an.z, 12, 0.4, h * 0.3, 0.4, 0.06);
+            Fx.send(l, ParticleTypes.LARGE_SMOKE, an.x, an.y + 0.3, an.z, 10, 0.6, 0.2, 0.6, 0.03);
+            sound(l, an.x, an.y, an.z, SoundEvents.WITHER_SPAWN, 0.35F, 1.6F);
+            sound(l, an.x, an.y, an.z, SoundEvents.AMETHYST_BLOCK_RESONATE, 1.0F, 0.5F);
+        } else {
+            Fx.send(l, ParticleTypes.SOUL, an.x, an.y + h * 0.4, an.z, 5, 0.3, h * 0.3, 0.3, 0.03);
+        }
     }
 
     /** Busca la entidad de una sombra que está fuera. */
@@ -612,6 +815,11 @@ public final class Shadows {
             }
         }
         return e instanceof Mob m ? m : null;
+    }
+
+    /** La entidad de una sombra que está fuera (o null). */
+    public static Mob outEntity(ServerPlayer p, ShadowRec rec) {
+        return rec == null ? null : entityOf(p, rec);
     }
 
     private static Mob entityOf(ServerPlayer p, ShadowRec rec) {
@@ -627,7 +835,7 @@ public final class Shadows {
             if (rec.state != OUT) continue;
             Mob m = entityOf(p, rec);
             if (m != null) {
-                store(p, d, rec, m);
+                store(p, d, rec, m, !remember);
             } else {
                 rec.state = STORED;
             }
@@ -649,7 +857,7 @@ public final class Shadows {
         int out = outCount(p);
         for (ShadowRec rec : d.shadows) {
             if (out >= allowed) break;
-            if (rec.state == STORED && summon(p, d, rec, null)) {
+            if (rec.state == STORED && summon(p, d, rec, null, RISE, Math.min(24, n * 3))) {
                 n++;
                 out++;
             }
@@ -701,7 +909,7 @@ public final class Shadows {
             if (rec.state == OUT) {
                 Mob m = entityOf(p, rec);
                 if (m != null) {
-                    ((ServerLevel) m.level()).sendParticles(ParticleTypes.SOUL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
+                    Fx.send((ServerLevel) m.level(), ParticleTypes.SOUL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
                     m.discard();
                 }
                 Map<Integer, UUID> map = ACTIVE.get(p.getUUID());
@@ -721,6 +929,11 @@ public final class Shadows {
         for (UUID id : new ArrayList<>(map.values())) {
             Mob m = find(p, id);
             if (m != null && m.level() == p.level()) {
+                Anim an = animOf(m);
+                if (an != null) {
+                    an.restore();
+                    ANIMS.remove(an);
+                }
                 Vec3 s = spotNear(p, i++);
                 m.teleportTo(s.x, s.y, s.z);
                 m.getNavigation().stop();
@@ -739,7 +952,7 @@ public final class Shadows {
             if (m == null) continue;
             m.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, time, 1, false, true));
             m.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, time, 1, false, true));
-            ((ServerLevel) m.level()).sendParticles(ParticleTypes.SOUL_FIRE_FLAME, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
+            Fx.send((ServerLevel) m.level(), ParticleTypes.SOUL_FIRE_FLAME, m.getX(), m.getY() + m.getBbHeight() / 2.0, m.getZ(),
                     12, 0.3, 0.5, 0.3, 0.02);
         }
     }
@@ -883,8 +1096,8 @@ public final class Shadows {
         }
         if (m.level() instanceof ServerLevel lvl) {
             double y = m.getY() + m.getBbHeight() / 2.0;
-            lvl.sendParticles(ParticleTypes.SOUL, m.getX(), y, m.getZ(), 25, 0.4, 0.6, 0.4, 0.05);
-            lvl.sendParticles(ParticleTypes.LARGE_SMOKE, m.getX(), y, m.getZ(), 25, 0.4, 0.6, 0.4, 0.03);
+            Fx.send(lvl, ParticleTypes.SOUL, m.getX(), y, m.getZ(), 25, 0.4, 0.6, 0.4, 0.05);
+            Fx.send(lvl, ParticleTypes.LARGE_SMOKE, m.getX(), y, m.getZ(), 25, 0.4, 0.6, 0.4, 0.03);
             sound(lvl, m.getX(), m.getY(), m.getZ(), SoundEvents.BEACON_DEACTIVATE, 1.0F, 0.5F);
         }
         store(p, d, rec, m);
@@ -912,6 +1125,7 @@ public final class Shadows {
     // ================================================================ tick
 
     public static void tick(MinecraftServer server) {
+        if (!ANIMS.isEmpty()) tickAnims();
         if (!PENDING_DISCARD.isEmpty()) {
             for (Mob m : PENDING_DISCARD) {
                 if (m.isAlive()) m.discard();
@@ -927,11 +1141,11 @@ public final class Shadows {
                 continue;
             }
             if (c.age % 5 == 0) {
-                c.level.sendParticles(ParticleTypes.SMOKE, c.pos.x, c.pos.y + 0.3, c.pos.z, 3, 0.25, 0.1, 0.25, 0.01);
-                c.level.sendParticles(new DustParticleOptions(new Vector3f(0.35F, 0.1F, 0.55F), 1.4F),
+                Fx.essential(c.level, ParticleTypes.SMOKE, c.pos.x, c.pos.y + 0.3, c.pos.z, 3, 0.25, 0.1, 0.25, 0.01);
+                Fx.essential(c.level, new DustParticleOptions(new Vector3f(0.35F, 0.1F, 0.55F), 1.4F),
                         c.pos.x, c.pos.y + 0.4, c.pos.z, 3, 0.3, 0.3, 0.3, 0.0);
                 if (c.age % 20 == 0) {
-                    c.level.sendParticles(ParticleTypes.SOUL, c.pos.x, c.pos.y + 0.5, c.pos.z, 2, 0.2, 0.3, 0.2, 0.02);
+                    Fx.ambient(c.level, ParticleTypes.SOUL, c.pos.x, c.pos.y + 0.5, c.pos.z, 2, 0.2, 0.3, 0.2, 0.02);
                 }
             }
         }
@@ -982,11 +1196,11 @@ public final class Shadows {
                         m.teleportTo(s.x, s.y, s.z);
                         m.getNavigation().stop();
                         m.resetFallDistance();
-                        ((ServerLevel) m.level()).sendParticles(ParticleTypes.SQUID_INK, s.x, s.y + 0.1, s.z, 12, 0.4, 0.05, 0.4, 0.02);
+                        Fx.send((ServerLevel) m.level(), ParticleTypes.SQUID_INK, s.x, s.y + 0.1, s.z, 12, 0.4, 0.05, 0.4, 0.02);
                     }
                     if ((t + index) % 10 == 0) {
                         m.clearFire();
-                        ((ServerLevel) m.level()).sendParticles(new DustParticleOptions(new Vector3f(0.3F, 0.05F, 0.5F), 1.0F),
+                        Fx.ambient((ServerLevel) m.level(), new DustParticleOptions(new Vector3f(0.3F, 0.05F, 0.5F), 1.0F),
                                 m.getX(), m.getY() + 0.15, m.getZ(), 2, m.getBbWidth() * 0.4, 0.05, m.getBbWidth() * 0.4, 0.0);
                     }
                     if (t % 20 == 0) {
@@ -1017,11 +1231,14 @@ public final class Shadows {
                 if (rec.state != OUT) continue;
                 Mob m = entityOf(p, rec);
                 if (m == null) continue;
+                Anim an = animOf(m);
+                if (an != null) an.restore();
                 CompoundTag tag = new CompoundTag();
                 if (m.saveAsPassenger(tag)) {
                     clean(tag);
                     rec.nbt = tag.toString();
                 }
+                if (an != null) an.freeze();
             }
         }
     }
@@ -1052,6 +1269,10 @@ public final class Shadows {
                 ElSistema.LOGGER.error("Error al guardar las sombras", e);
             }
         }
+        for (Anim an : ANIMS) {
+            if (an.kind == SINK) an.m.discard();
+        }
+        ANIMS.clear();
         ACTIVE.clear();
         CORPSES.clear();
         MISSING.clear();

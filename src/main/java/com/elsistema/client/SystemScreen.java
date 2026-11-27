@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Ventana del Sistema (tecla V): Estado, Habilidades (3 árboles), Sombras, Tienda, Misiones y Rango. */
+/** Ventana del Sistema (tecla V): Estado, Habilidades (3 árboles), Sombras, Tienda, Misiones, Rango y Ajustes. */
 public class SystemScreen extends Screen {
     private static int lastTab = 0;
     private static int lastSub = 0;
@@ -37,6 +37,20 @@ public class SystemScreen extends Screen {
     private static int lastQSub = 0;
     private static final String[] TABS = {"ESTADO", "HABILIDADES", "SOMBRAS", "TIENDA", "MISIONES", "RANGO"};
     private static final int TAB_RANK = 5;
+    /** Pestaña de AJUSTES: el engranaje a la derecha de las pestañas (tecla 7). */
+    private static final int TAB_CONFIG = 6;
+    private static final int GEAR_W = 18;
+    private static final String[] GEAR = {
+            "....#....",
+            ".#.###.#.",
+            "..#####..",
+            ".###.###.",
+            "###...###",
+            ".###.###.",
+            "..#####..",
+            ".#.###.#.",
+            "....#...."};
+    private static final String[] SETTING_TITLE = {"PARTÍCULAS DEL MOD", "MODO RENDIMIENTO"};
     private static final int TAB_H = 14;
     private static final int TAB_Y = 6;
 
@@ -155,13 +169,15 @@ public class SystemScreen extends Screen {
 
     private int tabW() {
         int n = TABS.length;
-        return Math.min(98, (pw() - 20 - 4 * (n - 1)) / n);
+        return Math.min(98, (pw() - 20 - 4 * (n - 1) - GEAR_W - 4) / n);
     }
 
+    /** X de una pestaña; la última (TAB_CONFIG) es el engranaje de los ajustes. */
     private int tabX(int i) {
         int tw = tabW();
         int n = TABS.length;
-        return px() + pw() / 2 - (n * tw + 4 * (n - 1)) / 2 + i * (tw + 4);
+        int group = n * tw + 4 * (n - 1) + 4 + GEAR_W;
+        return px() + pw() / 2 - group / 2 + Math.min(i, n) * (tw + 4);
     }
 
     private static int tabAccent(int i) {
@@ -187,7 +203,7 @@ public class SystemScreen extends Screen {
         if (a <= 0F) return;
         g.enableScissor(x1, cy - hh, x2, cy + hh);
         Ui.shine(g, x1, y1, x2, y1 + 16, now, a);
-        tabs(g, x1, y1, x2, mx, my, a);
+        List<String> tabTip = tabs(g, x1, y1, x2, mx, my, a);
         float ca = a * Ui.clamp01((now - tabTime) / 160F);
         List<String> tip = switch (tab) {
             case 1 -> trees(g, x1, y1, x2, y2, mx, my, ca, now);
@@ -195,17 +211,20 @@ public class SystemScreen extends Screen {
             case 3 -> shop(g, x1, y1, x2, y2, mx, my, ca);
             case 4 -> quests(g, x1, y1, x2, y2, mx, my, ca, now);
             case TAB_RANK -> rankTab(g, x1, y1, x2, y2, mx, my, ca, now);
+            case TAB_CONFIG -> settings(g, x1, y1, x2, y2, mx, my, ca, now);
             default -> status(g, x1, y1, x2, y2, mx, my, ca, now);
         };
+        if (tabTip != null) tip = tabTip;
         g.disableScissor();
         if (tip != null && ca >= 1F) {
             Ui.tooltip(g, this.font, tip, mx, my, this.width, this.height);
         }
     }
 
-    private void tabs(GuiGraphics g, int x1, int y1, int x2, int mx, int my, float a) {
+    private List<String> tabs(GuiGraphics g, int x1, int y1, int x2, int mx, int my, float a) {
         Font f = this.font;
         int tw = tabW();
+        List<String> tip = null;
         for (int i = 0; i < TABS.length; i++) {
             int tx = tabX(i);
             int ty = y1 + TAB_Y;
@@ -224,7 +243,24 @@ public class SystemScreen extends Screen {
             if (alert) label += " !";
             Ui.center(g, f, fit(f, label, tw - 4), tx + tw / 2, ty + 3, on ? Ui.WHITE : alert ? Ui.GOLD : Ui.GRAY, a);
         }
+        // Engranaje: pestaña de AJUSTES
+        int gx = tabX(TAB_CONFIG);
+        int gy = y1 + TAB_Y;
+        boolean gOn = tab == TAB_CONFIG;
+        boolean gHover = Ui.inside(mx, my, gx, gy, GEAR_W, TAB_H);
+        g.fill(gx, gy, gx + GEAR_W, gy + TAB_H, Ui.fade(gOn ? 0xA03A8DFF : gHover ? 0x60305070 : 0x40101A28, a));
+        Ui.border(g, gx, gy, gx + GEAR_W, gy + TAB_H, Ui.fade(gOn ? Ui.CYAN : 0xFF3C5A74, a));
+        int gc = Ui.fade(gOn || gHover ? Ui.WHITE : Ui.GRAY, a);
+        int ox = gx + (GEAR_W - 9) / 2;
+        int oy = gy + (TAB_H - 9) / 2;
+        for (int r = 0; r < GEAR.length; r++) {
+            for (int c = 0; c < GEAR[r].length(); c++) {
+                if (GEAR[r].charAt(c) == '#') g.fill(ox + c, oy + r, ox + c + 1, oy + r + 1, gc);
+            }
+        }
+        if (gHover) tip = List.of("Ajustes (tecla 7)", "Partículas y modo rendimiento");
         Ui.divider(g, x1, x2, y1 + TAB_Y + TAB_H + 3, a);
+        return tip;
     }
 
     private static void label(GuiGraphics g, Font f, String key, String value, int x, int y, int color, float a) {
@@ -1826,6 +1862,105 @@ public class SystemScreen extends Screen {
         return false;
     }
 
+    // ------------------------------------------------------------------ pestaña AJUSTES
+
+    private Box settingRow(int i) {
+        int x1 = px();
+        int top = py() + 44;
+        int h = Math.min(48, (ph() - 44 - 22 - 8) / 2);
+        return new Box(x1 + 12, top + i * (h + 8), x1 + pw() - 12, top + i * (h + 8) + h);
+    }
+
+    private static Box toggleBox(Box row) {
+        int h = 16;
+        int y = row.y1() + (row.h() - h) / 2;
+        return new Box(row.x2() - 62, y, row.x2() - 10, y + h);
+    }
+
+    private static boolean settingOn(int i) {
+        return i == 0 ? ClientConfig.particles() : ClientConfig.performance();
+    }
+
+    private static String settingDesc(int i, boolean on) {
+        if (i == 0) {
+            return on ? "Se ven los efectos de las habilidades, las sombras, los jefes y las mazmorras."
+                    : "Sin partículas del mod. Las puertas de mazmorra y los cadáveres se ven con unas pocas.";
+        }
+        return on ? "Activado: 1 de cada 3 partículas, sin auras ni remolinos y sin brillo en los monstruos."
+                : "Todo más ligero para el PC: menos partículas, sin auras y sin brillo en los monstruos.";
+    }
+
+    private static List<String> settingTip(int i) {
+        if (i == 0) {
+            return List.of("Partículas del mod",
+                    "Habilidades, golpes, ¡Levántate!, sombras, jefes y mazmorras.",
+                    "Sin ellas, las puertas de mazmorra, los cadáveres que se pueden",
+                    "levantar y las nubes de veneno se siguen viendo (con menos).",
+                    "Las partículas de Minecraft se cambian en Opciones > Vídeo.");
+        }
+        return List.of("Modo rendimiento",
+                "• Sólo 1 de cada 3 partículas del mod.",
+                "• Sin auras de las sombras ni remolinos de las puertas.",
+                "• Los ojos, runas y magma de los monstruos no brillan",
+                "  (una pasada de dibujo menos por monstruo).",
+                "Útil si el juego va lento con muchas sombras o en las mazmorras.");
+    }
+
+    private List<String> settings(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
+        Font f = this.font;
+        List<String> tip = null;
+        Ui.glow(g, f, "AJUSTES DEL SISTEMA", x1 + 14, y1 + 29, Ui.WHITE, Ui.GLOW, a);
+        String sub = "Sólo cambian lo que ves tú";
+        Ui.text(g, f, sub, x2 - 14 - f.width(sub), y1 + 29, Ui.MUTED, a);
+        for (int i = 0; i < SETTING_TITLE.length; i++) {
+            Box r = settingRow(i);
+            boolean on = settingOn(i);
+            boolean hover = r.in(mx, my);
+            card(g, r, on ? (i == 0 ? Ui.CYAN : Ui.GREEN) : 0xFF3C5A74, a);
+            if (hover) g.fill(r.x1() + 1, r.y1() + 1, r.x2() - 1, r.y2() - 1, Ui.fade(0x18FFFFFF, a));
+            Ui.text(g, f, SETTING_TITLE[i], r.x1() + 8, r.y1() + 7, on ? Ui.WHITE : Ui.GRAY, a);
+            List<String> lines = Ui.wrap(f, settingDesc(i, on), r.w() - 84);
+            for (int k = 0; k < Math.min(2, lines.size()); k++) {
+                Ui.text(g, f, lines.get(k), r.x1() + 8, r.y1() + 20 + k * 10, Ui.MUTED, a);
+            }
+            toggle(g, f, toggleBox(r), on, hover, a);
+            if (hover) tip = settingTip(i);
+        }
+        hint(g, "Se guardan en config/elsistema.json y valen para todos tus mundos", x1, x2, y2, a);
+        return tip;
+    }
+
+    /** Interruptor NO | SÍ. */
+    private static void toggle(GuiGraphics g, Font f, Box t, boolean on, boolean hover, float a) {
+        int mid = t.cx();
+        g.fill(t.x1(), t.y1(), t.x2(), t.y2(), Ui.fade(0xA0080F1A, a));
+        if (on) {
+            g.fill(mid, t.y1() + 1, t.x2() - 1, t.y2() - 1, Ui.fade(0x9035B060, a));
+        } else {
+            g.fill(t.x1() + 1, t.y1() + 1, mid, t.y2() - 1, Ui.fade(0x90902838, a));
+        }
+        Ui.border(g, t.x1(), t.y1(), t.x2(), t.y2(), Ui.fade(hover ? Ui.WHITE : on ? Ui.GREEN : 0xFF5F7387, a));
+        int ty = t.y1() + (t.h() - 8) / 2;
+        Ui.center(g, f, "NO", (t.x1() + mid) / 2, ty, on ? 0xFF56626E : Ui.WHITE, a);
+        Ui.center(g, f, "SÍ", (mid + t.x2()) / 2, ty, on ? Ui.WHITE : 0xFF56626E, a);
+    }
+
+    private boolean clickSettings(double mx, double my) {
+        for (int i = 0; i < SETTING_TITLE.length; i++) {
+            if (!settingRow(i).in(mx, my)) continue;
+            boolean on = !settingOn(i);
+            if (i == 0) {
+                ClientConfig.setParticles(on);
+            } else {
+                ClientConfig.setPerformance(on);
+            }
+            Hud.click();
+            Hud.sound(SoundEvents.AMETHYST_BLOCK_CHIME, 0.8F, on ? 2.0F : 0.7F);
+            return true;
+        }
+        return false;
+    }
+
     // ================================================================== ratón y teclado
 
     private void switchTab(int i) {
@@ -1856,6 +1991,10 @@ public class SystemScreen extends Screen {
                     return true;
                 }
             }
+            if (Ui.inside(mx, my, tabX(TAB_CONFIG), y1 + TAB_Y, GEAR_W, TAB_H)) {
+                switchTab(TAB_CONFIG);
+                return true;
+            }
         }
         if (tab == 0 && button == 0 && CData.points() > 0) {
             int lx = x1 + 12;
@@ -1873,6 +2012,7 @@ public class SystemScreen extends Screen {
         if (tab == 3 && button == 0 && clickShop(mx, my, y1, x2)) return true;
         if (tab == 4 && button == 0 && clickQuests(mx, my, y1)) return true;
         if (tab == TAB_RANK && button == 0 && clickRank(mx, my)) return true;
+        if (tab == TAB_CONFIG && button == 0 && clickSettings(mx, my)) return true;
         return super.mouseClicked(mx, my, button);
     }
 
@@ -2064,7 +2204,7 @@ public class SystemScreen extends Screen {
             this.onClose();
             return true;
         }
-        if (keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_1 + TABS.length - 1) {
+        if (keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_1 + TAB_CONFIG) {
             switchTab(keyCode - GLFW.GLFW_KEY_1);
             return true;
         }
@@ -2146,6 +2286,12 @@ public class SystemScreen extends Screen {
         }
         for (int i = 0; i < 5; i++) {
             statTip(i);
+        }
+        for (int i = 0; i < SETTING_TITLE.length; i++) {
+            settingDesc(i, true);
+            settingDesc(i, false);
+            settingTip(i);
+            n++;
         }
         int[] ranks = new int[ShadowTree.SIZE];
         for (int k = 0; k < ShadowTree.SIZE; k++) {

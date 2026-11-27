@@ -48,6 +48,10 @@ public final class Hud {
     private static long corpseTotal = 1;
     private static long ariseTime = -1;
     private static int ariseCount = 0;
+    /** Viñeta morada en los bordes de la pantalla: ¡Levántate! (larga) o invocar sombras (corta). */
+    private static long vignetteStart = -1;
+    private static long vignetteLength = 1;
+    private static float vignetteStrength = 0F;
     /** Probabilidad, intentos y maná del cadáver más interesante (-1 = sin datos). */
     private static int corpseChance = -1;
     private static int corpseTries = 0;
@@ -103,6 +107,12 @@ public final class Hud {
         bigFlash = flash;
     }
 
+    private static void vignette(long length, float strength) {
+        vignetteStart = System.currentTimeMillis();
+        vignetteLength = length;
+        vignetteStrength = strength;
+    }
+
     private static void callout(String text, int color) {
         callStart = System.currentTimeMillis();
         callText = text;
@@ -137,6 +147,7 @@ public final class Hud {
         bigStart = -1;
         callStart = -1;
         warnTime = -1;
+        vignetteStart = -1;
     }
 
     private static String join(List<String> l) {
@@ -256,6 +267,7 @@ public final class Hud {
                 ariseTime = now;
                 big(ariseCount > 1 ? "¡LEVÁNTATE! x" + ariseCount : "¡LEVÁNTATE!",
                         "Una sombra de rango " + name(Defs.RANK, b) + " se une a tu ejército", 0x909A4DFF, 0x55200040);
+                vignette(2600L, 1F);
             }
             case Net.N_ARISE_FAIL -> {
                 if (a <= 0) {
@@ -274,7 +286,10 @@ public final class Hud {
             case Net.N_ARISE_NO_MP -> warn("Maná insuficiente para la extracción (" + b + "/" + a + " MP)");
             case Net.N_NO_CORPSE -> warn("No hay ningún cadáver tuyo cerca para extraer.");
             case Net.N_ARMY_FULL -> warn("Tu ejército está lleno (" + a + "/" + b + "). Mejóralo en el árbol de sombras.");
-            case Net.N_SHADOWS_OUT -> callout(a == 1 ? "SAL, SOMBRA" : "SALID, SOMBRAS (" + a + ")", Ui.SHADOW);
+            case Net.N_SHADOWS_OUT -> {
+                callout(a == 1 ? "SAL, SOMBRA" : "SALID, SOMBRAS (" + a + ")", Ui.SHADOW);
+                vignette(1100L, 0.55F);
+            }
             case Net.N_SHADOWS_IN -> note(a == 1 ? "Una sombra ha vuelto a tu sombra." : a + " sombras han vuelto a tu sombra.", Ui.PURPLE);
             case Net.N_SHADOW_BACK -> {
                 note(shadowName(b) + " ha caído.", 0xFFFF8A5A);
@@ -405,6 +420,7 @@ public final class Hud {
         floating(g, f, now);
         corpseHint(g, f, now, sw, sh);
         toasts(g, f, now, sw);
+        vignette(g, now, sw, sh);
         big(g, f, now, sw, sh);
         callout(g, f, now, sw, sh);
     }
@@ -588,6 +604,37 @@ public final class Hud {
                 }
             }
             y += h + 8;
+        }
+    }
+
+    /** Bordes de la pantalla que se oscurecen de morado y laten mientras las sombras salen del suelo. */
+    private static void vignette(GuiGraphics g, long now, int sw, int sh) {
+        if (vignetteStart < 0) return;
+        long age = now - vignetteStart;
+        if (age > vignetteLength) {
+            vignetteStart = -1;
+            return;
+        }
+        float t = age / (float) vignetteLength;
+        float in = Ui.clamp01(t * 6F);
+        float out = Ui.clamp01((1F - t) * 3F);
+        float beat = 0.8F + 0.2F * (float) Math.sin(age / 90.0);
+        float a = in * out * beat * vignetteStrength;
+        if (a <= 0.01F) return;
+        int edge = Ui.fade(0xD0140024, a);
+        int clear = 0x00140024;
+        int dy = Math.max(12, sh / 5);
+        int dx = Math.max(12, sw / 7);
+        g.fillGradient(0, 0, sw, dy, edge, clear);
+        g.fillGradient(0, sh - dy, sw, sh, clear, edge);
+        // Lados: degradado horizontal hecho con franjas
+        int steps = 12;
+        for (int i = 0; i < steps; i++) {
+            int c = Ui.fade(0xD0140024, a * (1F - i / (float) steps));
+            int w1 = dx * i / steps;
+            int w2 = dx * (i + 1) / steps;
+            g.fill(w1, 0, w2, sh, c);
+            g.fill(sw - w2, 0, sw - w1, sh, c);
         }
     }
 

@@ -363,9 +363,84 @@ public final class SelfTest {
                 ElSistema.LOGGER.info("[SELFTEST] OK la sombra caída volvió al pasar el tiempo");
             }
             case 11, 12, 13, 14 -> gallery(p, step - 11);
+            case 15 -> animRise(p);
+            case 16 -> animArise(p);
             default -> {
             }
         }
+    }
+
+    /** Escenario para las capturas de las animaciones de las sombras (suelo liso, de día). */
+    private static BlockPos stage(ServerPlayer p) {
+        ServerLevel lvl = p.serverLevel();
+        BlockPos spawn = lvl.getSharedSpawnPos();
+        BlockPos o = new BlockPos(spawn.getX() + 80, 140, spawn.getZ() + 200);
+        for (int x = -10; x <= 10; x++) {
+            for (int z = -10; z <= 12; z++) {
+                lvl.setBlockAndUpdate(o.offset(x, -1, z), net.minecraft.world.level.block.Blocks.SMOOTH_STONE.defaultBlockState());
+            }
+        }
+        lvl.setDayTime(6000L);
+        p.teleportTo(lvl, o.getX() + 0.5, o.getY(), o.getZ() + 6.5, 180.0F, 14.0F);
+        return o;
+    }
+
+    /** Gira a una sombra recién invocada para que mire a la cámara. */
+    private static void faceCamera(ServerPlayer p, Data.ShadowRec rec) {
+        Mob m = Shadows.outEntity(p, rec);
+        if (m == null) return;
+        m.setYRot(0.0F);
+        m.setYHeadRot(0.0F);
+        m.setYBodyRot(0.0F);
+    }
+
+    /** 1.6.0: tres sombras salen del suelo, cada una un poco después que la anterior. */
+    private static void animRise(ServerPlayer p) {
+        Data d = Store.get(p);
+        Shadows.storeAll(p, false);
+        BlockPos o = stage(p);
+        int i = 0;
+        for (Data.ShadowRec rec : d.shadows) {
+            if (rec.state != Shadows.STORED) continue;
+            net.minecraft.world.phys.Vec3 at = new net.minecraft.world.phys.Vec3(o.getX() + 0.5 + (i - 1) * 2.6, o.getY(),
+                    o.getZ() + 0.5 - (i == 1 ? 1.0 : 0.0));
+            if (Shadows.summon(p, d, rec, at, Shadows.RISE, i * 5)) {
+                faceCamera(p, rec);
+                i++;
+            }
+            if (i >= 3) break;
+        }
+        if (i == 0) throw new IllegalStateException("no salió ninguna sombra para la animación");
+        if (!Shadows.animating(Shadows.outEntity(p, d.shadows.stream().filter(r -> r.state == Shadows.OUT).findFirst().orElseThrow()))) {
+            throw new IllegalStateException("la sombra invocada no está saliendo del suelo");
+        }
+        ElSistema.LOGGER.info("[SELFTEST] animación: {} sombras saliendo del suelo", i);
+    }
+
+    /** 1.6.0: ¡Levántate! con la animación nueva sobre un caballero maldito recién muerto. */
+    private static void animArise(ServerPlayer p) {
+        Data d = Store.get(p);
+        Shadows.storeAll(p, false);
+        BlockPos o = stage(p);
+        ServerLevel lvl = p.serverLevel();
+        Mob victim = ModEntities.CABALLERO.spawn(lvl, o, MobSpawnType.COMMAND);
+        if (victim == null) throw new IllegalStateException("no se pudo crear la víctima de la animación");
+        Ranks.apply(victim, 2, 30, false);
+        victim.setNoAi(true);
+        victim.hurt(p.damageSources().playerAttack(p), 100000.0F);
+        if (victim.isAlive()) throw new IllegalStateException("la víctima de la animación no murió");
+        int before = d.shadows.size();
+        Shadows.forceArise = true;
+        try {
+            Shadows.arise(p);
+        } finally {
+            Shadows.forceArise = false;
+        }
+        if (d.shadows.size() != before + 1) throw new IllegalStateException("¡Levántate! no creó la sombra de la animación");
+        Data.ShadowRec rec = d.shadows.get(d.shadows.size() - 1);
+        faceCamera(p, rec);
+        if (!Shadows.animating(Shadows.outEntity(p, rec))) throw new IllegalStateException("la sombra no está saliendo del suelo");
+        ElSistema.LOGGER.info("[SELFTEST] animación de ¡Levántate! empezada (sombra {})", rec.id);
     }
 
     /** Galería para las capturas: los monstruos en fila, quietos y mirando a la cámara (de día y de noche). */

@@ -3,6 +3,7 @@ package com.elsistema.client.render;
 import com.elsistema.DungeonMonster;
 import com.elsistema.ElSistema;
 import com.elsistema.ModEntities;
+import com.elsistema.client.ClientConfig;
 import com.elsistema.client.ClientShadows;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -143,7 +144,7 @@ public final class ModRenderers {
         @Override
         public void render(PoseStack poseStack, MultiBufferSource buffer, int packedLight, T entity, float limbSwing,
                            float limbSwingAmount, float partialTick, float ageInTicks, float netHeadYaw, float headPitch) {
-            if (ClientShadows.isShadow(entity) || entity.isInvisible()) return;
+            if (ClientConfig.performance() || ClientShadows.isShadow(entity) || entity.isInvisible()) return;
             this.getParentModel().renderToBuffer(poseStack, buffer.getBuffer(this.type), 0xF00000, OverlayTexture.NO_OVERLAY);
         }
     }

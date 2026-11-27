@@ -405,7 +405,7 @@ public final class ModItems {
                 d.bonusSlots += 2;
                 if (!sp.isCreative()) stack.shrink(1);
                 level.playSound((Player) null, sp.getX(), sp.getY(), sp.getZ(), SoundEvents.WITHER_SPAWN, SoundSource.PLAYERS, 0.4F, 1.6F);
-                ((ServerLevel) level).sendParticles(net.minecraft.core.particles.ParticleTypes.SCULK_SOUL,
+                Fx.send((ServerLevel) level, net.minecraft.core.particles.ParticleTypes.SCULK_SOUL,
                         sp.getX(), sp.getY() + 1.0, sp.getZ(), 40, 0.5, 0.8, 0.5, 0.05);
                 SystemLogic.notify(sp, Net.N_SLOTS_UP, 2, Shadows.maxSlots(d));
                 SystemLogic.sync(sp, d);
@@ -485,7 +485,7 @@ public final class ModItems {
                         d.mp = Math.min(max, d.mp + 60.0);
                         SystemLogic.notify(sp, Net.N_MANA, got, 0);
                         level.playSound((Player) null, sp.getX(), sp.getY(), sp.getZ(), SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0F, 1.2F);
-                        ((ServerLevel) level).sendParticles(net.minecraft.core.particles.ParticleTypes.ENCHANT,
+                        Fx.send((ServerLevel) level, net.minecraft.core.particles.ParticleTypes.ENCHANT,
                                 sp.getX(), sp.getY() + 1.0, sp.getZ(), 30, 0.4, 0.6, 0.4, 0.4);
                     }
                     case 1 -> {
@@ -494,7 +494,7 @@ public final class ModItems {
                         sp.removeEffect(MobEffects.WITHER);
                         sp.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 200, 1));
                         level.playSound((Player) null, sp.getX(), sp.getY(), sp.getZ(), SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0F, 0.9F);
-                        ((ServerLevel) level).sendParticles(net.minecraft.core.particles.ParticleTypes.HEART,
+                        Fx.send((ServerLevel) level, net.minecraft.core.particles.ParticleTypes.HEART,
                                 sp.getX(), sp.getY() + 1.2, sp.getZ(), 10, 0.5, 0.5, 0.5, 0.1);
                     }
                     default -> {
@@ -535,7 +535,7 @@ public final class ModItems {
         } else {
             y = pos.getY() + 0.6;
         }
-        ((ServerLevel) sp.level()).sendParticles(net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL,
+        Fx.send((ServerLevel) sp.level(), net.minecraft.core.particles.ParticleTypes.REVERSE_PORTAL,
                 sp.getX(), sp.getY() + 1.0, sp.getZ(), 50, 0.4, 0.8, 0.4, 0.1);
         sp.teleportTo(target, pos.getX() + 0.5, y, pos.getZ() + 0.5, sp.getYRot(), sp.getXRot());
         target.playSound((Player) null, sp.getX(), sp.getY(), sp.getZ(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);

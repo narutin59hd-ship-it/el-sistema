@@ -55,22 +55,22 @@ public final class Skills {
             p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 100, 0, false, false, true));
             for (int i = 0; i < 28; i++) {
                 double ang = i * Math.PI * 2.0 / 28.0;
-                lvl.sendParticles(ParticleTypes.SWEEP_ATTACK, p.getX() + Math.cos(ang) * 5.2, y + 0.2, p.getZ() + Math.sin(ang) * 5.2,
+                Fx.send(lvl, ParticleTypes.SWEEP_ATTACK, p.getX() + Math.cos(ang) * 5.2, y + 0.2, p.getZ() + Math.sin(ang) * 5.2,
                         1, 0.0, 0.0, 0.0, 0.0);
-                lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, p.getX() + Math.cos(ang) * 6.3, y, p.getZ() + Math.sin(ang) * 6.3,
+                Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, p.getX() + Math.cos(ang) * 6.3, y, p.getZ() + Math.sin(ang) * 6.3,
                         2, 0.1, 0.2, 0.1, 0.01);
             }
-            lvl.sendParticles(ParticleTypes.CRIT, p.getX(), y, p.getZ(), 60, 3.0, 0.5, 3.0, 0.4);
+            Fx.send(lvl, ParticleTypes.CRIT, p.getX(), y, p.getZ(), 60, 3.0, 0.5, 3.0, 0.4);
             sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.ANVIL_LAND, 0.5F, 1.4F);
         }
         for (int i = 0; i < 16; i++) {
             double ang = i * Math.PI * 2.0 / 16.0;
-            lvl.sendParticles(ParticleTypes.SWEEP_ATTACK, p.getX() + Math.cos(ang) * 2.2, y, p.getZ() + Math.sin(ang) * 2.2,
+            Fx.send(lvl, ParticleTypes.SWEEP_ATTACK, p.getX() + Math.cos(ang) * 2.2, y, p.getZ() + Math.sin(ang) * 2.2,
                     1, 0.0, 0.0, 0.0, 0.0);
-            lvl.sendParticles(ParticleTypes.ELECTRIC_SPARK, p.getX() + Math.cos(ang) * 3.8, y, p.getZ() + Math.sin(ang) * 3.8,
+            Fx.send(lvl, ParticleTypes.ELECTRIC_SPARK, p.getX() + Math.cos(ang) * 3.8, y, p.getZ() + Math.sin(ang) * 3.8,
                     2, 0.1, 0.1, 0.1, 0.02);
         }
-        lvl.sendParticles(ParticleTypes.ENCHANTED_HIT, p.getX(), y, p.getZ(), 40, 2.0, 0.4, 2.0, 0.2);
+        Fx.send(lvl, ParticleTypes.ENCHANTED_HIT, p.getX(), y, p.getZ(), 40, 2.0, 0.4, 2.0, 0.2);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.PLAYER_ATTACK_SWEEP, 1.2F, 0.7F);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.PLAYER_ATTACK_STRONG, 1.0F, 0.6F);
         return true;
@@ -97,7 +97,7 @@ public final class Skills {
             if (fire) a.setRemainingFireTicks(2000);
             lvl.addFreshEntity(a);
         }
-        lvl.sendParticles(ParticleTypes.CRIT, p.getX(), p.getEyeY(), p.getZ(), 25, 0.4, 0.2, 0.4, 0.3);
+        Fx.send(lvl, ParticleTypes.CRIT, p.getX(), p.getEyeY(), p.getZ(), 25, 0.4, 0.2, 0.4, 0.3);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.ARROW_SHOOT, 1.2F, 0.8F);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.ARROW_SHOOT, 1.0F, 1.3F);
         if (d.isMutated()) rain(p, lvl, mult, fire);
@@ -126,8 +126,8 @@ public final class Skills {
             if (fire) a.setRemainingFireTicks(2000);
             lvl.addFreshEntity(a);
         }
-        lvl.sendParticles(ParticleTypes.END_ROD, at.x, top, at.z, 50, 3.0, 0.5, 3.0, 0.02);
-        lvl.sendParticles(ParticleTypes.ELECTRIC_SPARK, at.x, at.y + 0.3, at.z, 30, 3.0, 0.2, 3.0, 0.05);
+        Fx.send(lvl, ParticleTypes.END_ROD, at.x, top, at.z, 50, 3.0, 0.5, 3.0, 0.02);
+        Fx.send(lvl, ParticleTypes.ELECTRIC_SPARK, at.x, at.y + 0.3, at.z, 30, 3.0, 0.2, 3.0, 0.05);
         sound(lvl, at.x, at.y, at.z, SoundEvents.ARROW_SHOOT, 1.6F, 0.5F);
         sound(lvl, at.x, at.y, at.z, SoundEvents.AMETHYST_BLOCK_CHIME, 1.6F, 1.6F);
     }
@@ -149,19 +149,19 @@ public final class Skills {
                 e -> isTarget(e, p) && e.getBoundingBox().inflate(0.4).clip(from, to).isPresent());
         for (LivingEntity e : hits) {
             e.hurt(p.damageSources().indirectMagic(p, p), dmg);
-            lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, e.getX(), e.getY() + e.getBbHeight() / 2.0, e.getZ(), 15, 0.3, 0.3, 0.3, 0.05);
+            Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, e.getX(), e.getY() + e.getBbHeight() / 2.0, e.getZ(), 15, 0.3, 0.3, 0.3, 0.05);
         }
         double len = from.distanceTo(to);
         Vec3 dir = to.subtract(from).normalize();
         int step = 0;
         for (double t = 0.8; t < len; t += 0.4) {
             Vec3 q = from.add(dir.scale(t));
-            lvl.sendParticles(mut ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.END_ROD, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
+            Fx.send(lvl, mut ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.END_ROD, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
             if (step++ % 3 == 0) {
-                lvl.sendParticles(mut ? ParticleTypes.REVERSE_PORTAL : ParticleTypes.ELECTRIC_SPARK, q.x, q.y, q.z, 2, 0.1, 0.1, 0.1, 0.05);
+                Fx.send(lvl, mut ? ParticleTypes.REVERSE_PORTAL : ParticleTypes.ELECTRIC_SPARK, q.x, q.y, q.z, 2, 0.1, 0.1, 0.1, 0.05);
             }
         }
-        lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, to.x, to.y, to.z, 25, 0.3, 0.3, 0.3, 0.05);
+        Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, to.x, to.y, to.z, 25, 0.3, 0.3, 0.3, 0.05);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.EVOKER_CAST_SPELL, 1.0F, 1.6F);
         sound(lvl, to.x, to.y, to.z, SoundEvents.AMETHYST_BLOCK_CHIME, 1.5F, 0.6F);
         if (mut) {
@@ -172,9 +172,9 @@ public final class Skills {
                 e.hurt(p.damageSources().indirectMagic(p, p), dmg * 0.6F);
                 e.addEffect(new MobEffectInstance(MobEffects.WITHER, 80, 0), p);
             }
-            lvl.sendParticles(ParticleTypes.EXPLOSION, to.x, to.y, to.z, 4, 1.2, 0.8, 1.2, 0.0);
-            lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, to.x, to.y, to.z, 80, 1.5, 1.2, 1.5, 0.2);
-            lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, to.x, to.y, to.z, 50, 2.0, 1.0, 2.0, 0.05);
+            Fx.send(lvl, ParticleTypes.EXPLOSION, to.x, to.y, to.z, 4, 1.2, 0.8, 1.2, 0.0);
+            Fx.send(lvl, ParticleTypes.REVERSE_PORTAL, to.x, to.y, to.z, 80, 1.5, 1.2, 1.5, 0.2);
+            Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, to.x, to.y, to.z, 50, 2.0, 1.0, 2.0, 0.05);
             sound(lvl, to.x, to.y, to.z, SoundEvents.WITHER_SHOOT, 1.0F, 0.6F);
         }
         return true;
@@ -201,7 +201,7 @@ public final class Skills {
                 e -> isTarget(e, p) && e.getBoundingBox().inflate(0.3).clip(from, to).isPresent());
         for (LivingEntity e : hits) {
             e.hurt(p.damageSources().indirectMagic(p, p), dmg);
-            lvl.sendParticles(sovereign ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.WITCH,
+            Fx.send(lvl, sovereign ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.WITCH,
                     e.getX(), e.getY() + e.getBbHeight() / 2.0, e.getZ(), 10, 0.3, 0.3, 0.3, 0.05);
             if (sovereign) e.addEffect(new MobEffectInstance(MobEffects.WITHER, 60, 1), p);
         }
@@ -209,7 +209,7 @@ public final class Skills {
         Vec3 dir = to.subtract(from).normalize();
         for (double t = 0.8; t < len; t += 0.5) {
             Vec3 q = from.add(dir.scale(t));
-            lvl.sendParticles(sovereign ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.WITCH, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
+            Fx.send(lvl, sovereign ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.WITCH, q.x, q.y, q.z, 1, 0.02, 0.02, 0.02, 0.0);
         }
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.EVOKER_CAST_SPELL, 0.7F, 1.9F);
     }
@@ -225,15 +225,15 @@ public final class Skills {
         for (Mob m : hunters) {
             m.setTarget(null);
         }
-        lvl.sendParticles(ParticleTypes.LARGE_SMOKE, p.getX(), p.getY() + 1.0, p.getZ(), 40, 0.4, 0.6, 0.4, 0.02);
-        lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, p.getX(), p.getY() + 1.0, p.getZ(), 40, 0.4, 0.6, 0.4, 0.05);
+        Fx.send(lvl, ParticleTypes.LARGE_SMOKE, p.getX(), p.getY() + 1.0, p.getZ(), 40, 0.4, 0.6, 0.4, 0.02);
+        Fx.send(lvl, ParticleTypes.REVERSE_PORTAL, p.getX(), p.getY() + 1.0, p.getZ(), 40, 0.4, 0.6, 0.4, 0.05);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.ENDERMAN_TELEPORT, 0.8F, 1.5F);
         if (d.isMutated()) {
             // Nigromante: Dominio de las sombras
             int out = Shadows.summonAll(p);
             if (out > 0) SystemLogic.notify(p, Net.N_SHADOWS_OUT, out, 0);
             Shadows.buffOut(p, time);
-            lvl.sendParticles(ParticleTypes.SCULK_SOUL, p.getX(), p.getY() + 0.3, p.getZ(), 40, 2.0, 0.2, 2.0, 0.03);
+            Fx.send(lvl, ParticleTypes.SCULK_SOUL, p.getX(), p.getY() + 0.3, p.getZ(), 40, 2.0, 0.2, 2.0, 0.03);
             sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.WITHER_SPAWN, 0.3F, 1.8F);
         }
         return true;
@@ -248,8 +248,8 @@ public final class Skills {
         p.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, time, mut ? 3 : 1, false, false, true));
         if (mut) {
             p.heal(p.getMaxHealth() * 0.3F);
-            lvl.sendParticles(ParticleTypes.HEART, p.getX(), p.getY() + 1.6, p.getZ(), 8, 0.5, 0.3, 0.5, 0.0);
-            lvl.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(), 40, 0.6, 1.0, 0.6, 0.3);
+            Fx.send(lvl, ParticleTypes.HEART, p.getX(), p.getY() + 1.6, p.getZ(), 8, 0.5, 0.3, 0.5, 0.0);
+            Fx.send(lvl, ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(), 40, 0.6, 1.0, 0.6, 0.3);
         }
         List<LivingEntity> list = lvl.getEntitiesOfClass(LivingEntity.class, p.getBoundingBox().inflate(mut ? 10.0 : 6.0),
                 e -> isTarget(e, p));
@@ -261,10 +261,10 @@ public final class Skills {
         }
         for (int i = 0; i < 32; i++) {
             double ang = i * Math.PI * 2.0 / 32.0;
-            lvl.sendParticles(ParticleTypes.ENCHANTED_HIT, p.getX() + Math.cos(ang) * 3.0, p.getY() + 0.3, p.getZ() + Math.sin(ang) * 3.0,
+            Fx.send(lvl, ParticleTypes.ENCHANTED_HIT, p.getX() + Math.cos(ang) * 3.0, p.getY() + 0.3, p.getZ() + Math.sin(ang) * 3.0,
                     2, 0.05, 0.3, 0.05, 0.0);
         }
-        lvl.sendParticles(ParticleTypes.CLOUD, p.getX(), p.getY() + 0.2, p.getZ(), 30, 1.5, 0.1, 1.5, 0.05);
+        Fx.send(lvl, ParticleTypes.CLOUD, p.getX(), p.getY() + 0.2, p.getZ(), 30, 1.5, 0.1, 1.5, 0.05);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.RAVAGER_ROAR, 0.7F, 1.3F);
         sound(lvl, p.getX(), p.getY(), p.getZ(), SoundEvents.ANVIL_LAND, 0.5F, 0.6F);
         return true;

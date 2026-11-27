@@ -81,7 +81,7 @@ public final class Ranking {
         SystemLogic.notify(p, Net.N_RANK_UP, rank, old);
         p.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
         p.playNotifySound(SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.0F, 1.2F);
-        ((ServerLevel) p.level()).sendParticles(ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(),
+        Fx.send((ServerLevel) p.level(), ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(),
                 80, 0.7, 1.0, 0.7, 0.35);
         Shadows.refresh(p);
         SystemLogic.sync(p, d);
@@ -135,9 +135,9 @@ public final class Ranking {
         p.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 0.8F);
         p.playNotifySound(SoundEvents.WITHER_SPAWN, SoundSource.PLAYERS, 0.5F, 1.3F);
         ServerLevel lvl = (ServerLevel) p.level();
-        lvl.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(), 120, 0.8, 1.2, 0.8, 0.45);
-        lvl.sendParticles(ParticleTypes.SCULK_SOUL, p.getX(), p.getY() + 0.3, p.getZ(), 60, 1.2, 0.2, 1.2, 0.04);
-        lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, p.getX(), p.getY() + 1.0, p.getZ(), 80, 0.6, 1.0, 0.6, 0.1);
+        Fx.send(lvl, ParticleTypes.TOTEM_OF_UNDYING, p.getX(), p.getY() + 1.0, p.getZ(), 120, 0.8, 1.2, 0.8, 0.45);
+        Fx.send(lvl, ParticleTypes.SCULK_SOUL, p.getX(), p.getY() + 0.3, p.getZ(), 60, 1.2, 0.2, 1.2, 0.04);
+        Fx.send(lvl, ParticleTypes.REVERSE_PORTAL, p.getX(), p.getY() + 1.0, p.getZ(), 80, 0.6, 1.0, 0.6, 0.1);
         Shadows.refresh(p);
         SystemLogic.sync(p, d);
         Shadows.sendList(p);

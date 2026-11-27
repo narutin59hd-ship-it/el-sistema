@@ -36,6 +36,7 @@ public class ElSistemaClient implements ClientModInitializer {
         SHADOWS = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.elsistema.shadows", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, "key.categories.elsistema"));
 
+        ClientConfig.load();
         ModRenderers.register();
         registerBow(ModItems.SOBERANO[Defs.ARQUERO]);
 
@@ -47,6 +48,8 @@ public class ElSistemaClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(Net.ShadowsPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> ClientShadows.set(payload.nums(), payload.strs())));
+
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ClientConfig.markDirty());
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
             CData.reset();
@@ -80,6 +83,7 @@ public class ElSistemaClient implements ClientModInitializer {
                 }
             }
             CData.tick();
+            ClientConfig.tick(client.player != null && client.getConnection() != null);
             if (++pruneTimer >= 200) {
                 pruneTimer = 0;
                 if (client.level != null) ClientShadows.prune(client.level);

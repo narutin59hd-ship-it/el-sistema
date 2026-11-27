@@ -308,11 +308,11 @@ public class SecretBoss extends DungeonMonster {
         }
         for (int i = 0; i < 24; i++) {
             double ang = i * Math.PI * 2.0 / 24.0;
-            lvl.sendParticles(ParticleTypes.SWEEP_ATTACK, this.getX() + Math.cos(ang) * r * 0.7, this.getY() + 0.4,
+            Fx.send(lvl, ParticleTypes.SWEEP_ATTACK, this.getX() + Math.cos(ang) * r * 0.7, this.getY() + 0.4,
                     this.getZ() + Math.sin(ang) * r * 0.7, 1, 0.0, 0.0, 0.0, 0.0);
         }
-        lvl.sendParticles(ParticleTypes.EXPLOSION, this.getX(), this.getY() + 0.5, this.getZ(), 6, r * 0.4, 0.2, r * 0.4, 0.0);
-        lvl.sendParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 0.5, this.getZ(), 40, r * 0.5, 0.3, r * 0.5, 0.05);
+        Fx.send(lvl, ParticleTypes.EXPLOSION, this.getX(), this.getY() + 0.5, this.getZ(), 6, r * 0.4, 0.2, r * 0.4, 0.0);
+        Fx.send(lvl, ParticleTypes.END_ROD, this.getX(), this.getY() + 0.5, this.getZ(), 40, r * 0.5, 0.3, r * 0.5, 0.05);
         this.sound(lvl, SoundEvents.ANVIL_LAND, 1.2F, 0.5F);
         this.sound(lvl, SoundEvents.PLAYER_ATTACK_SWEEP, 1.4F, 0.6F);
     }
@@ -323,7 +323,7 @@ public class SecretBoss extends DungeonMonster {
         if (dir.lengthSqr() < 1.0E-4) return;
         dir = dir.normalize();
         this.setDeltaMovement(dir.x * speed, up, dir.z * speed);
-        lvl.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.3, this.getZ(), 15, 0.4, 0.1, 0.4, 0.05);
+        Fx.send(lvl, ParticleTypes.CLOUD, this.getX(), this.getY() + 0.3, this.getZ(), 15, 0.4, 0.1, 0.4, 0.05);
         this.sound(lvl, SoundEvents.RAVAGER_ROAR, 1.0F, 1.2F);
     }
 
@@ -333,8 +333,8 @@ public class SecretBoss extends DungeonMonster {
         for (LivingEntity e : lvl.getEntitiesOfClass(LivingEntity.class, this.getBoundingBox().inflate(20.0), this::foe)) {
             e.addEffect(new MobEffectInstance(shadow ? MobEffects.WEAKNESS : MobEffects.DARKNESS, 100, 0), this);
         }
-        lvl.sendParticles(ParticleTypes.SCULK_SOUL, this.getX(), this.getY() + 1.2, this.getZ(), 30, 1.0, 0.6, 1.0, 0.05);
-        lvl.sendParticles(ParticleTypes.SQUID_INK, this.getX(), this.getY() + 0.3, this.getZ(), 40, 2.5, 0.1, 2.5, 0.02);
+        Fx.send(lvl, ParticleTypes.SCULK_SOUL, this.getX(), this.getY() + 1.2, this.getZ(), 30, 1.0, 0.6, 1.0, 0.05);
+        Fx.send(lvl, ParticleTypes.SQUID_INK, this.getX(), this.getY() + 0.3, this.getZ(), 40, 2.5, 0.1, 2.5, 0.02);
         if (!shadow) this.summon(lvl, ModEntities.LOBO, 3, t);
     }
 
@@ -346,8 +346,8 @@ public class SecretBoss extends DungeonMonster {
             Cloud c = it.next();
             c.life--;
             if (c.life % 5 == 0) {
-                lvl.sendParticles(dust, c.pos.x, c.pos.y + 0.4, c.pos.z, 14, 1.6, 0.3, 1.6, 0.0);
-                lvl.sendParticles(ParticleTypes.WITCH, c.pos.x, c.pos.y + 0.6, c.pos.z, 4, 1.4, 0.3, 1.4, 0.0);
+                Fx.essential(lvl, dust, c.pos.x, c.pos.y + 0.4, c.pos.z, 14, 1.6, 0.3, 1.6, 0.0);
+                Fx.essential(lvl, ParticleTypes.WITCH, c.pos.x, c.pos.y + 0.6, c.pos.z, 4, 1.4, 0.3, 1.4, 0.0);
             }
             if (c.life % 10 == 0) {
                 AABB box = new AABB(c.pos.x - 3.0, c.pos.y - 1.0, c.pos.z - 3.0, c.pos.x + 3.0, c.pos.y + 2.5, c.pos.z + 3.0);
@@ -381,12 +381,12 @@ public class SecretBoss extends DungeonMonster {
                 double ang = i * Math.PI * 2.0 / n;
                 double x = this.getX() + Math.cos(ang) * rr;
                 double z = this.getZ() + Math.sin(ang) * rr;
-                lvl.sendParticles(rock, x, this.getY() + 0.2, z, 2, 0.2, 0.1, 0.2, 0.0);
-                if (i % 3 == 0) lvl.sendParticles(magma, x, this.getY() + 0.4, z, 1, 0.1, 0.3, 0.1, 0.0);
+                Fx.send(lvl, rock, x, this.getY() + 0.2, z, 2, 0.2, 0.1, 0.2, 0.0);
+                if (i % 3 == 0) Fx.send(lvl, magma, x, this.getY() + 0.4, z, 1, 0.1, 0.3, 0.1, 0.0);
             }
         }
-        lvl.sendParticles(ParticleTypes.EXPLOSION, this.getX(), this.getY() + 0.5, this.getZ(), 8, r * 0.4, 0.2, r * 0.4, 0.0);
-        lvl.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, this.getX(), this.getY() + 0.3, this.getZ(), 20, r * 0.4, 0.2, r * 0.4, 0.02);
+        Fx.send(lvl, ParticleTypes.EXPLOSION, this.getX(), this.getY() + 0.5, this.getZ(), 8, r * 0.4, 0.2, r * 0.4, 0.0);
+        Fx.send(lvl, ParticleTypes.CAMPFIRE_COSY_SMOKE, this.getX(), this.getY() + 0.3, this.getZ(), 20, r * 0.4, 0.2, r * 0.4, 0.02);
         this.sound(lvl, SoundEvents.ANVIL_LAND, 1.6F, 0.35F);
         this.sound(lvl, SoundEvents.IRON_GOLEM_ATTACK, 1.6F, 0.5F);
     }
@@ -396,8 +396,8 @@ public class SecretBoss extends DungeonMonster {
         this.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 20 * 60 * 20, 0, false, true));
         this.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 20 * 60 * 20, 0, false, true));
         this.bossEvent.setColor(BossEvent.BossBarColor.PURPLE);
-        lvl.sendParticles(ParticleTypes.ANGRY_VILLAGER, this.getX(), this.getY() + this.getBbHeight(), this.getZ(), 8, 0.6, 0.3, 0.6, 0.0);
-        lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, this.getX(), this.getY() + 1.0, this.getZ(), 40, 0.8, 1.0, 0.8, 0.05);
+        Fx.send(lvl, ParticleTypes.ANGRY_VILLAGER, this.getX(), this.getY() + this.getBbHeight(), this.getZ(), 8, 0.6, 0.3, 0.6, 0.0);
+        Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, this.getX(), this.getY() + 1.0, this.getZ(), 40, 0.8, 1.0, 0.8, 0.05);
         this.sound(lvl, roar, 1.6F, 0.6F);
     }
 
@@ -426,7 +426,7 @@ public class SecretBoss extends DungeonMonster {
             Ranks.apply(m, rank, level, false);
             m.setTarget(t);
             this.minions.add(m.getUUID());
-            lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
+            Fx.send(lvl, ParticleTypes.REVERSE_PORTAL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
         }
     }
 
@@ -434,7 +434,7 @@ public class SecretBoss extends DungeonMonster {
         for (UUID id : this.minions) {
             Entity e = lvl.getEntity(id);
             if (e != null && e.isAlive()) {
-                lvl.sendParticles(ParticleTypes.LARGE_SMOKE, e.getX(), e.getY() + 0.8, e.getZ(), 15, 0.3, 0.5, 0.3, 0.02);
+                Fx.send(lvl, ParticleTypes.LARGE_SMOKE, e.getX(), e.getY() + 0.8, e.getZ(), 15, 0.3, 0.5, 0.3, 0.02);
                 e.discard();
             }
         }
@@ -443,8 +443,8 @@ public class SecretBoss extends DungeonMonster {
 
     /** La Bestia del Eclipse se desvanece al amanecer. */
     private void flee(ServerLevel lvl) {
-        lvl.sendParticles(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 1.0, this.getZ(), 60, 0.8, 1.0, 0.8, 0.05);
-        lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, this.getX(), this.getY() + 1.0, this.getZ(), 60, 0.8, 1.0, 0.8, 0.1);
+        Fx.send(lvl, ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 1.0, this.getZ(), 60, 0.8, 1.0, 0.8, 0.05);
+        Fx.send(lvl, ParticleTypes.REVERSE_PORTAL, this.getX(), this.getY() + 1.0, this.getZ(), 60, 0.8, 1.0, 0.8, 0.1);
         this.sound(lvl, SoundEvents.WOLF_HOWL, 1.5F, 0.4F);
         for (ServerPlayer o : lvl.players()) {
             if (o.distanceToSqr(this) < 96 * 96) SystemLogic.notify(o, Net.N_SECRET_FLED, this.secretKind().ordinal(), 0);
@@ -460,7 +460,7 @@ public class SecretBoss extends DungeonMonster {
         this.bossEvent.removeAllPlayers();
         if (this.level() instanceof ServerLevel lvl) {
             this.clearMinions(lvl);
-            lvl.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, this.getX(), this.getY() + this.getBbHeight() / 2.0, this.getZ(),
+            Fx.send(lvl, ParticleTypes.TOTEM_OF_UNDYING, this.getX(), this.getY() + this.getBbHeight() / 2.0, this.getZ(),
                     80, 1.0, 1.5, 1.0, 0.4);
             this.sound(lvl, SoundEvents.WITHER_DEATH, 0.5F, 1.4F);
         }
@@ -482,8 +482,8 @@ public class SecretBoss extends DungeonMonster {
         if (dungeon) b.addTag(DG);
         b.setup(rank, level);
         if (!lvl.addFreshEntity(b)) return null;
-        lvl.sendParticles(ParticleTypes.REVERSE_PORTAL, b.getX(), b.getY() + 1.0, b.getZ(), 80, 0.6, 1.4, 0.6, 0.15);
-        lvl.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, b.getX(), b.getY() + 0.2, b.getZ(), 40, 1.2, 0.1, 1.2, 0.02);
+        Fx.send(lvl, ParticleTypes.REVERSE_PORTAL, b.getX(), b.getY() + 1.0, b.getZ(), 80, 0.6, 1.4, 0.6, 0.15);
+        Fx.send(lvl, ParticleTypes.SOUL_FIRE_FLAME, b.getX(), b.getY() + 0.2, b.getZ(), 40, 1.2, 0.1, 1.2, 0.02);
         return b;
     }
 

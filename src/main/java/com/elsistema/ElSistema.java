@@ -46,6 +46,7 @@ public class ElSistema implements ModInitializer {
             Shadows.forget(handler.player);
             Store.save(server, handler.player.getUUID());
             Store.remove(handler.player.getUUID());
+            Fx.forget(handler.player.getUUID());
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {

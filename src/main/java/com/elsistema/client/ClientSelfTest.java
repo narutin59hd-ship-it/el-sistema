@@ -1,6 +1,7 @@
 package com.elsistema.client;
 
 import com.elsistema.ElSistema;
+import com.elsistema.Fx;
 import com.elsistema.Net;
 import com.elsistema.SelfTest;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -345,7 +346,11 @@ public final class ClientSelfTest {
             case 1080 -> view(mc, 2, 1, 0);
             case 1092 -> shot(mc, "pestaña SOMBRAS: árbol propio de una sombra");
             case 1096 -> mc.setScreen(null);
-            case 1100 -> trial(11);
+            case 1100 -> {
+                // Galería sin el HUD ni la mano, para que se vean todos los monstruos
+                mc.options.hideGui = true;
+                trial(11);
+            }
             case 1170 -> {
                 if (worldMode) shot(mc, "galería: goblin, orco, caballero maldito y Guardián del Juicio");
             }
@@ -361,9 +366,71 @@ public final class ClientSelfTest {
             case 1350 -> {
                 if (worldMode) shot(mc, "galería de noche: ojos, runas y magma que brillan");
             }
-            case 1356 -> finish(mc);
+            // ---------------------------------------------------- 1.6.0: ajustes y animaciones de las sombras
+            case 1352 -> {
+                mc.options.hideGui = false;
+                view(mc, 6, 0, 0);
+            }
+            case 1362 -> shot(mc, "pestaña AJUSTES");
+            case 1364 -> {
+                ClientConfig.setParticles(false);
+                ClientConfig.setPerformance(true);
+            }
+            case 1374 -> {
+                shot(mc, "AJUSTES: sin partículas y modo rendimiento");
+                checkSettings(mc, Fx.NO_PARTICLES | Fx.PERFORMANCE);
+                ClientConfig.setParticles(true);
+                ClientConfig.setPerformance(false);
+            }
+            case 1384 -> {
+                checkSettings(mc, 0);
+                mc.setScreen(null);
+            }
+            case 1386 -> {
+                mc.options.hideGui = true;
+                trial(15);
+            }
+            case 1395 -> {
+                if (worldMode) shot(mc, "animación: tres sombras saliendo del suelo");
+            }
+            case 1420 -> {
+                mc.options.hideGui = false;
+                trial(16);
+            }
+            case 1432 -> {
+                if (worldMode) shot(mc, "¡Levántate!: el humo y las almas se juntan");
+            }
+            case 1444 -> {
+                if (worldMode) shot(mc, "¡Levántate!: la sombra sale del suelo");
+            }
+            case 1478 -> {
+                if (worldMode) shot(mc, "¡Levántate!: ya ha salido");
+            }
+            case 1484 -> finish(mc);
             default -> {
             }
+        }
+    }
+
+    /** Comprueba que el servidor integrado ha recibido los ajustes del cliente. */
+    private static void checkSettings(Minecraft mc, int want) {
+        if (!worldMode || mc.player == null || mc.getSingleplayerServer() == null) return;
+        try {
+            net.minecraft.server.level.ServerPlayer sp = mc.getSingleplayerServer().getPlayerList().getPlayer(mc.player.getUUID());
+            int got = sp == null ? -1 : Fx.bits(sp);
+            if (got != want) {
+                failures++;
+                ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: el servidor tiene los ajustes {} y deberían ser {}", got, want);
+            } else {
+                ElSistema.LOGGER.info("[SELFTEST-CLIENTE] OK ajustes en el servidor: {}", got);
+            }
+            java.nio.file.Path f = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("elsistema.json");
+            if (!java.nio.file.Files.exists(f)) {
+                failures++;
+                ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: no se guardó config/elsistema.json");
+            }
+        } catch (Throwable t) {
+            fail("ajustes", t);
         }
     }
 

@@ -778,7 +778,7 @@ public final class Dungeons {
         }
         ServerPlayer target = nearestPlayer(g, m);
         if (target != null) m.setTarget(target);
-        g.level.sendParticles(ParticleTypes.REVERSE_PORTAL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
+        Fx.send(g.level, ParticleTypes.REVERSE_PORTAL, m.getX(), m.getY() + 1.0, m.getZ(), 20, 0.3, 0.6, 0.3, 0.05);
         return m;
     }
 
@@ -832,7 +832,7 @@ public final class Dungeons {
             p.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
             Quests.onDungeonClear(p, Store.get(p), rank);
         }
-        g.level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, r.cx(), r.y0 + 2.0, r.cz(), 120, 3.0, 1.5, 3.0, 0.4);
+        Fx.send(g.level, ParticleTypes.TOTEM_OF_UNDYING, r.cx(), r.y0 + 2.0, r.cz(), 120, 3.0, 1.5, 3.0, 0.4);
     }
 
     // ================================================================ cerrar y limpiar
@@ -870,7 +870,7 @@ public final class Dungeons {
     }
 
     private static void closeEffects(Gate g) {
-        g.level.sendParticles(ParticleTypes.REVERSE_PORTAL, g.cx(), g.cy() + 0.5, g.cz(), 60, 0.6, 1.0, 0.6, 0.2);
+        Fx.send(g.level, ParticleTypes.REVERSE_PORTAL, g.cx(), g.cy() + 0.5, g.cz(), 60, 0.6, 1.0, 0.6, 0.2);
         sound(g, SoundEvents.BEACON_DEACTIVATE, 1.0F, 0.8F);
     }
 
@@ -982,12 +982,12 @@ public final class Dungeons {
         double t = g.age * 0.15;
         for (int i = 0; i < 12; i++) {
             double a = t + i * Math.PI * 2.0 / 12.0;
-            l.sendParticles(dust, cx + Math.cos(a) * 1.2, cy + Math.sin(a) * 1.6, cz, 1, 0.0, 0.0, 0.0, 0.0);
+            Fx.essential(l, dust, cx + Math.cos(a) * 1.2, cy + Math.sin(a) * 1.6, cz, 1, 0.0, 0.0, 0.0, 0.0);
         }
-        l.sendParticles(ParticleTypes.PORTAL, cx, cy, cz, 6, 0.3, 0.8, 0.1, 0.4);
+        Fx.ambient(l, ParticleTypes.PORTAL, cx, cy, cz, 6, 0.3, 0.8, 0.1, 0.4);
         if (g.age % 20 == 0) {
             for (int y = 0; y < 24; y += 2) {
-                l.sendParticles(ParticleTypes.END_ROD, cx, cy + 2 + y, cz, 1, 0.05, 0.3, 0.05, 0.0);
+                Fx.essential(l, ParticleTypes.END_ROD, cx, cy + 2 + y, cz, 1, 0.05, 0.3, 0.05, 0.0);
             }
         }
     }
