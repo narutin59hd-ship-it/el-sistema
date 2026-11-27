@@ -52,7 +52,10 @@ public class SystemScreen extends Screen {
             "..#####..",
             ".#.###.#.",
             "....#...."};
-    private static final String[] SETTING_TITLE = {"PARTÍCULAS DEL MOD", "MODO RENDIMIENTO"};
+    private static final String[] SETTING_TITLE = {"PARTÍCULAS DEL MOD", "MODO RENDIMIENTO",
+            "PACK DE TEXTURAS DEL SISTEMA", "SHADER DE TONOS", "TONOS DE LUZ"};
+    private static final int[] SETTING_ACCENT = {Ui.CYAN, Ui.GREEN, Ui.PURPLE, Ui.CYAN, Ui.GOLD};
+    private static final int SETTING_GAP = 6;
     private static final int TAB_H = 14;
     private static final int TAB_Y = 6;
 
@@ -1963,10 +1966,11 @@ public class SystemScreen extends Screen {
     // ------------------------------------------------------------------ pestaña AJUSTES
 
     private Box settingRow(int i) {
+        int n = SETTING_TITLE.length;
         int x1 = px();
         int top = py() + 44;
-        int h = Math.min(48, (ph() - 44 - 22 - 8) / 2);
-        return new Box(x1 + 12, top + i * (h + 8), x1 + pw() - 12, top + i * (h + 8) + h);
+        int h = Math.min(40, (ph() - 44 - 30 - (n - 1) * SETTING_GAP) / n);
+        return new Box(x1 + 12, top + i * (h + SETTING_GAP), x1 + pw() - 12, top + i * (h + SETTING_GAP) + h);
     }
 
     private static Box toggleBox(Box row) {
@@ -1975,33 +1979,76 @@ public class SystemScreen extends Screen {
         return new Box(row.x2() - 62, y, row.x2() - 10, y + h);
     }
 
+    /** Selector de la intensidad del shader (más ancho que el interruptor). */
+    private static Box levelBox(Box row) {
+        int h = 16;
+        int y = row.y1() + (row.h() - h) / 2;
+        return new Box(row.x2() - 82, y, row.x2() - 10, y + h);
+    }
+
     private static boolean settingOn(int i) {
-        return i == 0 ? ClientConfig.particles() : ClientConfig.performance();
+        return switch (i) {
+            case 0 -> ClientConfig.particles();
+            case 1 -> ClientConfig.performance();
+            case 2 -> Tonos.packSelected();
+            case 3 -> ClientConfig.shader() > 0;
+            default -> ClientConfig.lightTones();
+        };
+    }
+
+    /** Los shaders y los tonos de luz vienen en el pack: sin él no hacen nada. */
+    private static boolean settingUsable(int i) {
+        return i < 3 || Tonos.packActive();
     }
 
     private static String settingDesc(int i, boolean on) {
-        if (i == 0) {
-            return on ? "Se ven los efectos de las habilidades, las sombras, los jefes y las mazmorras."
-                    : "Sin partículas del mod. Las puertas de mazmorra y los cadáveres se ven con unas pocas.";
-        }
-        return on ? "Activado: 1 de cada 3 partículas, sin auras ni remolinos y sin brillo en los monstruos."
-                : "Todo más ligero para el PC: menos partículas, sin auras y sin brillo en los monstruos.";
+        return switch (i) {
+            case 0 -> on ? "Efectos de habilidades, sombras, jefes y mazmorras."
+                    : "Sin partículas del mod; las puertas se siguen viendo.";
+            case 1 -> on ? "1 de cada 3 partículas, sin auras, brillos ni resplandor."
+                    : "Todo más ligero para el PC si el juego va lento.";
+            case 2 -> on ? "Menús, barra rápida, inventario, sol y luna del Sistema."
+                    : "Minecraft con su aspecto de siempre.";
+            case 3 -> on ? "Sombras azules, lo que brilla resplandece y viñeta."
+                    : "Los colores normales de Minecraft.";
+            default -> on ? "Antorchas cálidas, noches azules y sombras hondas."
+                    : "La luz normal de Minecraft.";
+        };
     }
 
     private static List<String> settingTip(int i) {
-        if (i == 0) {
-            return List.of("Partículas del mod",
+        return switch (i) {
+            case 0 -> List.of("Partículas del mod",
                     "Habilidades, golpes, ¡Levántate!, sombras, jefes y mazmorras.",
                     "Sin ellas, las puertas de mazmorra, los cadáveres que se pueden",
                     "levantar y las nubes de veneno se siguen viendo (con menos).",
                     "Las partículas de Minecraft se cambian en Opciones > Vídeo.");
-        }
-        return List.of("Modo rendimiento",
-                "• Sólo 1 de cada 3 partículas del mod.",
-                "• Sin auras de las sombras ni remolinos de las puertas.",
-                "• Los ojos, runas y magma de los monstruos no brillan",
-                "  (una pasada de dibujo menos por monstruo).",
-                "Útil si el juego va lento con muchas sombras o en las mazmorras.");
+            case 1 -> List.of("Modo rendimiento",
+                    "• Sólo 1 de cada 3 partículas del mod.",
+                    "• Sin auras de las sombras ni remolinos de las puertas.",
+                    "• Los ojos, runas y magma de los monstruos no brillan.",
+                    "• El shader de tonos va sin resplandor (más ligero).",
+                    "Útil si el juego va lento con muchas sombras o en las mazmorras.");
+            case 2 -> List.of("Pack de texturas del Sistema",
+                    "• Botones y menús como las ventanas del Sistema.",
+                    "• Barra rápida, experiencia y punto de mira nuevos.",
+                    "• Inventario y cofres oscuros con huecos azules.",
+                    "• Sol con resplandor y luna azul.",
+                    "Trae el shader y los tonos de luz. También se pone y se quita",
+                    "en Opciones > Paquetes de recursos (recarga los recursos).");
+            case 3 -> List.of("Shader de tonos",
+                    "Las sombras tiran al azul del Sistema, lo que brilla",
+                    "resplandece y los bordes de la pantalla se oscurecen.",
+                    "Clic: más intenso · clic derecho: menos.",
+                    "Con el modo rendimiento va sin resplandor.",
+                    "No se usa si tienes un shader de Iris puesto.");
+            default -> List.of("Tonos de luz",
+                    "• Antorchas, faroles, fuego y lava más cálidos.",
+                    "• Noches con luz de luna azul.",
+                    "• Sombras profundas de color azul oscuro.",
+                    "Sólo cambia el color de la luz: se ve igual de lejos.",
+                    "Casi no gasta nada (funciona también con Sodium).");
+        };
     }
 
     private List<String> settings(GuiGraphics g, int x1, int y1, int x2, int y2, int mx, int my, float a, long now) {
@@ -2012,20 +2059,42 @@ public class SystemScreen extends Screen {
         Ui.text(g, f, sub, x2 - 14 - f.width(sub), y1 + 29, Ui.MUTED, a);
         for (int i = 0; i < SETTING_TITLE.length; i++) {
             Box r = settingRow(i);
-            boolean on = settingOn(i);
+            boolean usable = settingUsable(i);
+            boolean on = settingOn(i) && usable;
             boolean hover = r.in(mx, my);
-            card(g, r, on ? (i == 0 ? Ui.CYAN : Ui.GREEN) : 0xFF3C5A74, a);
+            card(g, r, on ? SETTING_ACCENT[i] : 0xFF3C5A74, a);
             if (hover) g.fill(r.x1() + 1, r.y1() + 1, r.x2() - 1, r.y2() - 1, Ui.fade(0x18FFFFFF, a));
-            Ui.text(g, f, SETTING_TITLE[i], r.x1() + 8, r.y1() + 7, on ? Ui.WHITE : Ui.GRAY, a);
-            List<String> lines = Ui.wrap(f, settingDesc(i, on), r.w() - 84);
-            for (int k = 0; k < Math.min(2, lines.size()); k++) {
-                Ui.text(g, f, lines.get(k), r.x1() + 8, r.y1() + 20 + k * 10, Ui.MUTED, a);
+            boolean tall = r.h() >= 30;
+            Ui.text(g, f, SETTING_TITLE[i], r.x1() + 8, r.y1() + (tall ? 6 : 4), on ? Ui.WHITE : Ui.GRAY, a);
+            String desc = usable ? settingDesc(i, settingOn(i)) : "Necesita el pack de texturas del Sistema puesto.";
+            int dy = r.y1() + (tall ? 18 : 15);
+            int maxLines = Math.max(1, (r.y2() - dy - 1) / 10);
+            int dw = r.w() - (i == 3 ? 104 : 84);
+            List<String> lines = fitLines(f, Ui.wrap(f, desc, dw), maxLines, dw);
+            for (int k = 0; k < lines.size(); k++) {
+                Ui.text(g, f, lines.get(k), r.x1() + 8, dy + k * 10, Ui.MUTED, a);
             }
-            toggle(g, f, toggleBox(r), on, hover, a);
+            if (i == 3) {
+                level(g, f, levelBox(r), usable ? ClientConfig.shader() : 0, hover, a);
+            } else {
+                toggle(g, f, toggleBox(r), on, hover, a);
+            }
             if (hover) tip = settingTip(i);
         }
         hint(g, "Se guardan en config/elsistema.json y valen para todos tus mundos", x1, x2, y2, a);
         return tip;
+    }
+
+    /** Corta las líneas que no caben y pone «…» al final de la última. */
+    private static List<String> fitLines(Font f, List<String> lines, int max, int width) {
+        if (lines.size() <= max) return lines;
+        List<String> out = new ArrayList<>(lines.subList(0, max));
+        String last = out.get(max - 1);
+        while (!last.isEmpty() && f.width(last + "…") > width) {
+            last = last.substring(0, last.length() - 1);
+        }
+        out.set(max - 1, last.stripTrailing() + "…");
+        return out;
     }
 
     /** Interruptor NO | SÍ. */
@@ -2043,14 +2112,48 @@ public class SystemScreen extends Screen {
         Ui.center(g, f, "SÍ", (mid + t.x2()) / 2, ty, on ? Ui.WHITE : 0xFF56626E, a);
     }
 
-    private boolean clickSettings(double mx, double my) {
+    /** Selector NO / SUAVE / NORMAL / INTENSO con tres barritas. */
+    private static void level(GuiGraphics g, Font f, Box t, int lv, boolean hover, float a) {
+        g.fill(t.x1(), t.y1(), t.x2(), t.y2(), Ui.fade(0xA0080F1A, a));
+        if (lv > 0) g.fill(t.x1() + 1, t.y1() + 1, t.x2() - 1, t.y2() - 1, Ui.fade(0x40205880, a));
+        Ui.border(g, t.x1(), t.y1(), t.x2(), t.y2(), Ui.fade(hover ? Ui.WHITE : lv > 0 ? Ui.CYAN : 0xFF5F7387, a));
+        for (int k = 0; k < 3; k++) {
+            int bh = 4 + k * 2;
+            int bx = t.x1() + 5 + k * 4;
+            g.fill(bx, t.y2() - 3 - bh, bx + 2, t.y2() - 3, Ui.fade(k < lv ? Ui.CYAN : 0xFF2A3A4A, a));
+        }
+        int ty = t.y1() + (t.h() - 8) / 2;
+        Ui.center(g, f, Tonos.LEVEL_NAMES[Math.max(0, Math.min(3, lv))], (t.x1() + 18 + t.x2()) / 2, ty,
+                lv > 0 ? Ui.WHITE : Ui.GRAY, a);
+    }
+
+    private boolean clickSettings(double mx, double my, int button) {
         for (int i = 0; i < SETTING_TITLE.length; i++) {
             if (!settingRow(i).in(mx, my)) continue;
-            boolean on = !settingOn(i);
-            if (i == 0) {
-                ClientConfig.setParticles(on);
-            } else {
-                ClientConfig.setPerformance(on);
+            if (button != 0 && i != 3) return false;
+            boolean on;
+            switch (i) {
+                case 0 -> {
+                    on = !ClientConfig.particles();
+                    ClientConfig.setParticles(on);
+                }
+                case 1 -> {
+                    on = !ClientConfig.performance();
+                    ClientConfig.setPerformance(on);
+                }
+                case 2 -> {
+                    on = !Tonos.packSelected();
+                    Tonos.setPack(on);
+                }
+                case 3 -> {
+                    int lv = (ClientConfig.shader() + (button == 1 ? 3 : 1)) % 4;
+                    ClientConfig.setShader(lv);
+                    on = lv > 0;
+                }
+                default -> {
+                    on = !ClientConfig.lightTones();
+                    ClientConfig.setLightTones(on);
+                }
             }
             Hud.click();
             Hud.sound(SoundEvents.AMETHYST_BLOCK_CHIME, 0.8F, on ? 2.0F : 0.7F);
@@ -2110,7 +2213,7 @@ public class SystemScreen extends Screen {
         if (tab == 3 && button == 0 && clickShop(mx, my, y1, x2)) return true;
         if (tab == 4 && button == 0 && clickQuests(mx, my, y1)) return true;
         if (tab == TAB_RANK && button == 0 && clickRank(mx, my)) return true;
-        if (tab == TAB_CONFIG && button == 0 && clickSettings(mx, my)) return true;
+        if (tab == TAB_CONFIG && (button == 0 || button == 1) && clickSettings(mx, my, button)) return true;
         return super.mouseClicked(mx, my, button);
     }
 

@@ -8,6 +8,13 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -18,6 +25,7 @@ import net.minecraft.world.item.Item;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
  * Prueba automática del cliente (ELSISTEMA_SELFTEST=client): entra en el mundo de prueba, comprueba texturas,
@@ -36,6 +44,10 @@ public final class ClientSelfTest {
     private static boolean done = false;
     private static int failures = 0;
     private static int shots = 0;
+    /** Espera (sin avanzar los pasos) hasta que se cumpla algo, por ejemplo que acabe de recargar los recursos. */
+    private static BooleanSupplier hold = null;
+    private static int holdLeft = 0;
+    private static String holdWhat = "";
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(ClientSelfTest::tick);
@@ -52,6 +64,20 @@ public final class ClientSelfTest {
         ticks++;
         try {
             if (t0 >= 0) {
+                if (hold != null) {
+                    boolean ok = hold.getAsBoolean();
+                    if (!ok && --holdLeft > 0) {
+                        t0++;
+                        return;
+                    }
+                    if (!ok) {
+                        failures++;
+                        ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: tiempo agotado esperando: {}", holdWhat);
+                    } else {
+                        ElSistema.LOGGER.info("[SELFTEST-CLIENTE] hecho: {}", holdWhat);
+                    }
+                    hold = null;
+                }
                 steps(mc, ticks - t0);
                 return;
             }
@@ -75,6 +101,9 @@ public final class ClientSelfTest {
             if (worldTicks == 1) {
                 ElSistema.LOGGER.info("[SELFTEST-CLIENTE] mundo cargado");
                 checkResources(mc);
+                ElSistema.LOGGER.info("[SELFTEST-CLIENTE] paquetes: {} (puestos {})", mc.getResourcePackRepository().getAvailableIds(),
+                        mc.getResourcePackRepository().getSelectedIds());
+                ElSistema.LOGGER.info("[SELFTEST-CLIENTE] tonos: {}", Tonos.status());
             }
             mc.player.setYRot(0.0F);
             mc.player.setXRot(12.0F);
@@ -473,9 +502,127 @@ public final class ClientSelfTest {
             }
             case 1770 -> view(mc, 4, 2, 0);
             case 1782 -> shot(mc, "MISIONES > CIUDAD: contratos y viaje");
-            case 1786 -> finish(mc);
+            // ---------------------------------------------------- 1.8.0: pack de texturas, tonos de luz y shader
+            case 1786 -> {
+                mc.setScreen(null);
+                packCheck(true, "al empezar");
+                ElSistema.LOGGER.info("[SELFTEST-CLIENTE] tonos: {}", Tonos.status());
+                if (mc.player != null) mc.setScreen(new InventoryScreen(mc.player));
+            }
+            case 1796 -> shot(mc, "pack del Sistema: inventario");
+            case 1798 -> openChest(mc);
+            case 1808 -> shot(mc, "pack del Sistema: cofre grande");
+            case 1810 -> mc.setScreen(new PauseScreen(true));
+            case 1820 -> shot(mc, "pack del Sistema: menú de pausa (botones y menús)");
+            case 1822 -> {
+                mc.setScreen(null);
+                trial(27);
+            }
+            case 1860 -> {
+                if (worldMode) shot(mc, "tonos de luz y shader NORMAL: patio con antorchas de noche");
+            }
+            case 1862 -> {
+                ClientConfig.setShader(0);
+                ClientConfig.setLightTones(false);
+            }
+            case 1872 -> {
+                if (worldMode) shot(mc, "el mismo patio sin shader ni tonos de luz (Minecraft normal)");
+                ClientConfig.setShader(3);
+                ClientConfig.setLightTones(true);
+            }
+            case 1882 -> {
+                if (worldMode) shot(mc, "tonos de luz y shader INTENSO");
+                ClientConfig.setShader(2);
+                mc.options.hideGui = true;
+                mc.options.cloudStatus().set(net.minecraft.client.CloudStatus.OFF);
+                trial(28);
+            }
+            case 1910 -> {
+                if (worldMode) shot(mc, "la luna del Sistema");
+                trial(29);
+            }
+            case 1940 -> {
+                if (worldMode) shot(mc, "el sol del Sistema");
+                mc.options.hideGui = false;
+                mc.options.cloudStatus().set(net.minecraft.client.CloudStatus.FANCY);
+                view(mc, 6, 0, 0);
+            }
+            case 1950 -> {
+                shot(mc, "AJUSTES: pack, shader y tonos de luz");
+                tonosCheck();
+                mc.setScreen(null);
+                Tonos.setPack(false);
+                waitFor(() -> !Tonos.packActive() && mc.getOverlay() == null, 1500, "quitar el pack del Sistema");
+            }
+            case 1956 -> {
+                packCheck(false, "tras quitarlo");
+                if (mc.player != null) mc.setScreen(new InventoryScreen(mc.player));
+            }
+            case 1966 -> {
+                shot(mc, "sin el pack: el inventario normal de Minecraft");
+                mc.setScreen(null);
+                Tonos.setPack(true);
+                waitFor(() -> Tonos.packActive() && mc.getOverlay() == null, 1500, "volver a poner el pack del Sistema");
+            }
+            case 1972 -> {
+                packCheck(true, "al volver a ponerlo");
+                ElSistema.LOGGER.info("[SELFTEST-CLIENTE] tonos: {}", Tonos.status());
+            }
+            case 1976 -> finish(mc);
             default -> {
             }
+        }
+    }
+
+    private static void waitFor(BooleanSupplier cond, int maxTicks, String what) {
+        hold = cond;
+        holdLeft = maxTicks;
+        holdWhat = what;
+        ElSistema.LOGGER.info("[SELFTEST-CLIENTE] espero: {}", what);
+    }
+
+    /** Cofre grande de mentira (sólo en el cliente) con algunas cosas, para ver la textura del pack. */
+    private static void openChest(Minecraft mc) {
+        if (mc.player == null) return;
+        ChestMenu menu = ChestMenu.sixRows(1000, mc.player.getInventory());
+        ItemStack[] stuff = {new ItemStack(Items.DIAMOND, 12), new ItemStack(Items.GOLD_INGOT, 30), new ItemStack(Items.ENDER_PEARL, 8),
+                new ItemStack(Items.IRON_SWORD), new ItemStack(Items.TORCH, 64), new ItemStack(Items.AMETHYST_SHARD, 5),
+                new ItemStack(Items.LANTERN, 3), new ItemStack(Items.BOOK, 2)};
+        for (int i = 0; i < stuff.length; i++) {
+            menu.getContainer().setItem(i * 7 % 54, stuff[i]);
+        }
+        mc.setScreen(new ContainerScreen(menu, mc.player.getInventory(), Component.literal("Cofre del Sistema")));
+    }
+
+    private static void packCheck(boolean want, String when) {
+        boolean selected = Tonos.packSelected();
+        boolean active = Tonos.packActive();
+        if (selected != want || active != want) {
+            failures++;
+            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: pack del Sistema {}: puesto {} y activo {} (debería ser {})", when,
+                    selected, active, want);
+        } else {
+            ElSistema.LOGGER.info("[SELFTEST-CLIENTE] OK pack del Sistema {}: {}", when, want ? "puesto" : "quitado");
+        }
+    }
+
+    /** Comprueba que el shader se ha dibujado, que el mapa de luz se ha teñido y que los títulos cambiaron de color. */
+    private static void tonosCheck() {
+        ElSistema.LOGGER.info("[SELFTEST-CLIENTE] tonos: {}", Tonos.status());
+        if (Tonos.postFrames <= 0) {
+            failures++;
+            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: el shader de tonos no se ha dibujado");
+        }
+        if (Tonos.tintUploads <= 0) {
+            failures++;
+            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: no se han teñido los tonos de luz");
+        }
+        if (Tonos.labelHits <= 0) {
+            failures++;
+            ElSistema.LOGGER.error("[SELFTEST-CLIENTE] FALLO: los títulos del inventario no cambiaron de color");
+        }
+        if (Tonos.postFrames > 0 && Tonos.tintUploads > 0 && Tonos.labelHits > 0) {
+            ElSistema.LOGGER.info("[SELFTEST-CLIENTE] OK tonos: shader, luz y títulos");
         }
     }
 

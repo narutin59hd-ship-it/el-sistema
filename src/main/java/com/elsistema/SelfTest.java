@@ -370,6 +370,7 @@ public final class SelfTest {
             case 15 -> animRise(p);
             case 16 -> animArise(p);
             case 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 -> cityStep(p, step);
+            case 27, 28, 29 -> lightStep(p, step);
             default -> {
             }
         }
@@ -498,13 +499,70 @@ public final class SelfTest {
             case 25 -> {
                 p.getAbilities().flying = false;
                 p.onUpdateAbilities();
-                p.serverLevel().setDayTime(18000L);
+                // la ciudad usa la hora del mundo normal (los demás mundos no pueden cambiarla)
+                p.getServer().overworld().setDayTime(18000L);
                 p.teleportTo(p.serverLevel(), 0.5, City.G, 9.5, 180.0F, -8.0F);
             }
             case 26 -> {
                 City.back(p, d);
                 if (City.inCity(p)) throw new IllegalStateException("no se volvió de la ciudad");
                 ElSistema.LOGGER.info("[SELFTEST] OK vuelta de la ciudad");
+            }
+            default -> {
+            }
+        }
+    }
+
+    // ================================================================ 1.8.0: tonos de luz (capturas del cliente)
+
+    /** 27: patio de piedra de noche con antorchas, faroles y una hoguera; 28: la luna; 29: el sol. */
+    private static void lightStep(ServerPlayer p, int step) {
+        ServerLevel lvl = p.getServer().overworld();
+        BlockPos spawn = lvl.getSharedSpawnPos();
+        BlockPos o = new BlockPos(spawn.getX() - 120, 150, spawn.getZ() + 160);
+        switch (step) {
+            case 27 -> {
+                net.minecraft.world.level.block.state.BlockState floor = net.minecraft.world.level.block.Blocks.STONE_BRICKS.defaultBlockState();
+                net.minecraft.world.level.block.state.BlockState wall = net.minecraft.world.level.block.Blocks.DEEPSLATE_BRICKS.defaultBlockState();
+                net.minecraft.world.level.block.state.BlockState air = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+                for (int x = -12; x <= 12; x++) {
+                    for (int z = -12; z <= 12; z++) {
+                        lvl.setBlockAndUpdate(o.offset(x, -1, z), floor);
+                        for (int y = 0; y <= 6; y++) {
+                            lvl.setBlockAndUpdate(o.offset(x, y, z), air);
+                        }
+                    }
+                }
+                for (int x = -7; x <= 7; x++) {
+                    for (int y = 0; y <= 4; y++) {
+                        lvl.setBlockAndUpdate(o.offset(x, y, -7), wall);
+                    }
+                }
+                for (int z = -6; z <= 0; z++) {
+                    for (int y = 0; y <= 3; y++) {
+                        lvl.setBlockAndUpdate(o.offset(-7, y, z), wall);
+                    }
+                }
+                net.minecraft.world.level.block.state.BlockState torch = net.minecraft.world.level.block.Blocks.WALL_TORCH.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.WallTorchBlock.FACING, net.minecraft.core.Direction.SOUTH);
+                lvl.setBlockAndUpdate(o.offset(-4, 2, -6), torch);
+                lvl.setBlockAndUpdate(o.offset(3, 2, -6), torch);
+                lvl.setBlockAndUpdate(o.offset(-1, 0, -4), net.minecraft.world.level.block.Blocks.LANTERN.defaultBlockState());
+                lvl.setBlockAndUpdate(o.offset(-5, 0, -2), net.minecraft.world.level.block.Blocks.SOUL_LANTERN.defaultBlockState());
+                lvl.setBlockAndUpdate(o.offset(4, 0, -3), net.minecraft.world.level.block.Blocks.CAMPFIRE.defaultBlockState());
+                lvl.setBlockAndUpdate(o.offset(6, 0, 2), net.minecraft.world.level.block.Blocks.SEA_LANTERN.defaultBlockState());
+                lvl.setDayTime(18000L);
+                lvl.setWeatherParameters(12000, 0, false, false);
+                p.teleportTo(lvl, o.getX() + 0.5, o.getY(), o.getZ() + 8.5, 180.0F, 10.0F);
+                ElSistema.LOGGER.info("[SELFTEST] patio de noche para los tonos de luz");
+            }
+            case 28 -> {
+                lvl.setDayTime(18000L);
+                p.teleportTo(lvl, o.getX() + 0.5, o.getY(), o.getZ() + 8.5, 180.0F, -90.0F);
+            }
+            case 29 -> {
+                lvl.setDayTime(6000L);
+                p.teleportTo(lvl, o.getX() + 0.5, o.getY(), o.getZ() + 8.5, 180.0F, -90.0F);
             }
             default -> {
             }

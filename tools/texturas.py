@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen_modelos  # noqa: E402
 import monstruos  # noqa: E402
 import ciudadanos  # noqa: E402
+import pack_sistema  # noqa: E402
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
 A = os.path.join(ROOT, "src/main/resources/assets/elsistema")
@@ -946,6 +947,7 @@ def main():
     models()
     locales()
     ciudadanos.generate(os.path.join(A, "textures/entity/ciudadano"))
+    pack_sistema.generate(os.path.join(ROOT, "src/main/resources/resourcepacks/sistema"))
     print("texturas generadas en", A)
 
 

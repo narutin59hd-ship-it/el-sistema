@@ -39,6 +39,8 @@ public class ElSistemaClient implements ClientModInitializer {
                 "key.elsistema.shadows", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, "key.categories.elsistema"));
 
         ClientConfig.load();
+        // 1.8.0: pack de texturas del Sistema, tonos de luz y shader de tonos
+        Tonos.register();
         ModRenderers.register();
         registerBow(ModItems.SOBERANO[Defs.ARQUERO]);
 
@@ -86,6 +88,7 @@ public class ElSistemaClient implements ClientModInitializer {
             }
             CData.tick();
             ClientConfig.tick(client.player != null && client.getConnection() != null);
+            Tonos.tick(client);
             if (++pruneTimer >= 200) {
                 pruneTimer = 0;
                 if (client.level != null) ClientShadows.prune(client.level);

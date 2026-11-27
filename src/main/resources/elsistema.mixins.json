@@ -5,7 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [],
   "client": [
-    "client.WorldOpenFlowsMixin"
+    "client.WorldOpenFlowsMixin",
+    "client.GameRendererMixin",
+    "client.ContainerLabelsMixin",
+    "client.InventoryLabelsMixin"
   ],
   "injectors": {
     "defaultRequire": 0

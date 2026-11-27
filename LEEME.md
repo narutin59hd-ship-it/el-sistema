@@ -1,4 +1,4 @@
-# El Sistema 1.7.0 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.8.0 (mod de Fabric para Minecraft 1.21.1)
 
 Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
@@ -15,6 +15,25 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.8.0
+
+### Pack de texturas del Sistema
+- Viene **dentro del mod** y se pone solo la primera vez. Se quita y se vuelve a poner en **Ajustes** (engranaje,
+  tecla 7) o en Opciones > Paquetes de recursos («El Sistema: interfaz, luz y shaders»).
+- Botones, deslizadores, casillas y fondos de los menús como las ventanas del Sistema (azul oscuro con esquinas
+  brillantes); barra rápida, barra de experiencia y punto de mira nuevos; **inventario y cofres** oscuros con
+  huecos azules (los títulos van en azul claro); **sol** con resplandor y **luna** azul.
+- Todo son dibujos propios (tools/pack_sistema.py), con las mismas medidas que las texturas de Minecraft 1.21.1.
+
+### Shaders para los tonos de luz
+- **Tonos de luz**: antorchas, faroles, fuego y lava más cálidos, noches con luz de luna azul y sombras profundas
+  de color azul oscuro. Se tiñe el mapa de luz de Minecraft, así que vale para bloques y criaturas, casi no gasta
+  y funciona también con Sodium.
+- **Shader de tonos** (post-procesado): las sombras tiran al azul del Sistema, lo que brilla resplandece y los
+  bordes de la pantalla se oscurecen un poco. Intensidad **SUAVE / NORMAL / INTENSO** (o NO) en Ajustes
+  (clic para subir, clic derecho para bajar). Con el **modo rendimiento** va sin resplandor.
+- Si tienes Iris con un shader puesto, el mod no usa los suyos.
 
 ## Novedades de la 1.7.0
 
