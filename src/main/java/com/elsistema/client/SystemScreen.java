@@ -1529,7 +1529,7 @@ public class SystemScreen extends Screen {
         for (String s : Defs.prestigeBuffs(pres)) {
             buffs.add("★ " + s);
         }
-        if (buffs.isEmpty()) buffs.add("Ninguno todavía: ¡haz el examen!");
+        if (buffs.isEmpty()) buffs.add("Ninguno: ¡haz el examen!");
         for (String s : buffs) {
             if (y > lb.y2() - 13) break;
             boolean star = s.startsWith("★");
@@ -1573,12 +1573,12 @@ public class SystemScreen extends Screen {
             Ui.bar(g, ex, y + 1, ew - f.width(lt) - 6, 4, CData.level() / (float) Defs.RANK_MIN[next], ecol, a);
             Ui.text(g, f, lt, eb.x2() - 8 - f.width(lt), y, Ui.WHITE, a);
             y += 11;
-            Ui.text(g, f, fit(f, "Mazmorra privada · " + Defs.EXAM_WAVES + " oleadas + examinador · nivel "
-                    + Defs.examLevel(next, CData.level()), ew), ex, y, Ui.MUTED, a);
+            Ui.text(g, f, fit(f, Defs.EXAM_WAVES + " oleadas + examinador · nivel " + Defs.examLevel(next, CData.level()),
+                    ew), ex, y, Ui.MUTED, a);
             y += 11;
             Ui.text(g, f, "AL ASCENDER:", ex, y, Ui.GRAY, a);
             y += 10;
-            for (String l : Ui.wrap(f, String.join("  ·  ", Defs.rankBuffs(next)), ew)) {
+            for (String l : pack(f, Defs.rankBuffs(next), ew)) {
                 if (y > eBtn.y1() - 11) break;
                 Ui.text(g, f, l, ex, y, Ui.GOLD, a);
                 y += 10;
@@ -1606,8 +1606,8 @@ public class SystemScreen extends Screen {
         Ui.text(g, f, plt, pb.x2() - 8 - f.width(plt), y, Ui.WHITE, a);
         y += 12;
         Box pBtn = bottomButton(pb);
-        String pdesc = "Vuelves al nivel 1 y conservas todo lo demás. Ganas el rango " + Defs.prestigeName(pres + 1)
-                + ", el arma del Monarca de tu clase, +" + Defs.P_XP + "% de EXP, +" + Defs.P_DMG + "% de daño y vida, +"
+        String pdesc = "Vuelves al nivel 1 (conservas lo demás) y ganas: rango " + Defs.prestigeName(pres + 1)
+                + ", arma del Monarca, +" + Defs.P_XP + "% EXP, +" + Defs.P_DMG + "% daño y vida, +"
                 + Defs.P_SLOTS + " sombras y +" + Defs.P_POINTS + " punto por nivel.";
         for (String l : Ui.wrap(f, pdesc, ew)) {
             if (y > pBtn.y1() - 11) break;
@@ -1622,8 +1622,25 @@ public class SystemScreen extends Screen {
         String plbl = !pReady ? "NECESITAS NIVEL " + Defs.MAX_LEVEL : armed ? "¿SEGURO? VUELVES AL NIVEL 1" : "HACER PRESTIGIO";
         Ui.button(g, f, fit(f, plbl, pBtn.w() - 6), pBtn.x1(), pBtn.y1(), pBtn.w(), pBtn.h(), mx, my, armed ? Ui.RED : pcol, pReady, a);
 
-        hint(g, "El rango sube con el examen de ascenso · el prestigio se desbloquea en el nivel " + Defs.MAX_LEVEL, x1, x2, y2, a);
+        hint(g, "El rango sube con el examen · el prestigio, en el nivel " + Defs.MAX_LEVEL, x1, x2, y2, a);
         return tip;
+    }
+
+    /** Junta textos cortos en líneas separadas por " · " sin partir ninguno por la mitad. */
+    private static List<String> pack(Font f, List<String> items, int w) {
+        List<String> out = new ArrayList<>();
+        String line = "";
+        for (String it : items) {
+            String test = line.isEmpty() ? it : line + "  ·  " + it;
+            if (!line.isEmpty() && f.width(test) > w) {
+                out.add(line);
+                line = it;
+            } else {
+                line = test;
+            }
+        }
+        if (!line.isEmpty()) out.add(line);
+        return out;
     }
 
     private boolean clickRank(double mx, double my) {

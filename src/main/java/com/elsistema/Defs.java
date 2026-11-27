@@ -102,7 +102,7 @@ public final class Defs {
         l.add("+" + P_XP * p + "% de EXP");
         l.add("+" + P_DMG * p + "% de daño y +" + P_HP * p + "% de vida");
         l.add("+" + P_SLOTS * p + " sombras en tu ejército");
-        l.add("+" + P_POINTS * p + (p == 1 ? " punto" : " puntos") + " de estadística extra por nivel");
+        l.add("+" + P_POINTS * p + (p == 1 ? " punto" : " puntos") + " extra por nivel");
         return l;
     }
 

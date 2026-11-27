@@ -1,6 +1,6 @@
-# El Sistema 1.3.0 (mod de Fabric para Minecraft 1.21.1)
+# El Sistema 1.4.0 (mod de Fabric para Minecraft 1.21.1)
 
-Despierta como Jugador: nivel (hasta 100), rango de cazador (E, D, C, B, A, S), 5 estadísticas,
+Despierta como Jugador: nivel (hasta 500, con prestigio), rango de cazador (E, D, C, B, A, S) con examen de ascenso, 5 estadísticas,
 6 razas y 5 clases con habilidad propia, árboles de habilidades, **ejército de sombras**,
 monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, **misiones ocultas**,
 **jefes secretos** y el **cambio de clase**. Todo con ventanas animadas del Sistema.
@@ -8,12 +8,58 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 ## Controles
 
 - **V**: ventana del Sistema (o el despertar, si todavía no has despertado).
-  - Pestañas **Estado**, **Habilidades**, **Sombras**, **Tienda** y **Misiones** (también con las teclas 1 a 5).
+  - Pestañas **Estado**, **Habilidades**, **Sombras**, **Tienda**, **Misiones** y **Rango** (también con las teclas 1 a 6).
 - **R**: habilidad de tu clase.
 - **G**: ¡Levántate! (extraer la sombra de una criatura muerta).
 - **H**: invocar todas tus sombras / guardarlas todas.
 - **Mayús en el aire**: planear (Dragón con el nudo «Alas»).
 - Las teclas se cambian en Opciones > Controles > El Sistema.
+
+## Novedades de la 1.4.0
+
+### ¡Levántate! con 3 intentos
+- Cada cadáver tiene **3 intentos**. Cuanto más alto es el rango del muerto, **más maná cuesta** y **menos
+  probabilidad** hay: E 75% · D 60% · C 46% · B 34% · A 24% · S 15% (los jefes, un 40% menos).
+- Coste por intento: E 10 · D 15 · C 22 · B 30 · A 40 · S 50 de maná (los jefes, un 50% más).
+- Ser de un rango mayor que el muerto ayuda (+5% por rango) y ser de un rango menor lo pone difícil (-10% por rango).
+- Bajo la mira se ve la **probabilidad, los intentos que quedan y el maná** que cuesta.
+- Nuevo nudo **Perspicacia** en el árbol de sombras: +4% de probabilidad por rango (hasta 10 rangos).
+
+### Sombras más fuertes (y mortales)
+- Todas las sombras atacan, también las que no sabían (vacas, ovejas, caballos...).
+- Su daño depende de **la criatura** (su ataque o, si no tiene, su vida) **y de su rango**:
+  E x1 · D x1,25 · C x1,6 · B x2 · A x2,6 · S x3,5. Las sombras arqueras disparan más fuerte según su nivel y rango.
+- En la pestaña Sombras se ve el **ataque** de cada una.
+- **Se las puede matar**: una sombra caída queda **inhabilitada 3 días de Minecraft** (dormir los hace pasar más rápido).
+
+### Pestaña RANGO: examen de ascenso
+- El rango de cazador ya **no sube solo**: al llegar al nivel del rango siguiente (D 10, C 25, B 45, A 65, S 85)
+  se desbloquea su **examen de ascenso** (mazmorra privada con 3 oleadas y un **examinador**).
+- Si lo superas subes de rango para siempre y ganas sus bonus:
+
+| Rango | Bonus |
+|---|---|
+| D | +5% de daño y vida |
+| C | +10% de daño y vida, +5% de EXP |
+| B | +15% de daño y vida, +10% de EXP, +1 sombra |
+| A | +20% de daño y vida, +15% de EXP, +2 sombras, +5% de levantar sombras |
+| S | +30% de daño y vida, +25% de EXP, +3 sombras, +10% de levantar sombras, +10% de velocidad |
+
+- Los cazadores de antes conservan el rango que ya tenían por su nivel.
+- La tienda y la misión «Más allá de tu rango» usan este rango.
+
+### Nivel 500 y prestigio
+- El nivel máximo sube de 100 a **500** (los monstruos, las mazmorras S y las sombras también llegan al 500).
+  A partir del nivel 100 cada nivel cuesta algo más de EXP.
+- En el nivel 500, en la pestaña Rango, puedes hacer el **PRESTIGIO**: vuelves al nivel 1 (estadísticas a 10)
+  y conservas raza, clase, árboles, sombras, oro, objetos y rango. A cambio:
+  - Rango único **MONARCA** (MONARCA II, III... si lo repites).
+  - El **arma del Monarca** de tu clase (indestructible): Filo del Monarca, Arco del Monarca, Báculo del Monarca,
+    Colmillos del Monarca o Martillo del Monarca.
+  - Por cada prestigio (hasta 10): +10% de EXP, +5% de daño y de vida, +2 sombras y +1 punto de estadística por nivel.
+
+### Comandos nuevos (con trucos)
+- `/sistema nivel <1-500>`, `/sistema rango <E..S>`, `/sistema examen`, `/sistema prestigio`.
 
 ## Novedades de la 1.3.0
 
@@ -61,7 +107,7 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
   Es más fácil con criaturas de rango menor que el tuyo y más difícil con jefes.
 - Si sale bien, la criatura se alza como **tu sombra**: negra y morada, con su nombre
   `☾ Sombra · ...`. Te sigue, te defiende y ataca a lo que tú atacas.
-- Las sombras **no mueren**: si caen, vuelven a tu sombra y se recuperan en 60 segundos.
+- Si caen, vuelven a tu sombra (desde la 1.4.0 quedan inhabilitadas 3 días de Minecraft: ver arriba).
 - Ganan bajas y **suben de nivel**. También te dan parte de la EXP y el oro de lo que matan.
 - No se pueden extraer: creepers, aldeanos, el Warden, el Wither, el dragón y algunos animales.
 - Límite: **2 sombras** al empezar. Súbelo en el árbol **Monarca de las Sombras** y con la
@@ -71,9 +117,9 @@ monstruos propios en las mazmorras, armas y armaduras exclusivas de la tienda, *
 - Al cerrar el juego, tus sombras se guardan y vuelven a salir cuando entras.
 
 ### Árbol del Monarca de las Sombras (compartido por todas las razas y clases)
-- Ejército de sombras (+1 sombra por rango), Extracción perfecta (+5% de probabilidad),
+- Ejército de sombras (+1 sombra por rango), Perspicacia (antes Extracción perfecta: probabilidad de levantar),
   Poder de las sombras (+5% de vida y daño), Legión (+2 sombras por rango) y
-  Soberano de la noche (se curan solas y vuelven antes).
+  Soberano de la noche (se curan solas).
 
 ### Árboles de habilidades nuevos
 - Nueva pestaña con 3 árboles (Raza, Clase y Sombras), nudos octogonales, líneas de luz
